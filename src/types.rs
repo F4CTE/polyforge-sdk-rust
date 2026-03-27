@@ -192,6 +192,37 @@ pub struct ListOrdersParams {
     pub status: Option<String>,
 }
 
+/// Parameters for placing a direct order.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaceOrderParams {
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    pub side: String,
+    pub outcome: String,
+    pub size: f64,
+    pub price: f64,
+    #[serde(rename = "orderType", skip_serializing_if = "Option::is_none")]
+    pub order_type: Option<String>,
+}
+
+/// Response from placing a direct order.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaceOrderResponse {
+    #[serde(rename = "orderId")]
+    pub order_id: String,
+    #[serde(rename = "intentId")]
+    pub intent_id: String,
+    pub status: String,
+}
+
+/// Response from cancelling an order.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelOrderResponse {
+    #[serde(rename = "orderId")]
+    pub order_id: String,
+    pub status: String,
+}
+
 /// Trader score / reputation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraderScore {

@@ -75,6 +75,16 @@ impl PolyforgeClient {
         self.handle_response(resp).await
     }
 
+    async fn delete<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let resp = self
+            .http
+            .delete(self.url(path))
+            .header(AUTHORIZATION, self.auth_header())
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
     async fn handle_response<T: serde::de::DeserializeOwned>(
         &self,
         resp: reqwest::Response,
@@ -247,6 +257,21 @@ impl PolyforgeClient {
     /// Get the trader score / reputation.
     pub async fn get_score(&self) -> Result<TraderScore> {
         self.get("/api/score").await
+    }
+
+    // -----------------------------------------------------------------------
+    // Direct Trading
+    // -----------------------------------------------------------------------
+
+    /// Place a direct buy or sell order on a prediction market.
+    pub async fn place_order(&self, params: &PlaceOrderParams) -> Result<PlaceOrderResponse> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/orders/place", &body).await
+    }
+
+    /// Cancel a pending or live order.
+    pub async fn cancel_order(&self, order_id: &str) -> Result<CancelOrderResponse> {
+        self.delete(&format!("/api/v1/orders/{order_id}")).await
     }
 
     // -----------------------------------------------------------------------
