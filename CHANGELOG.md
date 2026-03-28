@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0] — 2026-03-28
+
+### Changed
+- Bump version to 1.0.0 (aligned with TypeScript and Python SDKs)
+
+### Fixed
+- Align all API paths to canonical `/api/v1/*` pattern matching backend
+- Add URL encoding for query parameters via `urlencoding` crate
+
+### Added
+- Unit tests for client construction, URL building, error types
+
 ## [0.2.0] — 2026-03-27
 
 ### Added
