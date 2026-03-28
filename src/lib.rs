@@ -20,6 +20,6 @@ pub mod client;
 pub mod errors;
 pub mod types;
 
-pub use client::PolyforgeClient;
+pub use client::{PolyforgeClient, StrategyEventStream};
 pub use errors::{PolyforgeError, Result};
 pub use types::*;

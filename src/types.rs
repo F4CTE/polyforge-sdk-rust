@@ -368,3 +368,30 @@ pub struct AiQueryResponse {
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
+
+// ---------------------------------------------------------------------------
+// Strategy Execution Events (SSE)
+// ---------------------------------------------------------------------------
+
+/// A single event emitted by the strategy execution SSE stream.
+///
+/// Iterate over these via [`crate::client::StrategyEventStream::next`].
+///
+/// Common event types: `CONNECTED`, `STRATEGY_STARTED`, `STRATEGY_STOPPED`,
+/// `STRATEGY_ERROR`, `ORDER_PLACED`, `ORDER_FILLED`, `ORDER_CANCELLED`,
+/// `BACKTEST_PROGRESS`, `BACKTEST_COMPLETED`, `BACKTEST_FAILED`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrategyEvent {
+    /// Event type identifier.
+    #[serde(rename = "type")]
+    pub event_type: String,
+    /// The strategy this event belongs to.
+    #[serde(rename = "strategyId", default)]
+    pub strategy_id: Option<String>,
+    /// Event-specific payload (varies per type).
+    #[serde(default)]
+    pub data: serde_json::Value,
+    /// Unix millisecond timestamp when the event was emitted server-side.
+    #[serde(default)]
+    pub timestamp: u64,
+}

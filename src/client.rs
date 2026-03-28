@@ -5,6 +5,69 @@ use urlencoding::encode;
 use crate::errors::{PolyforgeError, Result};
 use crate::types::*;
 
+// ---------------------------------------------------------------------------
+// StrategyEventStream — lazy SSE reader returned by watch_strategy()
+// ---------------------------------------------------------------------------
+
+/// An open SSE connection to a strategy's execution event stream.
+///
+/// Call [`StrategyEventStream::next`] in a loop to receive events one at a time.
+/// Drop the struct to close the underlying HTTP connection.
+///
+/// # Example
+/// ```no_run
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// # let client = polyforge::PolyforgeClient::new("key");
+/// let mut stream = client.watch_strategy("strat-uuid").await?;
+/// while let Some(event) = stream.next().await {
+///     let event = event?;
+///     println!("{}: {:?}", event.event_type, event.data);
+///     if event.event_type == "STRATEGY_STOPPED" { break; }
+/// }
+/// # Ok(())
+/// # }
+/// ```
+pub struct StrategyEventStream {
+    response: reqwest::Response,
+    buffer: String,
+}
+
+impl StrategyEventStream {
+    /// Receive the next event from the stream.
+    ///
+    /// Returns `None` when the server closes the connection.
+    pub async fn next(&mut self) -> Option<Result<StrategyEvent>> {
+        loop {
+            // Parse any complete SSE lines already in the buffer
+            if let Some(pos) = self.buffer.find('\n') {
+                let line = self.buffer[..pos].to_string();
+                self.buffer = self.buffer[pos + 1..].to_string();
+
+                if let Some(raw) = line.strip_prefix("data: ") {
+                    let raw = raw.trim();
+                    if !raw.is_empty() {
+                        return Some(
+                            serde_json::from_str::<StrategyEvent>(raw)
+                                .map_err(PolyforgeError::from),
+                        );
+                    }
+                }
+                // Skip comment / heartbeat lines and loop
+                continue;
+            }
+
+            // Need more bytes from the network
+            match self.response.chunk().await {
+                Ok(Some(chunk)) => {
+                    self.buffer.push_str(&String::from_utf8_lossy(&chunk));
+                }
+                Ok(None) => return None, // Server closed the stream
+                Err(e) => return Some(Err(PolyforgeError::from(e))),
+            }
+        }
+    }
+}
+
 const DEFAULT_BASE_URL: &str = "http://localhost:3002";
 
 /// Async client for the Polyforge trading platform REST API.
@@ -340,6 +403,46 @@ impl PolyforgeClient {
     pub async fn ai_query(&self, query: &str) -> Result<AiQueryResponse> {
         let body = json!({ "query": query });
         self.post("/api/v1/ai/query", &body).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Strategy Execution Watching (SSE)
+    // -----------------------------------------------------------------------
+
+    /// Open a live SSE event stream for a running (or backtesting) strategy.
+    ///
+    /// Returns a [`StrategyEventStream`] that you poll with `.next().await`.
+    /// The first event always has `event_type == "CONNECTED"`.
+    ///
+    /// # Errors
+    /// Returns an error if the HTTP request fails or the server returns a
+    /// non-2xx status (e.g. strategy not found, insufficient scope).
+    pub async fn watch_strategy(&self, strategy_id: &str) -> Result<StrategyEventStream> {
+        let path = format!("/api/v1/strategies/{}/events", encode(strategy_id));
+        let resp = self
+            .http
+            .get(self.url(&path))
+            .header(AUTHORIZATION, self.auth_header())
+            .header("Accept", "text/event-stream")
+            .header("Cache-Control", "no-cache")
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body: serde_json::Value = resp.json().await.unwrap_or_default();
+            return Err(PolyforgeError::Api {
+                status,
+                code: body.get("code").and_then(|v| v.as_str()).unwrap_or("STREAM_ERROR").to_string(),
+                message: body.get("message").and_then(|v| v.as_str()).unwrap_or("SSE stream request failed").to_string(),
+                request_id: None,
+            });
+        }
+
+        Ok(StrategyEventStream {
+            response: resp,
+            buffer: String::new(),
+        })
     }
 }
 

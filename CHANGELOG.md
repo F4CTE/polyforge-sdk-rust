@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0] — 2026-03-29
+
+### Added
+- `watch_strategy(strategy_id)` — opens the strategy SSE stream and returns a `StrategyEventStream`
+- `StrategyEventStream` struct — poll with `.next().await` to receive `Result<StrategyEvent>` items; drop to close the connection
+- `StrategyEvent` struct — `event_type`, `strategy_id`, `data` (raw JSON value), `timestamp`
+- Both `StrategyEventStream` and `StrategyEvent` re-exported from the crate root
+
 ## [1.0.0] — 2026-03-28
 
 ### Changed

@@ -81,6 +81,39 @@ async fn main() -> polyforge::Result<()> {
 | `stop_strategy(id)` | Stop a running strategy |
 | `get_strategy_templates()` | List available templates |
 | `export_strategy(id)` | Export strategy config as JSON |
+| `watch_strategy(id)` | Stream live execution events via SSE |
+
+### Live Execution Watching
+
+`watch_strategy` opens a persistent SSE connection and returns a `StrategyEventStream`. Poll it with `.next().await` — drop the struct to close the connection.
+
+```rust
+use polyforge::{PolyforgeClient, StrategyEventStream};
+
+#[tokio::main]
+async fn main() -> polyforge::Result<()> {
+    let client = PolyforgeClient::new("your-api-key");
+
+    client.start_strategy("strat-uuid", polyforge::TradingMode::Paper).await?;
+
+    let mut stream = client.watch_strategy("strat-uuid").await?;
+    while let Some(event) = stream.next().await {
+        let event = event?;
+        match event.event_type.as_str() {
+            "CONNECTED"         => println!("Stream live"),
+            "ORDER_FILLED"      => println!("Filled: {:?}", event.data),
+            "BACKTEST_PROGRESS" => println!("Progress: {:?}", event.data),
+            "STRATEGY_STOPPED" | "BACKTEST_COMPLETED" => break,
+            _ => {}
+        }
+    }
+    Ok(())
+}
+```
+
+**`StrategyEvent` fields:** `event_type: String` · `strategy_id: Option<String>` · `data: serde_json::Value` · `timestamp: u64`
+
+**Common event types:** `CONNECTED` · `STRATEGY_STARTED` · `STRATEGY_STOPPED` · `STRATEGY_ERROR` · `ORDER_PLACED` · `ORDER_FILLED` · `ORDER_CANCELLED` · `BACKTEST_PROGRESS` · `BACKTEST_COMPLETED` · `BACKTEST_FAILED`
 
 ### Portfolio & Orders
 
@@ -89,6 +122,8 @@ async fn main() -> polyforge::Result<()> {
 | `get_portfolio()` | Current portfolio and positions |
 | `get_orders(params)` | List orders with optional filters |
 | `get_score()` | Trader score and reputation |
+| `place_order(params)` | Place a direct buy/sell order |
+| `cancel_order(order_id)` | Cancel a pending or live order |
 
 ### Social & Signals
 
