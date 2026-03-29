@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.2.0] — 2026-03-29
+
+### Fixed
+- `get_score()` path corrected: `/api/v1/score` → `/api/v1/scores/me`
+- `get_whale_feed()` path corrected: `/api/v1/whale-feed` → `/api/v1/whales/feed`
+- `get_news_signals()` path corrected: `/api/v1/news-signals` → `/api/v1/news/signals`
+- `list_copy_configs()` path corrected: `/api/v1/copy-configs` → `/api/v1/copy`
+
+### Added
+- `update_strategy(id, name, description)` — `PATCH /api/v1/strategies/:id`
+- `delete_strategy(id)` — `DELETE /api/v1/strategies/:id`
+- `import_strategy(data)` — `POST /api/v1/strategies/import`
+- `pause_strategy(id)` — `POST /api/v1/strategies/:id/pause`
+- `resume_strategy(id)` — `POST /api/v1/strategies/:id/resume`
+- `fork_strategy(id)` — `POST /api/v1/strategies/:id/fork`
+- `close_position(params)` — `POST /api/v1/orders/close-position`
+- `redeem_position(params)` — `POST /api/v1/orders/redeem`
+- `split_position(params)` — `POST /api/v1/orders/split`
+- `merge_positions(params)` — `POST /api/v1/orders/merge`
+- `ListOrdersParams` now includes `strategy_id`, `from`, `to` filter fields
+- `patch()` internal helper for `PATCH` requests
+- New types: `ClosePositionParams`, `RedeemPositionParams`, `SplitPositionParams`, `MergePositionParams`
+
 ## [1.1.0] — 2026-03-29
 
 ### Added

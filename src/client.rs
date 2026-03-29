@@ -139,6 +139,21 @@ impl PolyforgeClient {
         self.handle_response(resp).await
     }
 
+    async fn patch<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<T> {
+        let resp = self
+            .http
+            .patch(self.url(path))
+            .header(AUTHORIZATION, self.auth_header())
+            .json(body)
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
     async fn delete<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
         let resp = self
             .http
@@ -289,6 +304,49 @@ impl PolyforgeClient {
         self.get(&format!("/api/v1/strategies/{id}/export")).await
     }
 
+    /// Update a strategy's name and/or description.
+    pub async fn update_strategy(
+        &self,
+        id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<Strategy> {
+        let mut body = serde_json::json!({});
+        if let Some(n) = name {
+            body["name"] = serde_json::json!(n);
+        }
+        if let Some(d) = description {
+            body["description"] = serde_json::json!(d);
+        }
+        self.patch(&format!("/api/v1/strategies/{id}"), &body).await
+    }
+
+    /// Delete a strategy by ID.
+    pub async fn delete_strategy(&self, id: &str) -> Result<serde_json::Value> {
+        self.delete(&format!("/api/v1/strategies/{id}")).await
+    }
+
+    /// Import a strategy from a .polyforge JSON export.
+    pub async fn import_strategy(&self, data: &serde_json::Value) -> Result<Strategy> {
+        let body = serde_json::json!({ "data": data });
+        self.post("/api/v1/strategies/import", &body).await
+    }
+
+    /// Pause a running strategy.
+    pub async fn pause_strategy(&self, id: &str) -> Result<Strategy> {
+        self.post(&format!("/api/v1/strategies/{id}/pause"), &serde_json::json!({})).await
+    }
+
+    /// Resume a paused strategy.
+    pub async fn resume_strategy(&self, id: &str) -> Result<Strategy> {
+        self.post(&format!("/api/v1/strategies/{id}/resume"), &serde_json::json!({})).await
+    }
+
+    /// Fork a strategy to create a new editable copy.
+    pub async fn fork_strategy(&self, id: &str) -> Result<Strategy> {
+        self.post(&format!("/api/v1/strategies/{id}/fork"), &serde_json::json!({})).await
+    }
+
     // -----------------------------------------------------------------------
     // Portfolio & Orders
     // -----------------------------------------------------------------------
@@ -307,6 +365,15 @@ impl PolyforgeClient {
         if let Some(ref s) = params.status {
             qp.push(("status", s.clone()));
         }
+        if let Some(ref s) = params.strategy_id {
+            qp.push(("strategyId", s.clone()));
+        }
+        if let Some(ref f) = params.from {
+            qp.push(("from", f.clone()));
+        }
+        if let Some(ref t) = params.to {
+            qp.push(("to", t.clone()));
+        }
 
         let qs = if qp.is_empty() {
             String::new()
@@ -320,7 +387,7 @@ impl PolyforgeClient {
 
     /// Get the trader score / reputation.
     pub async fn get_score(&self) -> Result<TraderScore> {
-        self.get("/api/v1/score").await
+        self.get("/api/v1/scores/me").await
     }
 
     // -----------------------------------------------------------------------
@@ -338,6 +405,30 @@ impl PolyforgeClient {
         self.delete(&format!("/api/v1/orders/{order_id}")).await
     }
 
+    /// Close an open position (sell all shares at market price).
+    pub async fn close_position(&self, params: &ClosePositionParams) -> Result<PlaceOrderResponse> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/orders/close-position", &body).await
+    }
+
+    /// Redeem winning shares after a market resolves.
+    pub async fn redeem_position(&self, params: &RedeemPositionParams) -> Result<PlaceOrderResponse> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/orders/redeem", &body).await
+    }
+
+    /// Split a position into smaller positions.
+    pub async fn split_position(&self, params: &SplitPositionParams) -> Result<PlaceOrderResponse> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/orders/split", &body).await
+    }
+
+    /// Merge multiple positions into one.
+    pub async fn merge_positions(&self, params: &MergePositionParams) -> Result<PlaceOrderResponse> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/orders/merge", &body).await
+    }
+
     // -----------------------------------------------------------------------
     // Social & Signals
     // -----------------------------------------------------------------------
@@ -348,7 +439,7 @@ impl PolyforgeClient {
             Some(s) => format!("?min_size={}", encode(&s.to_string())),
             None => String::new(),
         };
-        self.get(&format!("/api/v1/whale-feed{qs}")).await
+        self.get(&format!("/api/v1/whales/feed{qs}")).await
     }
 
     /// Get AI-powered news signals.
@@ -360,7 +451,7 @@ impl PolyforgeClient {
             Some(c) => format!("?min_confidence={}", encode(&c.to_string())),
             None => String::new(),
         };
-        self.get(&format!("/api/v1/news-signals{qs}")).await
+        self.get(&format!("/api/v1/news/signals{qs}")).await
     }
 
     // -----------------------------------------------------------------------
@@ -374,7 +465,7 @@ impl PolyforgeClient {
 
     /// List copy-trading configurations.
     pub async fn list_copy_configs(&self) -> Result<Vec<CopyConfig>> {
-        self.get("/api/v1/copy-configs").await
+        self.get("/api/v1/copy").await
     }
 
     /// List registered webhooks.

@@ -190,6 +190,43 @@ pub struct Order {
 pub struct ListOrdersParams {
     pub limit: Option<u32>,
     pub status: Option<String>,
+    pub strategy_id: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
+
+/// Parameters for closing a position.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct ClosePositionParams {
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<f64>,
+}
+
+/// Parameters for redeeming a resolved position.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct RedeemPositionParams {
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    #[serde(rename = "conditionId", skip_serializing_if = "Option::is_none")]
+    pub condition_id: Option<String>,
+}
+
+/// Parameters for splitting a position.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct SplitPositionParams {
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    pub size: f64,
+    pub price: f64,
+}
+
+/// Parameters for merging positions.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct MergePositionParams {
+    #[serde(rename = "tokenIds")]
+    pub token_ids: Vec<String>,
 }
 
 /// Parameters for placing a direct order.
