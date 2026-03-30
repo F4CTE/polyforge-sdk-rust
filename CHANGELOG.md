@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.4.1] — 2026-03-30
+
+### Fixed
+- `MarketSentiment` struct: renamed `label` → `direction` to match the actual API response field (`direction: String`, values `"BULLISH" | "BEARISH" | "NEUTRAL"`)
+
 ## [1.4.0] — 2026-03-30
 
 ### Added

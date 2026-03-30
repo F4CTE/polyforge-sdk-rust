@@ -650,7 +650,7 @@ pub struct MarketSentiment {
     #[serde(rename = "marketId")]
     pub market_id: String,
     pub score: f64,
-    pub label: String,
+    pub direction: String,
     #[serde(rename = "signalCount")]
     pub signal_count: u32,
     #[serde(rename = "lastUpdated")]
