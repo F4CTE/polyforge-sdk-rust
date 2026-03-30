@@ -407,6 +407,282 @@ pub struct AiQueryResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Arbitrage
+// ---------------------------------------------------------------------------
+
+/// A merge arbitrage opportunity (YES + NO prices < $1.00).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArbitrageOpportunity {
+    #[serde(rename = "marketId")]
+    pub market_id: String,
+    #[serde(rename = "marketTitle")]
+    pub market_title: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(rename = "endDate", default)]
+    pub end_date: Option<String>,
+    #[serde(rename = "yesTokenId")]
+    pub yes_token_id: String,
+    #[serde(rename = "noTokenId")]
+    pub no_token_id: String,
+    #[serde(rename = "yesPrice")]
+    pub yes_price: String,
+    #[serde(rename = "noPrice")]
+    pub no_price: String,
+    pub sum: String,
+    #[serde(rename = "marginPct")]
+    pub margin_pct: String,
+    #[serde(rename = "costPerUnit")]
+    pub cost_per_unit: String,
+    #[serde(rename = "profitPerUnit")]
+    pub profit_per_unit: String,
+}
+
+// ---------------------------------------------------------------------------
+// Smart Orders
+// ---------------------------------------------------------------------------
+
+/// Smart order execution algorithm.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SmartOrderType {
+    TWAP,
+    DCA,
+    BRACKET,
+    OCO,
+}
+
+/// Smart order lifecycle status.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SmartOrderStatus {
+    PENDING,
+    ACTIVE,
+    COMPLETED,
+    CANCELLED,
+    FAILED,
+}
+
+/// Parameters for placing a smart order.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaceSmartOrderParams {
+    #[serde(rename = "type")]
+    pub order_type: SmartOrderType,
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    pub side: String,
+    pub outcome: String,
+    #[serde(rename = "totalSize")]
+    pub total_size: f64,
+    // TWAP / DCA
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slices: Option<u32>,
+    #[serde(rename = "intervalMinutes", skip_serializing_if = "Option::is_none")]
+    pub interval_minutes: Option<u32>,
+    #[serde(rename = "limitPrice", skip_serializing_if = "Option::is_none")]
+    pub limit_price: Option<f64>,
+    // BRACKET
+    #[serde(rename = "entryPrice", skip_serializing_if = "Option::is_none")]
+    pub entry_price: Option<f64>,
+    #[serde(rename = "takeProfitPrice", skip_serializing_if = "Option::is_none")]
+    pub take_profit_price: Option<f64>,
+    #[serde(rename = "stopLossPrice", skip_serializing_if = "Option::is_none")]
+    pub stop_loss_price: Option<f64>,
+    // OCO
+    #[serde(rename = "priceA", skip_serializing_if = "Option::is_none")]
+    pub price_a: Option<f64>,
+    #[serde(rename = "priceB", skip_serializing_if = "Option::is_none")]
+    pub price_b: Option<f64>,
+}
+
+/// Response from placing a smart order.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaceSmartOrderResponse {
+    #[serde(rename = "smartOrderId")]
+    pub smart_order_id: String,
+    #[serde(rename = "type")]
+    pub order_type: String,
+    pub status: String,
+    #[serde(rename = "slicesTotal")]
+    pub slices_total: u32,
+}
+
+/// A child order spawned by a smart order.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmartOrderChild {
+    pub id: String,
+    pub status: String,
+    #[serde(rename = "fillSize", default)]
+    pub fill_size: Option<String>,
+    #[serde(rename = "fillPrice", default)]
+    pub fill_price: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}
+
+/// A smart order with execution progress.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmartOrder {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub order_type: String,
+    pub status: String,
+    #[serde(rename = "marketId")]
+    pub market_id: String,
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    pub outcome: String,
+    pub side: String,
+    #[serde(rename = "totalSize")]
+    pub total_size: String,
+    #[serde(rename = "slicesFilled", default)]
+    pub slices_filled: u32,
+    #[serde(rename = "slicesTotal", default)]
+    pub slices_total: u32,
+    #[serde(rename = "nextExecuteAt", default)]
+    pub next_execute_at: Option<String>,
+    #[serde(rename = "completedAt", default)]
+    pub completed_at: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(default)]
+    pub orders: Vec<SmartOrderChild>,
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace
+// ---------------------------------------------------------------------------
+
+/// A strategy listing in the marketplace.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketplaceListing {
+    pub id: String,
+    #[serde(rename = "strategyId")]
+    pub strategy_id: String,
+    #[serde(rename = "sellerId")]
+    pub seller_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(rename = "priceUsdc")]
+    pub price_usdc: String,
+    pub status: String,
+    #[serde(rename = "purchaseCount", default)]
+    pub purchase_count: u64,
+    #[serde(rename = "forkCount", default)]
+    pub fork_count: u64,
+    #[serde(rename = "avgRating", default)]
+    pub avg_rating: Option<String>,
+    #[serde(rename = "ratingCount", default)]
+    pub rating_count: u64,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Response from purchasing a marketplace strategy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketplacePurchaseResult {
+    #[serde(rename = "purchaseId")]
+    pub purchase_id: String,
+    #[serde(rename = "forkedStrategyId")]
+    pub forked_strategy_id: String,
+    #[serde(rename = "priceUsdc")]
+    pub price_usdc: f64,
+    #[serde(rename = "platformFee")]
+    pub platform_fee: f64,
+    #[serde(rename = "sellerNet")]
+    pub seller_net: f64,
+}
+
+/// Parameters for browsing the marketplace.
+#[derive(Debug, Default)]
+pub struct BrowseMarketplaceParams {
+    pub sort: Option<String>,
+    pub tag: Option<String>,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+}
+
+// ---------------------------------------------------------------------------
+// Accuracy & Portfolio Review
+// ---------------------------------------------------------------------------
+
+/// A calibration bucket for the accuracy score.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalibrationBucket {
+    #[serde(rename = "bucketMid")]
+    pub bucket_mid: f64,
+    pub frequency: f64,
+    pub count: u32,
+}
+
+/// Prediction accuracy and calibration score for the authenticated user.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccuracyScore {
+    #[serde(rename = "brierScore")]
+    pub brier_score: Option<f64>,
+    #[serde(rename = "totalPredictions")]
+    pub total_predictions: u32,
+    #[serde(rename = "correctPredictions")]
+    pub correct_predictions: u32,
+    #[serde(rename = "winRate")]
+    pub win_rate: String,
+    pub calibration: Vec<CalibrationBucket>,
+    #[serde(rename = "byCategory")]
+    pub by_category: std::collections::HashMap<String, serde_json::Value>,
+}
+
+/// AI-generated portfolio review and optimization suggestions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortfolioReview {
+    pub review: String,
+    pub suggestions: Vec<String>,
+    pub score: u32,
+    #[serde(rename = "generatedAt")]
+    pub generated_at: String,
+}
+
+/// Aggregated news sentiment for a specific market.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketSentiment {
+    #[serde(rename = "marketId")]
+    pub market_id: String,
+    pub score: f64,
+    pub label: String,
+    #[serde(rename = "signalCount")]
+    pub signal_count: u32,
+    #[serde(rename = "lastUpdated")]
+    pub last_updated: Option<String>,
+}
+
+/// Parameters for providing liquidity on a market token.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProvideLiquidityParams {
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    pub spread: f64,
+    pub size: f64,
+}
+
+/// A liquidity position resulting from a provide_liquidity call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LpPosition {
+    #[serde(rename = "buyOrderId")]
+    pub buy_order_id: String,
+    #[serde(rename = "sellOrderId")]
+    pub sell_order_id: String,
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    #[serde(rename = "buyPrice")]
+    pub buy_price: String,
+    #[serde(rename = "sellPrice")]
+    pub sell_price: String,
+    pub size: String,
+}
+
+// ---------------------------------------------------------------------------
 // Strategy Execution Events (SSE)
 // ---------------------------------------------------------------------------
 

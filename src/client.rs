@@ -430,6 +430,86 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
+    // Arbitrage
+    // -----------------------------------------------------------------------
+
+    /// Scan all active markets for merge arbitrage opportunities (YES + NO < $1.00).
+    pub async fn get_arbitrage_opportunities(
+        &self,
+        min_margin: Option<f64>,
+    ) -> Result<Vec<ArbitrageOpportunity>> {
+        let qs = match min_margin {
+            Some(m) => format!("?minMargin={m}"),
+            None => String::new(),
+        };
+        self.get(&format!("/api/v1/arbitrage{qs}")).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Smart Orders
+    // -----------------------------------------------------------------------
+
+    /// Place an advanced smart order (TWAP, DCA, BRACKET, or OCO).
+    pub async fn place_smart_order(
+        &self,
+        params: &PlaceSmartOrderParams,
+    ) -> Result<PlaceSmartOrderResponse> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/orders/smart", &body).await
+    }
+
+    /// List your smart orders with child order progress.
+    pub async fn list_smart_orders(&self) -> Result<Vec<SmartOrder>> {
+        self.get("/api/v1/orders/smart").await
+    }
+
+    /// Cancel a pending or active smart order and its child orders.
+    pub async fn cancel_smart_order(&self, id: &str) -> Result<serde_json::Value> {
+        self.delete(&format!("/api/v1/orders/smart/{}", encode(id))).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Marketplace
+    // -----------------------------------------------------------------------
+
+    /// Browse marketplace listings with optional sort and tag filter.
+    pub async fn browse_marketplace(
+        &self,
+        params: &BrowseMarketplaceParams,
+    ) -> Result<serde_json::Value> {
+        let mut qp: Vec<String> = Vec::new();
+        if let Some(ref sort) = params.sort {
+            qp.push(format!("sort={}", encode(sort)));
+        }
+        if let Some(ref tag) = params.tag {
+            qp.push(format!("tag={}", encode(tag)));
+        }
+        if let Some(limit) = params.limit {
+            qp.push(format!("limit={limit}"));
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            format!("?{}", qp.join("&"))
+        };
+        self.get(&format!("/api/v1/marketplace{qs}")).await
+    }
+
+    /// Get a single marketplace listing by ID.
+    pub async fn get_marketplace_listing(&self, id: &str) -> Result<MarketplaceListing> {
+        self.get(&format!("/api/v1/marketplace/{}", encode(id))).await
+    }
+
+    /// Purchase a marketplace strategy. Receive a private fork in your account.
+    pub async fn purchase_strategy(&self, listing_id: &str) -> Result<MarketplacePurchaseResult> {
+        self.post(
+            &format!("/api/v1/marketplace/{}/purchase", encode(listing_id)),
+            &json!({}),
+        )
+        .await
+    }
+
+    // -----------------------------------------------------------------------
     // Social & Signals
     // -----------------------------------------------------------------------
 
@@ -494,6 +574,31 @@ impl PolyforgeClient {
     pub async fn ai_query(&self, query: &str) -> Result<AiQueryResponse> {
         let body = json!({ "query": query });
         self.post("/api/v1/ai/query", &body).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Accuracy & Portfolio Review
+    // -----------------------------------------------------------------------
+
+    /// Get prediction accuracy and calibration score for the authenticated user.
+    pub async fn get_accuracy(&self) -> Result<AccuracyScore> {
+        self.get("/api/v1/accuracy/me").await
+    }
+
+    /// Get AI-generated portfolio review and optimization suggestions.
+    pub async fn get_portfolio_review(&self) -> Result<PortfolioReview> {
+        self.get("/api/v1/ai/portfolio-review").await
+    }
+
+    /// Get aggregated news sentiment for a specific market.
+    pub async fn get_market_sentiment(&self, market_id: &str) -> Result<MarketSentiment> {
+        self.get(&format!("/api/v1/news/sentiment/{}", market_id)).await
+    }
+
+    /// Provide liquidity by placing two-sided quotes on a market token.
+    pub async fn provide_liquidity(&self, params: &ProvideLiquidityParams) -> Result<LpPosition> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/lp/provide", &body).await
     }
 
     // -----------------------------------------------------------------------

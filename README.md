@@ -147,6 +147,28 @@ async fn main() -> polyforge::Result<()> {
 |--------|-------------|
 | `ai_query(query)` | Natural-language AI query |
 
+### Accuracy & AI Insights
+
+| Method | Description |
+|--------|-------------|
+| `get_accuracy()` | Brier score, win rate, calibration buckets, and per-category breakdown |
+| `get_portfolio_review()` | AI-generated portfolio review with suggestions and score (1–10) |
+| `get_market_sentiment(market_id)` | Sentiment score (−100 to +100) with BULLISH / BEARISH / NEUTRAL label |
+
+### Liquidity Provisioning
+
+| Method | Description |
+|--------|-------------|
+| `provide_liquidity(params)` | Post liquidity; returns `LpPosition` with buy and sell order IDs |
+
+```rust
+// Accuracy & AI
+client.get_accuracy().await?
+client.get_portfolio_review().await?
+client.get_market_sentiment("market-id").await?
+client.provide_liquidity(&ProvideLiquidityParams { token_id, spread, size }).await?
+```
+
 ## Error Handling
 
 All methods return `polyforge::Result<T>`. Errors are represented by `PolyforgeError`:
