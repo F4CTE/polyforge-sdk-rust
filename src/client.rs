@@ -260,10 +260,14 @@ impl PolyforgeClient {
         &self,
         name: &str,
         description: Option<&str>,
+        market_id: Option<&str>,
     ) -> Result<Strategy> {
         let mut body = json!({ "name": name });
         if let Some(desc) = description {
             body["description"] = json!(desc);
+        }
+        if let Some(mid) = market_id {
+            body["marketId"] = json!(mid);
         }
         self.post("/api/v1/strategies", &body).await
     }
@@ -310,6 +314,7 @@ impl PolyforgeClient {
         id: &str,
         name: Option<&str>,
         description: Option<&str>,
+        market_id: Option<&str>,
     ) -> Result<Strategy> {
         let mut body = serde_json::json!({});
         if let Some(n) = name {
@@ -317,6 +322,9 @@ impl PolyforgeClient {
         }
         if let Some(d) = description {
             body["description"] = serde_json::json!(d);
+        }
+        if let Some(mid) = market_id {
+            body["marketId"] = serde_json::json!(mid);
         }
         self.patch(&format!("/api/v1/strategies/{id}"), &body).await
     }
