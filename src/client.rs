@@ -237,7 +237,7 @@ impl PolyforgeClient {
 
     /// Get a single market by ID.
     pub async fn get_market(&self, id: &str) -> Result<Market> {
-        self.get(&format!("/api/v1/markets/{id}")).await
+        self.get(&format!("/api/v1/markets/{}", encode(id))).await
     }
 
     // -----------------------------------------------------------------------
@@ -261,7 +261,7 @@ impl PolyforgeClient {
 
     /// Get a single strategy by ID.
     pub async fn get_strategy(&self, id: &str) -> Result<Strategy> {
-        self.get(&format!("/api/v1/strategies/{id}")).await
+        self.get(&format!("/api/v1/strategies/{}", encode(id))).await
     }
 
     /// Create a new strategy with a name and optional description.
@@ -297,13 +297,13 @@ impl PolyforgeClient {
     /// Start a strategy in the given trading mode.
     pub async fn start_strategy(&self, id: &str, mode: TradingMode) -> Result<Strategy> {
         let body = json!({ "mode": mode });
-        self.post(&format!("/api/v1/strategies/{id}/start"), &body)
+        self.post(&format!("/api/v1/strategies/{}/start", encode(id)), &body)
             .await
     }
 
     /// Stop a running strategy.
     pub async fn stop_strategy(&self, id: &str) -> Result<Strategy> {
-        self.post(&format!("/api/v1/strategies/{id}/stop"), &json!({}))
+        self.post(&format!("/api/v1/strategies/{}/stop", encode(id)), &json!({}))
             .await
     }
 
@@ -314,7 +314,7 @@ impl PolyforgeClient {
 
     /// Export a strategy configuration as JSON.
     pub async fn export_strategy(&self, id: &str) -> Result<serde_json::Value> {
-        self.get(&format!("/api/v1/strategies/{id}/export")).await
+        self.get(&format!("/api/v1/strategies/{}/export", encode(id))).await
     }
 
     /// Update a strategy's name and/or description.
@@ -335,12 +335,12 @@ impl PolyforgeClient {
         if let Some(mid) = market_id {
             body["marketId"] = serde_json::json!(mid);
         }
-        self.patch(&format!("/api/v1/strategies/{id}"), &body).await
+        self.patch(&format!("/api/v1/strategies/{}", encode(id)), &body).await
     }
 
     /// Delete a strategy by ID.
     pub async fn delete_strategy(&self, id: &str) -> Result<serde_json::Value> {
-        self.delete(&format!("/api/v1/strategies/{id}")).await
+        self.delete(&format!("/api/v1/strategies/{}", encode(id))).await
     }
 
     /// Import a strategy from a .polyforge JSON export.
@@ -351,17 +351,17 @@ impl PolyforgeClient {
 
     /// Pause a running strategy.
     pub async fn pause_strategy(&self, id: &str) -> Result<Strategy> {
-        self.post(&format!("/api/v1/strategies/{id}/pause"), &serde_json::json!({})).await
+        self.post(&format!("/api/v1/strategies/{}/pause", encode(id)), &serde_json::json!({})).await
     }
 
     /// Resume a paused strategy.
     pub async fn resume_strategy(&self, id: &str) -> Result<Strategy> {
-        self.post(&format!("/api/v1/strategies/{id}/resume"), &serde_json::json!({})).await
+        self.post(&format!("/api/v1/strategies/{}/resume", encode(id)), &serde_json::json!({})).await
     }
 
     /// Fork a strategy to create a new editable copy.
     pub async fn fork_strategy(&self, id: &str) -> Result<Strategy> {
-        self.post(&format!("/api/v1/strategies/{id}/fork"), &serde_json::json!({})).await
+        self.post(&format!("/api/v1/strategies/{}/fork", encode(id)), &serde_json::json!({})).await
     }
 
     // -----------------------------------------------------------------------
@@ -419,7 +419,7 @@ impl PolyforgeClient {
 
     /// Cancel a pending or live order.
     pub async fn cancel_order(&self, order_id: &str) -> Result<CancelOrderResponse> {
-        self.delete(&format!("/api/v1/orders/{order_id}")).await
+        self.delete(&format!("/api/v1/orders/{}", encode(order_id))).await
     }
 
     /// Close an open position (sell all shares at market price).
@@ -609,7 +609,7 @@ impl PolyforgeClient {
 
     /// Get aggregated news sentiment for a specific market.
     pub async fn get_market_sentiment(&self, market_id: &str) -> Result<MarketSentiment> {
-        self.get(&format!("/api/v1/news/sentiment/{}", market_id)).await
+        self.get(&format!("/api/v1/news/sentiment/{}", encode(market_id))).await
     }
 
     /// Provide liquidity by placing two-sided quotes on a market token.
