@@ -19,7 +19,7 @@ use crate::types::*;
 /// # Example
 /// ```no_run
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// # let client = polyforge::PolyforgeClient::new("key");
+/// # let client = polyforge::PolyforgeClient::new("key")?;
 /// let mut stream = client.watch_strategy("strat-uuid").await?;
 /// while let Some(event) = stream.next().await {
 ///     let event = event?;
@@ -98,12 +98,19 @@ impl std::fmt::Debug for PolyforgeClient {
 
 impl PolyforgeClient {
     /// Create a new client pointing at the default local URL (`https://localhost:3002`).
-    pub fn new(api_key: impl Into<String>) -> Self {
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Http`] if the underlying HTTP client fails to build.
+    pub fn new(api_key: impl Into<String>) -> Result<Self> {
         Self::with_url(api_key, DEFAULT_BASE_URL)
     }
 
     /// Create a new client with a custom base URL.
-    pub fn with_url(api_key: impl Into<String>, api_url: impl Into<String>) -> Self {
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Http`] if the underlying HTTP client fails to
+    /// build (e.g. TLS misconfiguration).
+    pub fn with_url(api_key: impl Into<String>, api_url: impl Into<String>) -> Result<Self> {
         let api_key = SecretBox::new(Box::new(api_key.into()));
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -111,13 +118,13 @@ impl PolyforgeClient {
         let http = reqwest::Client::builder()
             .default_headers(headers)
             .build()
-            .expect("failed to build reqwest client");
+            .map_err(PolyforgeError::Http)?;
 
-        Self {
+        Ok(Self {
             http,
             base_url: api_url.into().trim_end_matches('/').to_string(),
             api_key,
-        }
+        })
     }
 
     // -----------------------------------------------------------------------
@@ -128,16 +135,16 @@ impl PolyforgeClient {
         format!("{}{}", self.base_url, path)
     }
 
-    fn auth_header(&self) -> HeaderValue {
+    fn auth_header(&self) -> Result<HeaderValue> {
         HeaderValue::from_str(&format!("Bearer {}", self.api_key.expose_secret()))
-            .expect("invalid api key characters")
+            .map_err(|_| PolyforgeError::Validation("API key contains invalid HTTP header characters".into()))
     }
 
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
         let resp = self
             .http
             .get(self.url(path))
-            .header(AUTHORIZATION, self.auth_header())
+            .header(AUTHORIZATION, self.auth_header()?)
             .send()
             .await?;
         self.handle_response(resp).await
@@ -151,7 +158,7 @@ impl PolyforgeClient {
         let resp = self
             .http
             .post(self.url(path))
-            .header(AUTHORIZATION, self.auth_header())
+            .header(AUTHORIZATION, self.auth_header()?)
             .json(body)
             .send()
             .await?;
@@ -166,7 +173,7 @@ impl PolyforgeClient {
         let resp = self
             .http
             .patch(self.url(path))
-            .header(AUTHORIZATION, self.auth_header())
+            .header(AUTHORIZATION, self.auth_header()?)
             .json(body)
             .send()
             .await?;
@@ -177,7 +184,7 @@ impl PolyforgeClient {
         let resp = self
             .http
             .delete(self.url(path))
-            .header(AUTHORIZATION, self.auth_header())
+            .header(AUTHORIZATION, self.auth_header()?)
             .send()
             .await?;
         self.handle_response(resp).await
@@ -713,7 +720,7 @@ impl PolyforgeClient {
         let resp = self
             .http
             .get(self.url(&path))
-            .header(AUTHORIZATION, self.auth_header())
+            .header(AUTHORIZATION, self.auth_header()?)
             .header("Accept", "text/event-stream")
             .header("Cache-Control", "no-cache")
             .send()
@@ -751,40 +758,40 @@ mod tests {
 
     #[test]
     fn test_client_construction() {
-        let client = PolyforgeClient::new("test-api-key");
+        let client = PolyforgeClient::new("test-api-key").unwrap();
         assert_eq!(client.base_url, DEFAULT_BASE_URL);
     }
 
     #[test]
     fn test_client_with_custom_url() {
-        let client = PolyforgeClient::with_url("test-api-key", "https://api.example.com");
+        let client = PolyforgeClient::with_url("test-api-key", "https://api.example.com").unwrap();
         assert_eq!(client.base_url, "https://api.example.com");
     }
 
     #[test]
     fn test_client_url_normalization() {
-        let client = PolyforgeClient::with_url("test-api-key", "http://localhost:3002/");
+        let client = PolyforgeClient::with_url("test-api-key", "http://localhost:3002/").unwrap();
         assert_eq!(client.base_url, "http://localhost:3002");
     }
 
     #[test]
     fn test_client_url_construction() {
-        let client = PolyforgeClient::new("test-api-key");
+        let client = PolyforgeClient::new("test-api-key").unwrap();
         let url = client.url("/api/v1/markets");
         assert_eq!(url, "https://localhost:3002/api/v1/markets");
     }
 
     #[test]
     fn test_client_url_construction_with_custom_base() {
-        let client = PolyforgeClient::with_url("test-api-key", "https://api.example.com");
+        let client = PolyforgeClient::with_url("test-api-key", "https://api.example.com").unwrap();
         let url = client.url("/api/v1/strategies");
         assert_eq!(url, "https://api.example.com/api/v1/strategies");
     }
 
     #[test]
     fn test_client_auth_header() {
-        let client = PolyforgeClient::new("my-secret-key");
-        let header = client.auth_header();
+        let client = PolyforgeClient::new("my-secret-key").unwrap();
+        let header = client.auth_header().unwrap();
         assert_eq!(header.to_str().unwrap(), "Bearer my-secret-key");
     }
 
@@ -840,11 +847,11 @@ mod tests {
 
     #[test]
     fn test_client_with_different_api_keys() {
-        let client1 = PolyforgeClient::new("key-1");
-        let client2 = PolyforgeClient::new("key-2");
+        let client1 = PolyforgeClient::new("key-1").unwrap();
+        let client2 = PolyforgeClient::new("key-2").unwrap();
 
-        let header1 = client1.auth_header();
-        let header2 = client2.auth_header();
+        let header1 = client1.auth_header().unwrap();
+        let header2 = client2.auth_header().unwrap();
 
         assert_ne!(header1.to_str().unwrap(), header2.to_str().unwrap());
     }
