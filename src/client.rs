@@ -1,5 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use secrecy::{ExposeSecret, SecretBox};
 use serde_json::json;
+use url::Url;
 use urlencoding::encode;
 
 use crate::errors::{PolyforgeError, Result};
@@ -58,17 +60,17 @@ impl StrategyEventStream {
 
             // Need more bytes from the network
             match self.response.chunk().await {
-                Ok(Some(chunk)) => {
-                    match String::from_utf8(chunk.to_vec()) {
+                Ok(Some(chunk)) => match String::from_utf8(chunk.to_vec()) {
                     Ok(s) => self.buffer.push_str(&s),
-                    Err(e) => return Some(Err(PolyforgeError::Api {
-                        status: 0,
-                        code: "INVALID_UTF8".into(),
-                        message: format!("Invalid UTF-8 in SSE stream: {}", e),
-                        request_id: None,
-                    })),
-                }
-                }
+                    Err(e) => {
+                        return Some(Err(PolyforgeError::Api {
+                            status: 0,
+                            code: "INVALID_UTF8".into(),
+                            message: format!("Invalid UTF-8 in SSE stream: {}", e),
+                            request_id: None,
+                        }))
+                    }
+                },
                 Ok(None) => return None, // Server closed the stream
                 Err(e) => return Some(Err(PolyforgeError::from(e))),
             }
@@ -82,7 +84,7 @@ const DEFAULT_BASE_URL: &str = "https://localhost:3002";
 pub struct PolyforgeClient {
     http: reqwest::Client,
     base_url: String,
-    api_key: String,
+    api_key: SecretBox<String>,
 }
 
 impl std::fmt::Debug for PolyforgeClient {
@@ -102,7 +104,7 @@ impl PolyforgeClient {
 
     /// Create a new client with a custom base URL.
     pub fn with_url(api_key: impl Into<String>, api_url: impl Into<String>) -> Self {
-        let api_key = api_key.into();
+        let api_key = SecretBox::new(Box::new(api_key.into()));
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
@@ -127,7 +129,7 @@ impl PolyforgeClient {
     }
 
     fn auth_header(&self) -> HeaderValue {
-        HeaderValue::from_str(&format!("Bearer {}", self.api_key))
+        HeaderValue::from_str(&format!("Bearer {}", self.api_key.expose_secret()))
             .expect("invalid api key characters")
     }
 
@@ -236,7 +238,10 @@ impl PolyforgeClient {
         let qs = if qp.is_empty() {
             String::new()
         } else {
-            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
             format!("?{}", pairs.join("&"))
         };
 
@@ -253,10 +258,7 @@ impl PolyforgeClient {
     // -----------------------------------------------------------------------
 
     /// List strategies, optionally filtered by status.
-    pub async fn list_strategies(
-        &self,
-        status: Option<StrategyStatus>,
-    ) -> Result<Vec<Strategy>> {
+    pub async fn list_strategies(&self, status: Option<StrategyStatus>) -> Result<Vec<Strategy>> {
         let qs = match status {
             Some(s) => {
                 let val = serde_json::to_value(&s).unwrap_or_default();
@@ -269,7 +271,8 @@ impl PolyforgeClient {
 
     /// Get a single strategy by ID.
     pub async fn get_strategy(&self, id: &str) -> Result<Strategy> {
-        self.get(&format!("/api/v1/strategies/{}", encode(id))).await
+        self.get(&format!("/api/v1/strategies/{}", encode(id)))
+            .await
     }
 
     /// Create a new strategy with a name and optional description.
@@ -299,7 +302,8 @@ impl PolyforgeClient {
         if let Some(mid) = market_id {
             body["market_id"] = json!(mid);
         }
-        self.post("/api/v1/strategies/from-description", &body).await
+        self.post("/api/v1/strategies/from-description", &body)
+            .await
     }
 
     /// Start a strategy in the given trading mode.
@@ -311,8 +315,11 @@ impl PolyforgeClient {
 
     /// Stop a running strategy.
     pub async fn stop_strategy(&self, id: &str) -> Result<Strategy> {
-        self.post(&format!("/api/v1/strategies/{}/stop", encode(id)), &json!({}))
-            .await
+        self.post(
+            &format!("/api/v1/strategies/{}/stop", encode(id)),
+            &json!({}),
+        )
+        .await
     }
 
     /// Get available strategy templates.
@@ -322,7 +329,8 @@ impl PolyforgeClient {
 
     /// Export a strategy configuration as JSON.
     pub async fn export_strategy(&self, id: &str) -> Result<serde_json::Value> {
-        self.get(&format!("/api/v1/strategies/{}/export", encode(id))).await
+        self.get(&format!("/api/v1/strategies/{}/export", encode(id)))
+            .await
     }
 
     /// Update a strategy's name and/or description.
@@ -343,12 +351,14 @@ impl PolyforgeClient {
         if let Some(mid) = market_id {
             body["marketId"] = serde_json::json!(mid);
         }
-        self.patch(&format!("/api/v1/strategies/{}", encode(id)), &body).await
+        self.patch(&format!("/api/v1/strategies/{}", encode(id)), &body)
+            .await
     }
 
     /// Delete a strategy by ID.
     pub async fn delete_strategy(&self, id: &str) -> Result<serde_json::Value> {
-        self.delete(&format!("/api/v1/strategies/{}", encode(id))).await
+        self.delete(&format!("/api/v1/strategies/{}", encode(id)))
+            .await
     }
 
     /// Import a strategy from a .polyforge JSON export.
@@ -359,17 +369,29 @@ impl PolyforgeClient {
 
     /// Pause a running strategy.
     pub async fn pause_strategy(&self, id: &str) -> Result<Strategy> {
-        self.post(&format!("/api/v1/strategies/{}/pause", encode(id)), &serde_json::json!({})).await
+        self.post(
+            &format!("/api/v1/strategies/{}/pause", encode(id)),
+            &serde_json::json!({}),
+        )
+        .await
     }
 
     /// Resume a paused strategy.
     pub async fn resume_strategy(&self, id: &str) -> Result<Strategy> {
-        self.post(&format!("/api/v1/strategies/{}/resume", encode(id)), &serde_json::json!({})).await
+        self.post(
+            &format!("/api/v1/strategies/{}/resume", encode(id)),
+            &serde_json::json!({}),
+        )
+        .await
     }
 
     /// Fork a strategy to create a new editable copy.
     pub async fn fork_strategy(&self, id: &str) -> Result<Strategy> {
-        self.post(&format!("/api/v1/strategies/{}/fork", encode(id)), &serde_json::json!({})).await
+        self.post(
+            &format!("/api/v1/strategies/{}/fork", encode(id)),
+            &serde_json::json!({}),
+        )
+        .await
     }
 
     // -----------------------------------------------------------------------
@@ -427,7 +449,8 @@ impl PolyforgeClient {
 
     /// Cancel a pending or live order.
     pub async fn cancel_order(&self, order_id: &str) -> Result<CancelOrderResponse> {
-        self.delete(&format!("/api/v1/orders/{}", encode(order_id))).await
+        self.delete(&format!("/api/v1/orders/{}", encode(order_id)))
+            .await
     }
 
     /// Close an open position (sell all shares at market price).
@@ -437,7 +460,10 @@ impl PolyforgeClient {
     }
 
     /// Redeem winning shares after a market resolves.
-    pub async fn redeem_position(&self, params: &RedeemPositionParams) -> Result<PlaceOrderResponse> {
+    pub async fn redeem_position(
+        &self,
+        params: &RedeemPositionParams,
+    ) -> Result<PlaceOrderResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/orders/redeem", &body).await
     }
@@ -449,7 +475,10 @@ impl PolyforgeClient {
     }
 
     /// Merge multiple positions into one.
-    pub async fn merge_positions(&self, params: &MergePositionParams) -> Result<PlaceOrderResponse> {
+    pub async fn merge_positions(
+        &self,
+        params: &MergePositionParams,
+    ) -> Result<PlaceOrderResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/orders/merge", &body).await
     }
@@ -490,7 +519,8 @@ impl PolyforgeClient {
 
     /// Cancel a pending or active smart order and its child orders.
     pub async fn cancel_smart_order(&self, id: &str) -> Result<serde_json::Value> {
-        self.delete(&format!("/api/v1/orders/smart/{}", encode(id))).await
+        self.delete(&format!("/api/v1/orders/smart/{}", encode(id)))
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -522,7 +552,8 @@ impl PolyforgeClient {
 
     /// Get a single marketplace listing by ID.
     pub async fn get_marketplace_listing(&self, id: &str) -> Result<MarketplaceListing> {
-        self.get(&format!("/api/v1/marketplace/{}", encode(id))).await
+        self.get(&format!("/api/v1/marketplace/{}", encode(id)))
+            .await
     }
 
     /// Purchase a marketplace strategy. Receive a private fork in your account.
@@ -548,10 +579,7 @@ impl PolyforgeClient {
     }
 
     /// Get AI-powered news signals.
-    pub async fn get_news_signals(
-        &self,
-        min_confidence: Option<u32>,
-    ) -> Result<Vec<NewsSignal>> {
+    pub async fn get_news_signals(&self, min_confidence: Option<u32>) -> Result<Vec<NewsSignal>> {
         let qs = match min_confidence {
             Some(c) => format!("?min_confidence={}", encode(&c.to_string())),
             None => String::new(),
@@ -579,16 +607,57 @@ impl PolyforgeClient {
     }
 
     /// Register a new webhook for the given events.
-    pub async fn create_webhook(
-        &self,
-        url: &str,
-        events: &[WebhookEvent],
-    ) -> Result<Webhook> {
+    ///
+    /// The URL must use the `https` scheme and must not point to a private or
+    /// loopback IP address.
+    pub async fn create_webhook(&self, url: &str, events: &[WebhookEvent]) -> Result<Webhook> {
+        Self::validate_webhook_url(url)?;
         let body = json!({
             "url": url,
             "events": events,
         });
         self.post("/api/v1/webhooks", &body).await
+    }
+
+    /// Validates a webhook URL: must be HTTPS, well-formed, and not target
+    /// private/loopback networks.
+    fn validate_webhook_url(url: &str) -> Result<()> {
+        let parsed = Url::parse(url)
+            .map_err(|_| PolyforgeError::Validation("Invalid webhook URL".into()))?;
+
+        if parsed.scheme() != "https" {
+            return Err(PolyforgeError::Validation(
+                "Webhook URL must use HTTPS".into(),
+            ));
+        }
+
+        let host = parsed.host_str().unwrap_or_default();
+
+        if host == "localhost" || host.ends_with(".local") {
+            return Err(PolyforgeError::Validation(
+                "Webhook URL must not target localhost".into(),
+            ));
+        }
+
+        // Block private and link-local IP ranges to prevent SSRF
+        if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+            let is_private = match ip {
+                std::net::IpAddr::V4(v4) => {
+                    v4.is_loopback()
+                        || v4.is_private()
+                        || v4.is_link_local()
+                        || v4.octets()[0] == 169 && v4.octets()[1] == 254
+                }
+                std::net::IpAddr::V6(v6) => v6.is_loopback(),
+            };
+            if is_private {
+                return Err(PolyforgeError::Validation(
+                    "Webhook URL must not target private or loopback addresses".into(),
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -617,7 +686,8 @@ impl PolyforgeClient {
 
     /// Get aggregated news sentiment for a specific market.
     pub async fn get_market_sentiment(&self, market_id: &str) -> Result<MarketSentiment> {
-        self.get(&format!("/api/v1/news/sentiment/{}", encode(market_id))).await
+        self.get(&format!("/api/v1/news/sentiment/{}", encode(market_id)))
+            .await
     }
 
     /// Provide liquidity by placing two-sided quotes on a market token.
@@ -654,8 +724,16 @@ impl PolyforgeClient {
             let body: serde_json::Value = resp.json().await.unwrap_or_default();
             return Err(PolyforgeError::Api {
                 status,
-                code: body.get("code").and_then(|v| v.as_str()).unwrap_or("STREAM_ERROR").to_string(),
-                message: body.get("message").and_then(|v| v.as_str()).unwrap_or("SSE stream request failed").to_string(),
+                code: body
+                    .get("code")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("STREAM_ERROR")
+                    .to_string(),
+                message: body
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("SSE stream request failed")
+                    .to_string(),
                 request_id: None,
             });
         }
@@ -707,10 +785,7 @@ mod tests {
     fn test_client_auth_header() {
         let client = PolyforgeClient::new("my-secret-key");
         let header = client.auth_header();
-        assert_eq!(
-            header.to_str().unwrap(),
-            "Bearer my-secret-key"
-        );
+        assert_eq!(header.to_str().unwrap(), "Bearer my-secret-key");
     }
 
     #[test]
@@ -722,7 +797,13 @@ mod tests {
             request_id: Some("req-123".to_string()),
         };
 
-        if let PolyforgeError::Api { status, code, message, request_id } = error {
+        if let PolyforgeError::Api {
+            status,
+            code,
+            message,
+            request_id,
+        } = error
+        {
             assert_eq!(status, 404);
             assert_eq!(code, "NOT_FOUND");
             assert_eq!(message, "Resource not found");
@@ -741,7 +822,13 @@ mod tests {
             request_id: None,
         };
 
-        if let PolyforgeError::Api { status, code, message, request_id } = error {
+        if let PolyforgeError::Api {
+            status,
+            code,
+            message,
+            request_id,
+        } = error
+        {
             assert_eq!(status, 500);
             assert_eq!(code, "INTERNAL_ERROR");
             assert_eq!(message, "Internal server error");
@@ -760,5 +847,47 @@ mod tests {
         let header2 = client2.auth_header();
 
         assert_ne!(header1.to_str().unwrap(), header2.to_str().unwrap());
+    }
+
+    #[test]
+    fn test_webhook_url_rejects_http() {
+        let result = PolyforgeClient::validate_webhook_url("http://example.com/hook");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_webhook_url_rejects_localhost() {
+        let result = PolyforgeClient::validate_webhook_url("https://localhost/hook");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_webhook_url_rejects_private_ip() {
+        let result = PolyforgeClient::validate_webhook_url("https://192.168.1.1/hook");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_webhook_url_rejects_loopback() {
+        let result = PolyforgeClient::validate_webhook_url("https://127.0.0.1/hook");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_webhook_url_rejects_link_local() {
+        let result = PolyforgeClient::validate_webhook_url("https://169.254.1.1/hook");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_webhook_url_accepts_valid_https() {
+        let result = PolyforgeClient::validate_webhook_url("https://hooks.example.com/polyforge");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_webhook_url_rejects_invalid_url() {
+        let result = PolyforgeClient::validate_webhook_url("not a url");
+        assert!(result.is_err());
     }
 }

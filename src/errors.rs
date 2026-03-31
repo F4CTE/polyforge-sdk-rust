@@ -17,6 +17,10 @@ pub enum PolyforgeError {
     /// A JSON serialization or deserialization error.
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+
+    /// A client-side input validation error.
+    #[error("Validation error: {0}")]
+    Validation(String),
 }
 
 /// A convenience alias for `std::result::Result<T, PolyforgeError>`.
