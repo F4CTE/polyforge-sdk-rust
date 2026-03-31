@@ -59,7 +59,15 @@ impl StrategyEventStream {
             // Need more bytes from the network
             match self.response.chunk().await {
                 Ok(Some(chunk)) => {
-                    self.buffer.push_str(&String::from_utf8_lossy(&chunk));
+                    match String::from_utf8(chunk.to_vec()) {
+                    Ok(s) => self.buffer.push_str(&s),
+                    Err(e) => return Some(Err(PolyforgeError::Api {
+                        status: 0,
+                        code: "INVALID_UTF8".into(),
+                        message: format!("Invalid UTF-8 in SSE stream: {}", e),
+                        request_id: None,
+                    })),
+                }
                 }
                 Ok(None) => return None, // Server closed the stream
                 Err(e) => return Some(Err(PolyforgeError::from(e))),
