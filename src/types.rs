@@ -372,7 +372,7 @@ pub enum WebhookEvent {
 }
 
 /// A registered webhook.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Webhook {
     pub id: String,
     #[serde(default)]
@@ -387,6 +387,18 @@ pub struct Webhook {
     pub created_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+impl std::fmt::Debug for Webhook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Webhook")
+            .field("id", &self.id)
+            .field("url", &self.url)
+            .field("secret", &"[REDACTED]")
+            .field("events", &self.events)
+            .field("enabled", &self.enabled)
+            .finish()
+    }
 }
 
 // ---------------------------------------------------------------------------
