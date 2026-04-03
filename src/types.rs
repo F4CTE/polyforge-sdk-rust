@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// A paginated API response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PaginatedResponse<T> {
     pub data: Vec<T>,
     #[serde(default)]
@@ -26,6 +27,7 @@ pub struct PaginatedResponse<T> {
 
 /// A prediction market.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Market {
     pub id: String,
     pub title: String,
@@ -91,6 +93,7 @@ pub enum TradingMode {
 
 /// A trading strategy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Strategy {
     pub id: String,
     #[serde(default)]
@@ -131,6 +134,7 @@ pub struct StrategyTemplate {
 
 /// The user's portfolio.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Portfolio {
     #[serde(default)]
     pub balance: Option<f64>,
@@ -146,6 +150,7 @@ pub struct Portfolio {
 
 /// A portfolio position.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Position {
     #[serde(default)]
     pub market_id: Option<String>,
@@ -165,6 +170,7 @@ pub struct Position {
 
 /// An order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Order {
     pub id: String,
     #[serde(default)]
@@ -262,6 +268,7 @@ pub struct CancelOrderResponse {
 
 /// Trader score / reputation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TraderScore {
     #[serde(default)]
     pub score: Option<f64>,
@@ -283,6 +290,7 @@ pub struct TraderScore {
 
 /// A whale trade from the social feed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WhaleTrade {
     #[serde(default)]
     pub id: Option<String>,
@@ -304,6 +312,7 @@ pub struct WhaleTrade {
 
 /// A news-based trading signal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NewsSignal {
     #[serde(default)]
     pub id: Option<String>,
@@ -329,6 +338,7 @@ pub struct NewsSignal {
 
 /// A price or event alert.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Alert {
     pub id: String,
     #[serde(default)]
@@ -345,6 +355,7 @@ pub struct Alert {
 
 /// A copy-trading configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CopyConfig {
     pub id: String,
     #[serde(default)]
@@ -373,6 +384,7 @@ pub enum WebhookEvent {
 
 /// A registered webhook.
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Webhook {
     pub id: String,
     #[serde(default)]
