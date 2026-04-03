@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.2] — 2026-04-03
+
+### Fixed
+- **Security**: `with_url()` now validates the base URL — rejects non-HTTPS schemes (HTTP is still allowed for `localhost`/`127.0.0.1` during development), malformed URLs, path-traversal sequences (`..`), and embedded query strings or fragments (closes #11)
+- **Security**: `get_orders()` query parameter values are now URL-encoded via `urlencoding::encode()`, preventing query-parameter injection (closes #9)
+
+### Added
+- `validate_base_url()` internal helper with comprehensive URL validation
+- Unit tests for base URL validation (scheme, localhost exception, malformed, traversal, query, fragment)
+
 ## [1.4.1] — 2026-03-30
 
 ### Fixed
