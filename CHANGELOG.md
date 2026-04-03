@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.4.3] — 2026-04-03
+
+### Fixed
+- `create_strategy_from_description`: send `"marketId"` instead of `"market_id"` in request body to match platform API (closes #14)
+
 ## [1.4.1] — 2026-03-30
 
 ### Fixed

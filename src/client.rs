@@ -307,7 +307,7 @@ impl PolyforgeClient {
     ) -> Result<Strategy> {
         let mut body = json!({ "description": description });
         if let Some(mid) = market_id {
-            body["market_id"] = json!(mid);
+            body["marketId"] = json!(mid);
         }
         self.post("/api/v1/strategies/from-description", &body)
             .await
