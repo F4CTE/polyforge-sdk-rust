@@ -722,6 +722,13 @@ impl PolyforgeClient {
             ));
         }
 
+        // Block cloud metadata hostnames
+        if host == "metadata.google.internal" || host.ends_with(".internal") {
+            return Err(PolyforgeError::Validation(
+                "Webhook URL must not target cloud metadata endpoints".into(),
+            ));
+        }
+
         // Block private and link-local IP ranges to prevent SSRF
         if let Ok(ip) = host.parse::<std::net::IpAddr>() {
             let is_private = match ip {
@@ -729,9 +736,21 @@ impl PolyforgeClient {
                     v4.is_loopback()
                         || v4.is_private()
                         || v4.is_link_local()
-                        || v4.octets()[0] == 169 && v4.octets()[1] == 254
+                        || v4.is_unspecified()
+                        || (v4.octets()[0] == 169 && v4.octets()[1] == 254)
                 }
-                std::net::IpAddr::V6(v6) => v6.is_loopback(),
+                std::net::IpAddr::V6(v6) => {
+                    v6.is_loopback()
+                        || v6.is_unspecified()
+                        // unique-local fc00::/7
+                        || (v6.octets()[0] & 0xfe) == 0xfc
+                        // link-local fe80::/10
+                        || (v6.octets()[0] == 0xfe && (v6.octets()[1] & 0xc0) == 0x80)
+                        // IPv4-mapped ::ffff:x.x.x.x — check the mapped IPv4
+                        || v6.to_ipv4_mapped().map_or(false, |v4| {
+                            v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified()
+                        })
+                }
             };
             if is_private {
                 return Err(PolyforgeError::Validation(

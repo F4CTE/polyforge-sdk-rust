@@ -15,9 +15,9 @@ pub struct PaginatedResponse<T> {
     pub page: u64,
     #[serde(default)]
     pub limit: u64,
-    #[serde(default)]
+    #[serde(rename = "totalPages", default)]
     pub total_pages: u64,
-    #[serde(default)]
+    #[serde(rename = "hasNext", default)]
     pub has_next: bool,
 }
 
