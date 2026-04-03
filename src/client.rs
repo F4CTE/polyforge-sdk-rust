@@ -108,9 +108,16 @@ impl PolyforgeClient {
     /// Create a new client with a custom base URL.
     ///
     /// # Errors
+    /// Returns [`PolyforgeError::Validation`] if the URL is malformed, uses a
+    /// non-HTTPS scheme (HTTP is only allowed for `localhost` / `127.0.0.1`),
+    /// or contains path-traversal sequences.
+    ///
     /// Returns [`PolyforgeError::Http`] if the underlying HTTP client fails to
     /// build (e.g. TLS misconfiguration).
     pub fn with_url(api_key: impl Into<String>, api_url: impl Into<String>) -> Result<Self> {
+        let raw_url = api_url.into();
+        let base_url = Self::validate_base_url(&raw_url)?;
+
         let api_key = SecretBox::new(Box::new(api_key.into()));
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -122,9 +129,78 @@ impl PolyforgeClient {
 
         Ok(Self {
             http,
-            base_url: api_url.into().trim_end_matches('/').to_string(),
+            base_url,
             api_key,
         })
+    }
+
+    /// Validate and normalise a base URL.
+    ///
+    /// Rules:
+    /// - Must be a well-formed URL with a host.
+    /// - Must use the `https` scheme, **unless** the host is `localhost` or
+    ///   `127.0.0.1` (development convenience).
+    /// - Must not contain path-traversal sequences (`..`) or fragment/query
+    ///   parts that could lead to injection.
+    /// - Trailing slashes are stripped for consistent path joining.
+    fn validate_base_url(raw: &str) -> Result<String> {
+        let parsed = Url::parse(raw).map_err(|e| {
+            PolyforgeError::Validation(format!("Malformed base URL: {e}"))
+        })?;
+
+        // --- scheme check ---------------------------------------------------
+        let scheme = parsed.scheme();
+        let host = parsed.host_str().unwrap_or_default();
+        let is_local = host == "localhost"
+            || host == "127.0.0.1"
+            || host == "[::1]"
+            || host == "::1";
+
+        match scheme {
+            "https" => {} // always OK
+            "http" if is_local => {} // allowed for local dev
+            "http" => {
+                return Err(PolyforgeError::Validation(
+                    "Base URL must use HTTPS (HTTP is only allowed for localhost/127.0.0.1)".into(),
+                ));
+            }
+            other => {
+                return Err(PolyforgeError::Validation(format!(
+                    "Unsupported URL scheme \"{other}\"; expected \"https\" (or \"http\" for localhost)"
+                )));
+            }
+        }
+
+        // --- host must be present -------------------------------------------
+        if host.is_empty() {
+            return Err(PolyforgeError::Validation(
+                "Base URL must contain a host".into(),
+            ));
+        }
+
+        // --- reject path traversal and injection characters -----------------
+        // Check the raw input because the URL parser normalises `..` segments away.
+        if raw.contains("..") {
+            return Err(PolyforgeError::Validation(
+                "Base URL must not contain path-traversal sequences (..)".into(),
+            ));
+        }
+
+        if parsed.query().is_some() {
+            return Err(PolyforgeError::Validation(
+                "Base URL must not contain a query string".into(),
+            ));
+        }
+
+        if parsed.fragment().is_some() {
+            return Err(PolyforgeError::Validation(
+                "Base URL must not contain a fragment".into(),
+            ));
+        }
+
+        // --- normalise: strip trailing slashes ------------------------------
+        let normalised = raw.trim_end_matches('/').to_string();
+        Ok(normalised)
     }
 
     // -----------------------------------------------------------------------
@@ -432,7 +508,7 @@ impl PolyforgeClient {
         let qs = if qp.is_empty() {
             String::new()
         } else {
-            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
             format!("?{}", pairs.join("&"))
         };
 
@@ -873,6 +949,60 @@ mod tests {
         let header2 = client2.auth_header().unwrap();
 
         assert_ne!(header1.to_str().unwrap(), header2.to_str().unwrap());
+    }
+
+    #[test]
+    fn test_base_url_rejects_http_non_localhost() {
+        let result = PolyforgeClient::with_url("key", "http://api.example.com");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_allows_http_localhost() {
+        let client = PolyforgeClient::with_url("key", "http://localhost:3002").unwrap();
+        assert_eq!(client.base_url, "http://localhost:3002");
+    }
+
+    #[test]
+    fn test_base_url_allows_http_127() {
+        let client = PolyforgeClient::with_url("key", "http://127.0.0.1:3002").unwrap();
+        assert_eq!(client.base_url, "http://127.0.0.1:3002");
+    }
+
+    #[test]
+    fn test_base_url_rejects_malformed() {
+        let result = PolyforgeClient::with_url("key", "not a url");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_path_traversal() {
+        let result = PolyforgeClient::with_url("key", "https://example.com/../admin");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_query_string() {
+        let result = PolyforgeClient::with_url("key", "https://example.com?redirect=evil");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_fragment() {
+        let result = PolyforgeClient::with_url("key", "https://example.com#frag");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_ftp_scheme() {
+        let result = PolyforgeClient::with_url("key", "ftp://example.com");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_strips_trailing_slash() {
+        let client = PolyforgeClient::with_url("key", "https://api.example.com/").unwrap();
+        assert_eq!(client.base_url, "https://api.example.com");
     }
 
     #[test]

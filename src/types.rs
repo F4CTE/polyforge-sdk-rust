@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// A paginated API response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PaginatedResponse<T> {
     pub data: Vec<T>,
     #[serde(default)]
@@ -26,6 +27,7 @@ pub struct PaginatedResponse<T> {
 
 /// A prediction market.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Market {
     pub id: String,
     pub title: String,
