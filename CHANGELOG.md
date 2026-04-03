@@ -1,9 +1,21 @@
 # Changelog
 
-## [1.4.3] â€” 2026-04-03
+## [1.4.3] — 2026-04-03
 
 ### Fixed
 - `create_strategy_from_description`: send `"marketId"` instead of `"market_id"` in request body to match platform API (closes #14)
+
+## [1.4.2] — 2026-04-03
+
+### Fixed
+- **Security**: `with_url()` now validates the base URL — rejects non-HTTPS schemes (HTTP is still allowed for `localhost`/`127.0.0.1` during development), malformed URLs, path-traversal sequences (`..`), and embedded query strings or fragments (closes #11)
+- **Security**: `get_orders()` query parameter values are now URL-encoded via `urlencoding::encode()`, preventing query-parameter injection (closes #9)
+- Add `#[serde(rename_all = "camelCase")]` to `PaginatedResponse` — `total_pages` and `has_next` now correctly deserialize from the API's camelCase JSON keys (closes #12)
+- Add `#[serde(rename_all = "camelCase")]` to all core API response types (`Market`, `Strategy`, `Portfolio`, `Position`, `Order`, `TraderScore`, `WhaleTrade`, `NewsSignal`, `Alert`, `CopyConfig`, `Webhook`) — snake_case fields now correctly map to camelCase JSON returned by the platform (closes #13)
+
+### Added
+- `validate_base_url()` internal helper with comprehensive URL validation
+- Unit tests for base URL validation (scheme, localhost exception, malformed, traversal, query, fragment)
 
 ## [1.4.1] â€” 2026-03-30
 
