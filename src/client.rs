@@ -385,7 +385,7 @@ impl PolyforgeClient {
         description: &str,
         market_id: Option<&str>,
     ) -> Result<Strategy> {
-        let mut body = json!({ "description": description });
+        let mut body = json!({ "query": description });
         if let Some(mid) = market_id {
             body["marketId"] = json!(mid);
         }
@@ -772,7 +772,7 @@ impl PolyforgeClient {
 
     /// Send a natural-language query to the AI assistant.
     pub async fn ai_query(&self, query: &str) -> Result<AiQueryResponse> {
-        let body = json!({ "query": query });
+        let body = json!({ "question": query });
         self.post("/api/v1/ai/query", &body).await
     }
 
