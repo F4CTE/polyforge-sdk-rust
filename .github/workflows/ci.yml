@@ -6,17 +6,20 @@ on:
   pull_request:
     branches: [master]
 
+env:
+  CARGO_HOME: C:\cargo-cache
+  RUSTUP_HOME: C:\Users\User\.rustup
+
 jobs:
   check:
     name: Build, Lint & Test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, polyforge-sdk]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Add Rust to PATH
+        shell: pwsh
+        run: echo "C:\Users\User\.cargo\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
 
       - name: Format check
         run: cargo fmt --check
