@@ -393,7 +393,7 @@ pub struct Webhook {
     pub events: Vec<WebhookEvent>,
     #[serde(default)]
     pub enabled: Option<bool>,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub secret: Option<String>,
     #[serde(default)]
     pub created_at: Option<String>,
