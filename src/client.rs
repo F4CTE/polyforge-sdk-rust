@@ -4,6 +4,7 @@ use serde_json::json;
 use url::Url;
 use urlencoding::encode;
 
+use std::time::Duration;
 use crate::errors::{PolyforgeError, Result};
 use crate::types::*;
 
@@ -124,6 +125,9 @@ impl PolyforgeClient {
 
         let http = reqwest::Client::builder()
             .default_headers(headers)
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(PolyforgeError::Http)?;
 
