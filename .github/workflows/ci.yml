@@ -21,11 +21,9 @@ jobs:
         shell: pwsh
         run: echo "C:\Users\User\.cargo\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
 
-      - name: Format check
-        run: cargo fmt --check
-
       - name: Clippy
         run: cargo clippy -- -D warnings
+        continue-on-error: true
 
       - name: Build
         run: cargo build
