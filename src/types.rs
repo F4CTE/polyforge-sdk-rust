@@ -507,8 +507,8 @@ pub struct PlaceSmartOrderParams {
     // TWAP / DCA
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slices: Option<u32>,
-    #[serde(rename = "intervalMinutes", skip_serializing_if = "Option::is_none")]
-    pub interval_minutes: Option<u32>,
+    #[serde(rename = "intervalSeconds", skip_serializing_if = "Option::is_none")]
+    pub interval_seconds: Option<u32>,
     #[serde(rename = "limitPrice", skip_serializing_if = "Option::is_none")]
     pub limit_price: Option<f64>,
     // BRACKET
