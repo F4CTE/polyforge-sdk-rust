@@ -18,6 +18,8 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      - uses: Swatinem/rust-cache@v2
+
       - name: Clippy
         run: cargo clippy -- -D warnings
         continue-on-error: true
