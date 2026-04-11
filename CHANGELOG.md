@@ -1,25 +1,32 @@
 # Changelog
 
-## [1.5.0] — 2026-04-03
+## [1.5.1] â€” 2026-04-06
+
+### Security
+- **HTTP request timeouts** â€” added `timeout(30s)` and `connect_timeout(10s)` to `reqwest::Client::builder()` to prevent indefinite hangs on unresponsive servers (closes #24)
+- **Disable automatic redirects** â€” set `redirect(Policy::none())` on the HTTP client to prevent the Bearer token from being forwarded to third-party hosts via 3xx redirects (closes #25)
+- **Webhook secret skip_serializing** â€” added `#[serde(skip_serializing)]` to `Webhook.secret` field to prevent the HMAC signing secret from leaking via `serde_json::to_string()` or any serialization path; regression of #8 where only `Debug` was fixed but `Serialize` was missed (closes #43)
+
+## [1.5.0] â€” 2026-04-03
 
 ### Fixed
 - **BREAKING**: `create_strategy_from_description()` now sends `marketId` (camelCase) instead of `market_id` to match the platform contract (closes #14)
-- `PaginatedResponse` now deserializes `totalPages` and `hasNext` correctly via `#[serde(rename)]` annotations — pagination was silently broken (closes #12)
-- Added `#[serde(rename_all = "camelCase")]` to `Strategy`, `Portfolio`, `Position`, `Order`, `TraderScore`, `WhaleTrade`, `NewsSignal`, `Alert`, `CopyConfig`, `Webhook` — all camelCase fields now deserialize correctly instead of defaulting to `None` (closes #13)
-- SSRF bypass in `validate_webhook_url()` — expanded IPv6 checks to cover unique-local (`fc00::/7`), link-local (`fe80::/10`), IPv4-mapped (`::ffff:x.x.x.x`), unspecified addresses, and cloud metadata hostnames (closes #10)
+- `PaginatedResponse` now deserializes `totalPages` and `hasNext` correctly via `#[serde(rename)]` annotations â€” pagination was silently broken (closes #12)
+- Added `#[serde(rename_all = "camelCase")]` to `Strategy`, `Portfolio`, `Position`, `Order`, `TraderScore`, `WhaleTrade`, `NewsSignal`, `Alert`, `CopyConfig`, `Webhook` â€” all camelCase fields now deserialize correctly instead of defaulting to `None` (closes #13)
+- SSRF bypass in `validate_webhook_url()` â€” expanded IPv6 checks to cover unique-local (`fc00::/7`), link-local (`fe80::/10`), IPv4-mapped (`::ffff:x.x.x.x`), unspecified addresses, and cloud metadata hostnames (closes #10)
 
-## [1.4.3] — 2026-04-03
+## [1.4.3] â€” 2026-04-03
 
 ### Fixed
 - `create_strategy_from_description`: send `"marketId"` instead of `"market_id"` in request body to match platform API (closes #14)
 
-## [1.4.2] — 2026-04-03
+## [1.4.2] â€” 2026-04-03
 
 ### Fixed
-- **Security**: `with_url()` now validates the base URL — rejects non-HTTPS schemes (HTTP is still allowed for `localhost`/`127.0.0.1` during development), malformed URLs, path-traversal sequences (`..`), and embedded query strings or fragments (closes #11)
+- **Security**: `with_url()` now validates the base URL â€” rejects non-HTTPS schemes (HTTP is still allowed for `localhost`/`127.0.0.1` during development), malformed URLs, path-traversal sequences (`..`), and embedded query strings or fragments (closes #11)
 - **Security**: `get_orders()` query parameter values are now URL-encoded via `urlencoding::encode()`, preventing query-parameter injection (closes #9)
-- Add `#[serde(rename_all = "camelCase")]` to `PaginatedResponse` — `total_pages` and `has_next` now correctly deserialize from the API's camelCase JSON keys (closes #12)
-- Add `#[serde(rename_all = "camelCase")]` to all core API response types (`Market`, `Strategy`, `Portfolio`, `Position`, `Order`, `TraderScore`, `WhaleTrade`, `NewsSignal`, `Alert`, `CopyConfig`, `Webhook`) — snake_case fields now correctly map to camelCase JSON returned by the platform (closes #13)
+- Add `#[serde(rename_all = "camelCase")]` to `PaginatedResponse` â€” `total_pages` and `has_next` now correctly deserialize from the API's camelCase JSON keys (closes #12)
+- Add `#[serde(rename_all = "camelCase")]` to all core API response types (`Market`, `Strategy`, `Portfolio`, `Position`, `Order`, `TraderScore`, `WhaleTrade`, `NewsSignal`, `Alert`, `CopyConfig`, `Webhook`) â€” snake_case fields now correctly map to camelCase JSON returned by the platform (closes #13)
 
 ### Added
 - `validate_base_url()` internal helper with comprehensive URL validation
