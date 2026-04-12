@@ -59,7 +59,7 @@ async fn main() -> polyforge::Result<()> {
 
 | Method | Description |
 |--------|-------------|
-| `PolyforgeClient::new(api_key)` | Connect to `http://localhost:3002` |
+| `PolyforgeClient::new(api_key)` | Connect to `https://localhost:3002` |
 | `PolyforgeClient::with_url(api_key, url)` | Connect to a custom URL |
 
 ### Markets
