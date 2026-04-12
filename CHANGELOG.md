@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Security
+- **DNS rebinding SSRF mitigation** — `validate_webhook_url()` now resolves domain names via `tokio::net::lookup_host()` and checks all resolved IPs against the private/loopback blocklist, preventing SSRF bypass via attacker-controlled DNS records; also adds CGNAT range (100.64.0.0/10, RFC 6598) to the blocklist; documents that this is a client-side best-effort check and the server must independently validate (closes #63, closes #41)
 - **Default URL from env var** — `new()` now reads `POLYFORGE_API_URL` env var before falling back to `https://localhost:3002`, preventing silent credential exposure when deployed without explicit URL configuration; extended `is_local` to cover `0.0.0.0`, `127.0.0.x` range, and `localhost.localdomain` (closes #71)
 - **CI**: switch from self-hosted runner to `ubuntu-latest` for all events and add `permissions: contents: read` to restrict GITHUB_TOKEN scope — mitigates supply chain risk from external PRs running on self-hosted infra (closes #72)
 - **Clippy CI gate enforced** — removed `continue-on-error: true` from Clippy step so lint warnings (including security-relevant ones) now block CI; fixed `map_or` → `is_some_and` clippy warning (closes #79)
