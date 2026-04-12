@@ -10,6 +10,7 @@
 - **Webhook secret skip_serializing** — added `#[serde(skip_serializing)]` to `Webhook.secret` field to prevent the HMAC signing secret from leaking via `serde_json::to_string()` or any serialization path; regression of #8 where only `Debug` was fixed but `Serialize` was missed (closes #43)
 
 ### Fixed
+- **BREAKING** `PlaceSmartOrderParams`: revert `interval_seconds`/`"intervalSeconds"` back to `interval_minutes`/`"intervalMinutes"` — the #66 fix was based on incorrect platform contract info; platform DTO uses `intervalMinutes` (closes #80)
 - **Issue #50**: `ai_query()` now sends `{ "question": ... }` instead of `{ "query": ... }` to match the platform's `AiQueryDto` contract — every call was previously rejected or silently ignored by the backend
 - **Issue #46**: `TradingMode` enum now serializes to `"LIVE"` / `"PAPER"` (uppercase) instead of `"live"` / `"paper"` — `start_strategy()` was receiving a 422 from the backend due to failed enum validation
 - **Issue #47**: `WebhookEvent` variants now serialize to dot-notation strings (`"order.filled"`, `"strategy.error"`, `"whale.trade"`, `"news.signal"`, `"backtest.complete"`, `"daily.loss.limit"`, `"market.resolved"`, `"price.alert"`) instead of `SCREAMING_SNAKE_CASE` — webhooks registered via the SDK were using invalid event type strings
