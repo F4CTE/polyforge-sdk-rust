@@ -295,6 +295,10 @@ impl PolyforgeClient {
                     .map(String::from),
             });
         }
+        if status == 204 {
+            return serde_json::from_value(serde_json::Value::Null)
+                .map_err(PolyforgeError::from);
+        }
         let body = resp.text().await?;
         serde_json::from_str(&body).map_err(PolyforgeError::from)
     }
@@ -442,10 +446,11 @@ impl PolyforgeClient {
             .await
     }
 
-    /// Delete a strategy by ID.
-    pub async fn delete_strategy(&self, id: &str) -> Result<serde_json::Value> {
-        self.delete(&format!("/api/v1/strategies/{}", encode(id)))
-            .await
+    /// Delete a strategy by ID. Returns `()` on success (platform returns 204 No Content).
+    pub async fn delete_strategy(&self, id: &str) -> Result<()> {
+        self.delete::<serde_json::Value>(&format!("/api/v1/strategies/{}", encode(id)))
+            .await?;
+        Ok(())
     }
 
     /// Import a strategy from a .polyforge JSON export.
