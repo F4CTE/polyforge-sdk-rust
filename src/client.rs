@@ -98,12 +98,15 @@ impl std::fmt::Debug for PolyforgeClient {
 }
 
 impl PolyforgeClient {
-    /// Create a new client pointing at the default local URL (`https://localhost:3002`).
+    /// Create a new client using the `POLYFORGE_API_URL` environment variable,
+    /// falling back to the default local URL (`https://localhost:3002`).
     ///
     /// # Errors
     /// Returns [`PolyforgeError::Http`] if the underlying HTTP client fails to build.
+    /// Returns [`PolyforgeError::Validation`] if the URL is invalid.
     pub fn new(api_key: impl Into<String>) -> Result<Self> {
-        Self::with_url(api_key, DEFAULT_BASE_URL)
+        let url = std::env::var("POLYFORGE_API_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string());
+        Self::with_url(api_key, url)
     }
 
     /// Create a new client with a custom base URL.
@@ -158,7 +161,10 @@ impl PolyforgeClient {
         let is_local = host == "localhost"
             || host == "127.0.0.1"
             || host == "[::1]"
-            || host == "::1";
+            || host == "::1"
+            || host == "0.0.0.0"
+            || host == "localhost.localdomain"
+            || host.starts_with("127.");
 
         match scheme {
             "https" => {} // always OK
@@ -976,6 +982,32 @@ mod tests {
     fn test_base_url_allows_http_127() {
         let client = PolyforgeClient::with_url("key", "http://127.0.0.1:3002").unwrap();
         assert_eq!(client.base_url, "http://127.0.0.1:3002");
+    }
+
+    #[test]
+    fn test_base_url_allows_http_127_x() {
+        let client = PolyforgeClient::with_url("key", "http://127.0.0.2:3002").unwrap();
+        assert_eq!(client.base_url, "http://127.0.0.2:3002");
+    }
+
+    #[test]
+    fn test_base_url_allows_http_0000() {
+        let client = PolyforgeClient::with_url("key", "http://0.0.0.0:3002").unwrap();
+        assert_eq!(client.base_url, "http://0.0.0.0:3002");
+    }
+
+    #[test]
+    fn test_base_url_allows_http_ipv6_loopback() {
+        let client = PolyforgeClient::with_url("key", "http://[::1]:3002").unwrap();
+        assert_eq!(client.base_url, "http://[::1]:3002");
+    }
+
+    #[test]
+    fn test_new_reads_env_var() {
+        std::env::set_var("POLYFORGE_API_URL", "https://api.staging.example.com");
+        let client = PolyforgeClient::new("key").unwrap();
+        assert_eq!(client.base_url, "https://api.staging.example.com");
+        std::env::remove_var("POLYFORGE_API_URL");
     }
 
     #[test]
