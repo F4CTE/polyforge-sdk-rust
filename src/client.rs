@@ -351,7 +351,7 @@ impl PolyforgeClient {
                     .unwrap_or("Unknown error")
                     .to_string(),
                 request_id: body
-                    .get("request_id")
+                    .get("requestId")
                     .and_then(|v| v.as_str())
                     .map(String::from),
             });
@@ -410,7 +410,7 @@ impl PolyforgeClient {
     // -----------------------------------------------------------------------
 
     /// List strategies, optionally filtered by status.
-    pub async fn list_strategies(&self, status: Option<StrategyStatus>) -> Result<Vec<Strategy>> {
+    pub async fn list_strategies(&self, status: Option<StrategyStatus>) -> Result<PaginatedResponse<Strategy>> {
         let qs = match status {
             Some(s) => {
                 let val = serde_json::to_value(&s).unwrap_or_default();
@@ -459,14 +459,20 @@ impl PolyforgeClient {
     }
 
     /// Start a strategy in the given trading mode.
-    pub async fn start_strategy(&self, id: &str, mode: TradingMode) -> Result<Strategy> {
+    ///
+    /// Returns a [`StrategyStatusResponse`] with the new status and `startedAt`
+    /// timestamp — not a full [`Strategy`] object.
+    pub async fn start_strategy(&self, id: &str, mode: TradingMode) -> Result<StrategyStatusResponse> {
         let body = json!({ "mode": mode });
         self.post(&format!("/api/v1/strategies/{}/start", encode(id)), &body)
             .await
     }
 
     /// Stop a running strategy.
-    pub async fn stop_strategy(&self, id: &str) -> Result<Strategy> {
+    ///
+    /// Returns a [`StrategyStatusResponse`] with the new status and `stoppedAt`
+    /// timestamp.
+    pub async fn stop_strategy(&self, id: &str) -> Result<StrategyStatusResponse> {
         self.post(
             &format!("/api/v1/strategies/{}/stop", encode(id)),
             &json!({}),
@@ -475,7 +481,7 @@ impl PolyforgeClient {
     }
 
     /// Get available strategy templates.
-    pub async fn get_strategy_templates(&self) -> Result<Vec<StrategyTemplate>> {
+    pub async fn get_strategy_templates(&self) -> Result<PaginatedResponse<StrategyTemplate>> {
         self.get("/api/v1/strategies/templates").await
     }
 
@@ -521,7 +527,7 @@ impl PolyforgeClient {
     }
 
     /// Pause a running strategy.
-    pub async fn pause_strategy(&self, id: &str) -> Result<Strategy> {
+    pub async fn pause_strategy(&self, id: &str) -> Result<StrategyStatusResponse> {
         self.post(
             &format!("/api/v1/strategies/{}/pause", encode(id)),
             &serde_json::json!({}),
@@ -530,7 +536,7 @@ impl PolyforgeClient {
     }
 
     /// Resume a paused strategy.
-    pub async fn resume_strategy(&self, id: &str) -> Result<Strategy> {
+    pub async fn resume_strategy(&self, id: &str) -> Result<StrategyStatusResponse> {
         self.post(
             &format!("/api/v1/strategies/{}/resume", encode(id)),
             &serde_json::json!({}),
@@ -557,7 +563,7 @@ impl PolyforgeClient {
     }
 
     /// Get orders with optional filtering.
-    pub async fn get_orders(&self, params: &ListOrdersParams) -> Result<Vec<Order>> {
+    pub async fn get_orders(&self, params: &ListOrdersParams) -> Result<PaginatedResponse<Order>> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
@@ -683,7 +689,7 @@ impl PolyforgeClient {
     }
 
     /// List your smart orders with child order progress.
-    pub async fn list_smart_orders(&self) -> Result<Vec<SmartOrder>> {
+    pub async fn list_smart_orders(&self) -> Result<PaginatedResponse<SmartOrder>> {
         self.get("/api/v1/orders/smart").await
     }
 
@@ -740,7 +746,7 @@ impl PolyforgeClient {
     // -----------------------------------------------------------------------
 
     /// Get the whale trade feed.
-    pub async fn get_whale_feed(&self, min_size: Option<u64>) -> Result<Vec<WhaleTrade>> {
+    pub async fn get_whale_feed(&self, min_size: Option<u64>) -> Result<PaginatedResponse<WhaleTrade>> {
         let qs = match min_size {
             Some(s) => format!("?min_size={}", encode(&s.to_string())),
             None => String::new(),
@@ -749,7 +755,7 @@ impl PolyforgeClient {
     }
 
     /// Get AI-powered news signals.
-    pub async fn get_news_signals(&self, min_confidence: Option<u32>) -> Result<Vec<NewsSignal>> {
+    pub async fn get_news_signals(&self, min_confidence: Option<u32>) -> Result<PaginatedResponse<NewsSignal>> {
         let qs = match min_confidence {
             Some(c) => format!("?min_confidence={}", encode(&c.to_string())),
             None => String::new(),
@@ -762,17 +768,17 @@ impl PolyforgeClient {
     // -----------------------------------------------------------------------
 
     /// List configured alerts.
-    pub async fn list_alerts(&self) -> Result<Vec<Alert>> {
+    pub async fn list_alerts(&self) -> Result<PaginatedResponse<Alert>> {
         self.get("/api/v1/alerts").await
     }
 
     /// List copy-trading configurations.
-    pub async fn list_copy_configs(&self) -> Result<Vec<CopyConfig>> {
+    pub async fn list_copy_configs(&self) -> Result<PaginatedResponse<CopyConfig>> {
         self.get("/api/v1/copy").await
     }
 
     /// List registered webhooks.
-    pub async fn list_webhooks(&self) -> Result<Vec<Webhook>> {
+    pub async fn list_webhooks(&self) -> Result<PaginatedResponse<Webhook>> {
         self.get("/api/v1/webhooks").await
     }
 
@@ -1588,5 +1594,84 @@ mod tests {
         // The line is not a "data:" line so it is skipped; the stream ends.
         let result = stream.next().await;
         assert!(result.is_none(), "should return None (stream ended), not an error");
+    }
+
+    // --- Breaking compat fixes (#49, #65, #76) ---
+
+    #[test]
+    fn test_error_response_reads_camelcase_request_id() {
+        // #49: Platform returns "requestId" (camelCase), not "request_id"
+        let body: serde_json::Value = serde_json::json!({
+            "code": "NOT_FOUND",
+            "message": "Resource not found",
+            "requestId": "req-abc123"
+        });
+        let request_id = body
+            .get("requestId")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        assert_eq!(request_id, Some("req-abc123".to_string()));
+
+        // Verify old snake_case key would NOT match
+        let old_id = body
+            .get("request_id")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        assert_eq!(old_id, None);
+    }
+
+    #[test]
+    fn test_strategy_status_response_deserializes_start() {
+        // #65: start_strategy returns minimal status, not full Strategy
+        let json = r#"{"status":"RUNNING","startedAt":"2026-04-13T10:00:00Z"}"#;
+        let resp: StrategyStatusResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.status, StrategyStatus::Running);
+        assert_eq!(resp.started_at, Some("2026-04-13T10:00:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_strategy_status_response_deserializes_stop() {
+        // #65: stop_strategy returns minimal status with stoppedAt
+        let json = r#"{"status":"IDLE","stoppedAt":"2026-04-13T10:05:00Z"}"#;
+        let resp: StrategyStatusResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.status, StrategyStatus::Idle);
+        assert_eq!(resp.stopped_at, Some("2026-04-13T10:05:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_strategy_status_response_deserializes_pause() {
+        // #65: pause/resume return just status
+        let json = r#"{"status":"PAUSED"}"#;
+        let resp: StrategyStatusResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.status, StrategyStatus::Paused);
+        assert_eq!(resp.started_at, None);
+        assert_eq!(resp.stopped_at, None);
+    }
+
+    #[test]
+    fn test_paginated_response_deserializes_strategies() {
+        // #76: List endpoints return PaginatedResponse, not Vec
+        let json = r#"{
+            "data": [{"id":"s1","name":"Alpha"},{"id":"s2","name":"Beta"}],
+            "total": 2,
+            "page": 1,
+            "limit": 10,
+            "totalPages": 1,
+            "hasNext": false
+        }"#;
+        let resp: PaginatedResponse<Strategy> = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.data.len(), 2);
+        assert_eq!(resp.total, 2);
+        assert_eq!(resp.page, 1);
+        assert!(!resp.has_next);
+        assert_eq!(resp.data[0].id, "s1");
+    }
+
+    #[test]
+    fn test_paginated_response_rejects_bare_array() {
+        // #76: Verify that a bare JSON array fails to deserialize as PaginatedResponse
+        let json = r#"[{"id":"s1"},{"id":"s2"}]"#;
+        let result = serde_json::from_str::<PaginatedResponse<Strategy>>(json);
+        assert!(result.is_err(), "bare array must not deserialize as PaginatedResponse");
     }
 }

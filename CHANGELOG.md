@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.9] — 2026-04-13
+
+### Fixed
+- **BREAKING** Error response parsing: read `requestId` (camelCase) instead of `request_id` (snake_case) — `PolyforgeError::Api.request_id` was always `None` even when the platform included a request ID (closes #49)
+- **BREAKING** Strategy lifecycle methods (`start_strategy`, `stop_strategy`, `pause_strategy`, `resume_strategy`): return `StrategyStatusResponse` instead of `Strategy` — the platform returns `{"status":"RUNNING"}` not a full strategy object, causing serde deserialization failure on every lifecycle call (closes #65)
+- **BREAKING** List endpoints (`list_strategies`, `get_orders`, `get_whale_feed`, `get_news_signals`, `list_alerts`, `list_copy_configs`, `list_webhooks`, `get_strategy_templates`, `list_smart_orders`): return `PaginatedResponse<T>` instead of `Vec<T>` — the platform wraps all list responses in `{"data":[...],"total":N,...}`, causing `expected a sequence, found a map` deserialization failure (closes #76)
+
 ## [1.6.8] — 2026-04-13
 
 ### Fixed
