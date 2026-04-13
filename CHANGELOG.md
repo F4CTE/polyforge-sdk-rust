@@ -11,6 +11,9 @@
 ## [Unreleased]
 
 ### Security
+- **Client-side financial parameter validation** — `place_order()`, `place_smart_order()`, and `provide_liquidity()` now reject NaN, Infinity, zero, and negative values for all financial parameters (size, price, total_size, spread, and optional price fields) before sending requests; prevents nonsensical orders from reaching the backend (closes #88)
+
+
 - **Default URL updated to production** — changed `DEFAULT_BASE_URL` from `https://localhost:3002` to `https://api.polyforge.app` to match Python and TypeScript SDKs; localhost with HTTPS causes immediate TLS failures for new users and encourages insecure workarounds (closes #87, regression of #71)
 - **SSE buffer overflow protection** — `StrategyEventStream` now enforces a 1 MiB (`MAX_SSE_BUFFER_SIZE`) cap on its internal line buffer; if the server sends data without a newline beyond this limit the stream returns `PolyforgeError::Api` with code `SSE_BUFFER_OVERFLOW` instead of growing unboundedly toward OOM (closes #52)
 - **Cargo.lock committed for reproducible builds** — removed `Cargo.lock` from `.gitignore` and committed the lockfile so that `cargo audit` can run, builds are reproducible, and supply-chain attacks are detectable via dependency pinning (closes #42)

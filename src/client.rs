@@ -103,6 +103,39 @@ impl StrategyEventStream {
 
 const DEFAULT_BASE_URL: &str = "https://api.polyforge.app";
 
+/// Validate that a financial parameter is a finite, positive number.
+///
+/// Rejects `NaN`, `+Inf`, `-Inf`, zero, and negative values — all of which
+/// are meaningless for order sizes, prices, and spreads and could cause
+/// unexpected behaviour on the backend.
+fn validate_financial_param(name: &str, value: f64) -> Result<()> {
+    if value.is_nan() {
+        return Err(PolyforgeError::Validation(format!(
+            "{name} must be a valid number, got NaN"
+        )));
+    }
+    if value.is_infinite() {
+        return Err(PolyforgeError::Validation(format!(
+            "{name} must be finite, got {}infinity",
+            if value.is_sign_negative() { "-" } else { "+" }
+        )));
+    }
+    if value <= 0.0 {
+        return Err(PolyforgeError::Validation(format!(
+            "{name} must be positive, got {value}"
+        )));
+    }
+    Ok(())
+}
+
+/// Validate an optional financial parameter (skip if `None`).
+fn validate_optional_financial_param(name: &str, value: Option<f64>) -> Result<()> {
+    if let Some(v) = value {
+        validate_financial_param(name, v)?;
+    }
+    Ok(())
+}
+
 /// Async client for the Polyforge trading platform REST API.
 pub struct PolyforgeClient {
     http: reqwest::Client,
@@ -562,7 +595,13 @@ impl PolyforgeClient {
     // -----------------------------------------------------------------------
 
     /// Place a direct buy or sell order on a prediction market.
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Validation`] if `size` or `price` is NaN,
+    /// infinite, zero, or negative.
     pub async fn place_order(&self, params: &PlaceOrderParams) -> Result<PlaceOrderResponse> {
+        validate_financial_param("size", params.size)?;
+        validate_financial_param("price", params.price)?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/orders/place", &body).await
     }
@@ -624,10 +663,21 @@ impl PolyforgeClient {
     // -----------------------------------------------------------------------
 
     /// Place an advanced smart order (TWAP, DCA, BRACKET, or OCO).
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Validation`] if `total_size` or any optional
+    /// price parameter is NaN, infinite, zero, or negative.
     pub async fn place_smart_order(
         &self,
         params: &PlaceSmartOrderParams,
     ) -> Result<PlaceSmartOrderResponse> {
+        validate_financial_param("total_size", params.total_size)?;
+        validate_optional_financial_param("limit_price", params.limit_price)?;
+        validate_optional_financial_param("entry_price", params.entry_price)?;
+        validate_optional_financial_param("take_profit_price", params.take_profit_price)?;
+        validate_optional_financial_param("stop_loss_price", params.stop_loss_price)?;
+        validate_optional_financial_param("price_a", params.price_a)?;
+        validate_optional_financial_param("price_b", params.price_b)?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/orders/smart", &body).await
     }
@@ -868,7 +918,13 @@ impl PolyforgeClient {
     }
 
     /// Provide liquidity by placing two-sided quotes on a market token.
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Validation`] if `spread` or `size` is NaN,
+    /// infinite, zero, or negative.
     pub async fn provide_liquidity(&self, params: &ProvideLiquidityParams) -> Result<LpPosition> {
+        validate_financial_param("spread", params.spread)?;
+        validate_financial_param("size", params.size)?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/lp/provide", &body).await
     }
@@ -1342,6 +1398,173 @@ mod tests {
         let body = json!({ "description": "buy low sell high" });
         assert!(body.get("description").is_some());
         // Note: body should not use "query" as the field name for description
+    }
+
+    // -----------------------------------------------------------------------
+    // Financial parameter validation (#88)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_validate_financial_param_rejects_nan() {
+        let err = validate_financial_param("size", f64::NAN).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("NaN"));
+    }
+
+    #[test]
+    fn test_validate_financial_param_rejects_positive_infinity() {
+        let err = validate_financial_param("price", f64::INFINITY).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("+infinity"));
+    }
+
+    #[test]
+    fn test_validate_financial_param_rejects_negative_infinity() {
+        let err = validate_financial_param("price", f64::NEG_INFINITY).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("-infinity"));
+    }
+
+    #[test]
+    fn test_validate_financial_param_rejects_zero() {
+        let err = validate_financial_param("size", 0.0).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
+    fn test_validate_financial_param_rejects_negative() {
+        let err = validate_financial_param("spread", -1.0).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
+    fn test_validate_financial_param_accepts_positive() {
+        assert!(validate_financial_param("size", 0.01).is_ok());
+        assert!(validate_financial_param("price", 100.0).is_ok());
+        assert!(validate_financial_param("spread", 0.005).is_ok());
+    }
+
+    #[test]
+    fn test_validate_optional_financial_param_skips_none() {
+        assert!(validate_optional_financial_param("limit_price", None).is_ok());
+    }
+
+    #[test]
+    fn test_validate_optional_financial_param_validates_some() {
+        let err = validate_optional_financial_param("limit_price", Some(f64::NAN)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+    }
+
+    #[test]
+    fn test_place_order_params_validation_rejects_nan_size() {
+        let params = PlaceOrderParams {
+            token_id: "t1".into(),
+            side: "BUY".into(),
+            outcome: "YES".into(),
+            size: f64::NAN,
+            price: 0.5,
+            order_type: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.place_order(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("size"));
+    }
+
+    #[test]
+    fn test_place_order_params_validation_rejects_negative_price() {
+        let params = PlaceOrderParams {
+            token_id: "t1".into(),
+            side: "BUY".into(),
+            outcome: "YES".into(),
+            size: 10.0,
+            price: -0.5,
+            order_type: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.place_order(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("price"));
+    }
+
+    #[test]
+    fn test_place_smart_order_params_validation_rejects_infinite_total_size() {
+        let params = PlaceSmartOrderParams {
+            order_type: SmartOrderType::TWAP,
+            token_id: "t1".into(),
+            side: "BUY".into(),
+            outcome: "YES".into(),
+            total_size: f64::INFINITY,
+            slices: Some(5),
+            interval_minutes: Some(10),
+            limit_price: None,
+            entry_price: None,
+            take_profit_price: None,
+            stop_loss_price: None,
+            price_a: None,
+            price_b: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.place_smart_order(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("total_size"));
+    }
+
+    #[test]
+    fn test_place_smart_order_params_validation_rejects_nan_optional_price() {
+        let params = PlaceSmartOrderParams {
+            order_type: SmartOrderType::BRACKET,
+            token_id: "t1".into(),
+            side: "BUY".into(),
+            outcome: "YES".into(),
+            total_size: 10.0,
+            slices: None,
+            interval_minutes: None,
+            limit_price: None,
+            entry_price: Some(0.5),
+            take_profit_price: Some(f64::NAN),
+            stop_loss_price: Some(0.3),
+            price_a: None,
+            price_b: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.place_smart_order(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("take_profit_price"));
+    }
+
+    #[test]
+    fn test_provide_liquidity_params_validation_rejects_zero_spread() {
+        let params = ProvideLiquidityParams {
+            token_id: "t1".into(),
+            spread: 0.0,
+            size: 100.0,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.provide_liquidity(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("spread"));
+    }
+
+    #[test]
+    fn test_provide_liquidity_params_validation_rejects_negative_size() {
+        let params = ProvideLiquidityParams {
+            token_id: "t1".into(),
+            spread: 0.02,
+            size: -50.0,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.provide_liquidity(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("size"));
     }
 
     #[tokio::test]
