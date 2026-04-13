@@ -686,6 +686,62 @@ impl std::fmt::Debug for Webhook {
 }
 
 // ---------------------------------------------------------------------------
+// Watchlist
+// ---------------------------------------------------------------------------
+
+/// An item in the user's watchlist.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchlistItem {
+    pub market_id: String,
+    #[serde(default)]
+    pub slug: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub current_price: Option<String>,
+    #[serde(rename = "volume24h", default)]
+    pub volume_24h: Option<String>,
+    #[serde(rename = "priceDelta24h", default)]
+    pub price_delta_24h: Option<String>,
+    #[serde(default)]
+    pub watched: Option<bool>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Response from adding a market to the watchlist.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchlistAddResponse {
+    pub market_id: String,
+    #[serde(default)]
+    pub added_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Watchlist status for a specific market.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchlistStatus {
+    pub market_id: String,
+    pub watched: bool,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Result from testing a webhook.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebhookTestResult {
+    pub success: bool,
+    pub status_code: u16,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
 // AI
 // ---------------------------------------------------------------------------
 

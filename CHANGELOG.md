@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.16] — 2026-04-13
+
+### Added
+- `get_watchlist()` — list all markets on the user's watchlist (closes #55)
+- `add_to_watchlist(market_id)` — add a market to the watchlist (closes #55)
+- `remove_from_watchlist(market_id)` — remove a market from the watchlist (closes #55)
+- `get_watchlist_status(market_id)` — check if a specific market is watched (closes #55)
+- `delete_webhook(id)` — delete a registered webhook (closes #56)
+- `test_webhook(id)` — send a test event to a webhook and return delivery result (closes #56)
+- `WatchlistItem`, `WatchlistAddResponse`, `WatchlistStatus` types for watchlist responses
+- `WebhookTestResult` type for webhook test responses
+- 11 new unit tests covering all watchlist and webhook mutation types
+
 ## [1.6.15] — 2026-04-13
 
 ### Fixed
