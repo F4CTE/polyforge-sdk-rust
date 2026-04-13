@@ -30,13 +30,23 @@ pub struct PaginatedResponse<T> {
 #[serde(rename_all = "camelCase")]
 pub struct Market {
     pub id: String,
-    pub title: String,
+    pub name: String,
     #[serde(default)]
     pub category: Option<String>,
     #[serde(default)]
-    pub volume: Option<f64>,
+    pub price: Option<String>,
+    #[serde(rename = "volume24h", default)]
+    pub volume_24h: Option<String>,
+    #[serde(rename = "change24h", default)]
+    pub change_24h: Option<String>,
     #[serde(default)]
-    pub tokens: Vec<Token>,
+    pub liquidity: Option<String>,
+    #[serde(rename = "baseToken", default)]
+    pub base_token: Option<serde_json::Value>,
+    #[serde(rename = "quoteToken", default)]
+    pub quote_token: Option<serde_json::Value>,
+    #[serde(rename = "createdAt", default)]
+    pub created_at: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
@@ -152,14 +162,18 @@ pub struct StrategyTemplate {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Portfolio {
-    #[serde(default)]
-    pub balance: Option<f64>,
+    #[serde(rename = "availableBalance", default)]
+    pub available_balance: Option<String>,
     #[serde(default)]
     pub positions: Vec<Position>,
     #[serde(default)]
-    pub total_value: Option<f64>,
-    #[serde(default)]
-    pub total_pnl: Option<f64>,
+    pub total_value: Option<String>,
+    #[serde(rename = "unrealizedPnl", default)]
+    pub unrealized_pnl: Option<String>,
+    #[serde(rename = "realizedPnl", default)]
+    pub realized_pnl: Option<String>,
+    #[serde(rename = "updatedAt", default)]
+    pub updated_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -173,13 +187,13 @@ pub struct Position {
     #[serde(default)]
     pub token_id: Option<String>,
     #[serde(default)]
-    pub size: Option<f64>,
+    pub size: Option<String>,
     #[serde(default)]
-    pub avg_price: Option<f64>,
+    pub avg_price: Option<String>,
     #[serde(default)]
-    pub current_price: Option<f64>,
+    pub current_price: Option<String>,
     #[serde(default)]
-    pub pnl: Option<f64>,
+    pub pnl: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -196,9 +210,13 @@ pub struct Order {
     #[serde(default)]
     pub side: Option<String>,
     #[serde(default)]
-    pub size: Option<f64>,
+    pub size: Option<String>,
     #[serde(default)]
-    pub price: Option<f64>,
+    pub price: Option<String>,
+    #[serde(default)]
+    pub fill_size: Option<String>,
+    #[serde(default)]
+    pub fill_price: Option<String>,
     #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]
@@ -287,15 +305,21 @@ pub struct CancelOrderResponse {
 #[serde(rename_all = "camelCase")]
 pub struct TraderScore {
     #[serde(default)]
-    pub score: Option<f64>,
+    pub overall: Option<f64>,
     #[serde(default)]
     pub rank: Option<u64>,
     #[serde(default)]
-    pub total_trades: Option<u64>,
+    pub profitability: Option<f64>,
     #[serde(default)]
-    pub win_rate: Option<f64>,
+    pub consistency: Option<f64>,
+    #[serde(rename = "riskManagement", default)]
+    pub risk_management: Option<f64>,
     #[serde(default)]
-    pub profit_factor: Option<f64>,
+    pub volume: Option<f64>,
+    #[serde(default)]
+    pub percentile: Option<f64>,
+    #[serde(rename = "updatedAt", default)]
+    pub updated_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
