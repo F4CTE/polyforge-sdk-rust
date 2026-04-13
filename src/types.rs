@@ -86,9 +86,9 @@ pub enum StrategyStatus {
 /// Trading mode used when starting a strategy.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TradingMode {
-    #[serde(rename = "LIVE")]
+    #[serde(rename = "live")]
     Live,
-    #[serde(rename = "PAPER")]
+    #[serde(rename = "paper")]
     Paper,
 }
 
@@ -372,21 +372,21 @@ pub struct CopyConfig {
 /// Webhook event types.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum WebhookEvent {
-    #[serde(rename = "order.filled")]
+    #[serde(rename = "ORDER_FILLED")]
     OrderFilled,
-    #[serde(rename = "strategy.error")]
+    #[serde(rename = "STRATEGY_ERROR")]
     StrategyError,
-    #[serde(rename = "whale.trade")]
+    #[serde(rename = "WHALE_TRADE")]
     WhaleTrade,
-    #[serde(rename = "news.signal")]
+    #[serde(rename = "NEWS_SIGNAL")]
     NewsSignal,
-    #[serde(rename = "backtest.complete")]
+    #[serde(rename = "BACKTEST_COMPLETE")]
     BacktestComplete,
-    #[serde(rename = "daily.loss.limit")]
+    #[serde(rename = "DAILY_LOSS_LIMIT")]
     DailyLossLimit,
-    #[serde(rename = "market.resolved")]
+    #[serde(rename = "MARKET_RESOLVED")]
     MarketResolved,
-    #[serde(rename = "price.alert")]
+    #[serde(rename = "PRICE_ALERT")]
     PriceAlert,
 }
 
