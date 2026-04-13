@@ -101,7 +101,7 @@ impl StrategyEventStream {
     }
 }
 
-const DEFAULT_BASE_URL: &str = "https://localhost:3002";
+const DEFAULT_BASE_URL: &str = "https://api.polyforge.app";
 
 /// Async client for the Polyforge trading platform REST API.
 pub struct PolyforgeClient {
@@ -121,7 +121,7 @@ impl std::fmt::Debug for PolyforgeClient {
 
 impl PolyforgeClient {
     /// Create a new client using the `POLYFORGE_API_URL` environment variable,
-    /// falling back to the default local URL (`https://localhost:3002`).
+    /// falling back to the production API URL (`https://api.polyforge.app`).
     ///
     /// # Errors
     /// Returns [`PolyforgeError::Http`] if the underlying HTTP client fails to build.
@@ -948,7 +948,7 @@ mod tests {
     fn test_client_url_construction() {
         let client = PolyforgeClient::new("test-api-key").unwrap();
         let url = client.url("/api/v1/markets");
-        assert_eq!(url, "https://localhost:3002/api/v1/markets");
+        assert_eq!(url, "https://api.polyforge.app/api/v1/markets");
     }
 
     #[test]
