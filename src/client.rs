@@ -894,6 +894,55 @@ impl PolyforgeClient {
         self.post("/api/v1/webhooks", &body).await
     }
 
+    /// Delete a registered webhook.
+    pub async fn delete_webhook(&self, id: &str) -> Result<()> {
+        let _: serde_json::Value = self
+            .delete(&format!("/api/v1/webhooks/{}", encode(id)))
+            .await?;
+        Ok(())
+    }
+
+    /// Send a test event to a registered webhook and return the delivery result.
+    pub async fn test_webhook(&self, id: &str) -> Result<WebhookTestResult> {
+        self.post(
+            &format!("/api/v1/webhooks/{}/test", encode(id)),
+            &json!({}),
+        )
+        .await
+    }
+
+    // -----------------------------------------------------------------------
+    // Watchlist
+    // -----------------------------------------------------------------------
+
+    /// List all markets on the authenticated user's watchlist.
+    pub async fn get_watchlist(&self) -> Result<Vec<WatchlistItem>> {
+        self.get("/api/v1/watchlist").await
+    }
+
+    /// Add a market to the watchlist.
+    pub async fn add_to_watchlist(&self, market_id: &str) -> Result<WatchlistAddResponse> {
+        let body = json!({ "marketId": market_id });
+        self.post("/api/v1/watchlist", &body).await
+    }
+
+    /// Remove a market from the watchlist.
+    pub async fn remove_from_watchlist(&self, market_id: &str) -> Result<()> {
+        let _: serde_json::Value = self
+            .delete(&format!("/api/v1/watchlist/{}", encode(market_id)))
+            .await?;
+        Ok(())
+    }
+
+    /// Check whether a specific market is on the watchlist.
+    pub async fn get_watchlist_status(&self, market_id: &str) -> Result<WatchlistStatus> {
+        self.get(&format!(
+            "/api/v1/watchlist/status/{}",
+            encode(market_id)
+        ))
+        .await
+    }
+
     /// Returns `true` if the given IP is in a blocked range (loopback, private,
     /// link-local, CGNAT, cloud metadata, or unspecified).
     fn is_blocked_ip(ip: std::net::IpAddr) -> bool {
@@ -2307,5 +2356,95 @@ mod tests {
         });
         body["exportedAt"] = serde_json::json!("2026-04-13T10:00:00Z");
         assert_eq!(body["exportedAt"], "2026-04-13T10:00:00Z");
+    }
+
+    // --- Watchlist types (closes #55) ---
+
+    #[test]
+    fn test_watchlist_item_deserializes() {
+        let json = r#"{
+            "marketId": "mkt-1",
+            "slug": "us-election-2026",
+            "title": "US Election 2026",
+            "currentPrice": "0.65",
+            "volume24h": "123456",
+            "priceDelta24h": "0.03",
+            "watched": true
+        }"#;
+        let item: WatchlistItem = serde_json::from_str(json).unwrap();
+        assert_eq!(item.market_id, "mkt-1");
+        assert_eq!(item.slug.as_deref(), Some("us-election-2026"));
+        assert_eq!(item.title.as_deref(), Some("US Election 2026"));
+        assert_eq!(item.current_price.as_deref(), Some("0.65"));
+        assert_eq!(item.volume_24h.as_deref(), Some("123456"));
+        assert_eq!(item.price_delta_24h.as_deref(), Some("0.03"));
+        assert_eq!(item.watched, Some(true));
+    }
+
+    #[test]
+    fn test_watchlist_item_deserializes_minimal() {
+        let json = r#"{"marketId": "mkt-2"}"#;
+        let item: WatchlistItem = serde_json::from_str(json).unwrap();
+        assert_eq!(item.market_id, "mkt-2");
+        assert!(item.slug.is_none());
+        assert!(item.title.is_none());
+        assert!(item.watched.is_none());
+    }
+
+    #[test]
+    fn test_watchlist_add_response_deserializes() {
+        let json = r#"{"marketId": "mkt-1", "addedAt": "2026-04-13T12:00:00Z"}"#;
+        let resp: WatchlistAddResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.market_id, "mkt-1");
+        assert_eq!(resp.added_at.as_deref(), Some("2026-04-13T12:00:00Z"));
+    }
+
+    #[test]
+    fn test_watchlist_status_deserializes() {
+        let json = r#"{"marketId": "mkt-1", "watched": true}"#;
+        let status: WatchlistStatus = serde_json::from_str(json).unwrap();
+        assert_eq!(status.market_id, "mkt-1");
+        assert!(status.watched);
+    }
+
+    #[test]
+    fn test_watchlist_status_not_watched() {
+        let json = r#"{"marketId": "mkt-1", "watched": false}"#;
+        let status: WatchlistStatus = serde_json::from_str(json).unwrap();
+        assert!(!status.watched);
+    }
+
+    #[test]
+    fn test_add_to_watchlist_body_format() {
+        let body = json!({ "marketId": "mkt-abc" });
+        assert_eq!(body["marketId"], "mkt-abc");
+        assert!(body.get("market_id").is_none(), "must use camelCase key");
+    }
+
+    // --- Webhook mutation types (closes #56) ---
+
+    #[test]
+    fn test_webhook_test_result_deserializes() {
+        let json = r#"{"success": true, "statusCode": 200}"#;
+        let result: WebhookTestResult = serde_json::from_str(json).unwrap();
+        assert!(result.success);
+        assert_eq!(result.status_code, 200);
+    }
+
+    #[test]
+    fn test_webhook_test_result_failure() {
+        let json = r#"{"success": false, "statusCode": 500}"#;
+        let result: WebhookTestResult = serde_json::from_str(json).unwrap();
+        assert!(!result.success);
+        assert_eq!(result.status_code, 500);
+    }
+
+    #[test]
+    fn test_webhook_test_result_with_extra_fields() {
+        let json = r#"{"success": true, "statusCode": 200, "latencyMs": 42}"#;
+        let result: WebhookTestResult = serde_json::from_str(json).unwrap();
+        assert!(result.success);
+        assert_eq!(result.status_code, 200);
+        assert_eq!(result.extra["latencyMs"], 42);
     }
 }
