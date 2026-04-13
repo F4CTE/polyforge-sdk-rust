@@ -426,10 +426,10 @@ pub struct ClosePositionParams {
 /// Parameters for redeeming a resolved position.
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct RedeemPositionParams {
-    #[serde(rename = "tokenId")]
-    pub token_id: String,
-    #[serde(rename = "conditionId", skip_serializing_if = "Option::is_none")]
-    pub condition_id: Option<String>,
+    #[serde(rename = "positionId")]
+    pub position_id: String,
+    #[serde(rename = "marketId", skip_serializing_if = "Option::is_none")]
+    pub market_id: Option<String>,
 }
 
 /// Parameters for splitting a position.
@@ -437,15 +437,17 @@ pub struct RedeemPositionParams {
 pub struct SplitPositionParams {
     #[serde(rename = "tokenId")]
     pub token_id: String,
-    pub size: f64,
-    pub price: f64,
+    /// Amount as a decimal string (e.g. `"100.5"`).
+    pub amount: String,
 }
 
 /// Parameters for merging positions.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergePositionParams {
-    #[serde(rename = "tokenIds")]
-    pub token_ids: Vec<String>,
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    /// Amount as a decimal string (e.g. `"100.5"`).
+    pub amount: String,
 }
 
 /// Parameters for placing a direct order.
@@ -516,13 +518,15 @@ pub struct WhaleTrade {
     #[serde(default)]
     pub market_id: Option<String>,
     #[serde(default)]
+    pub market_name: Option<String>,
+    #[serde(default)]
     pub side: Option<String>,
     #[serde(default)]
     pub size: Option<f64>,
     #[serde(default)]
-    pub price: Option<f64>,
+    pub usd_value: Option<f64>,
     #[serde(default)]
-    pub trader: Option<String>,
+    pub wallet: Option<String>,
     #[serde(default)]
     pub timestamp: Option<String>,
     #[serde(flatten)]
@@ -542,11 +546,11 @@ pub struct NewsSignal {
     #[serde(default)]
     pub confidence: Option<u32>,
     #[serde(default)]
-    pub direction: Option<String>,
+    pub sentiment: Option<String>,
     #[serde(default)]
-    pub market_id: Option<String>,
+    pub related_markets: Vec<String>,
     #[serde(default)]
-    pub timestamp: Option<String>,
+    pub published_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -561,13 +565,15 @@ pub struct NewsSignal {
 pub struct Alert {
     pub id: String,
     #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
     pub market_id: Option<String>,
     #[serde(default)]
     pub condition: Option<String>,
     #[serde(default)]
-    pub threshold: Option<f64>,
-    #[serde(default)]
     pub enabled: Option<bool>,
+    #[serde(default)]
+    pub last_triggered_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -668,13 +674,16 @@ impl std::fmt::Debug for Webhook {
 
 /// Response from the AI query endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AiQueryResponse {
     #[serde(default)]
     pub answer: Option<String>,
     #[serde(default)]
     pub confidence: Option<f64>,
     #[serde(default)]
-    pub sources: Vec<serde_json::Value>,
+    pub sources: Vec<String>,
+    #[serde(default)]
+    pub suggested_actions: Vec<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -930,12 +939,11 @@ pub struct MarketSentiment {
     pub last_updated: Option<String>,
 }
 
-/// Parameters for providing liquidity on a market token.
+/// Parameters for providing liquidity on a market.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProvideLiquidityParams {
-    #[serde(rename = "tokenId")]
-    pub token_id: String,
-    pub spread: f64,
+    #[serde(rename = "marketId")]
+    pub market_id: String,
     pub size: f64,
 }
 
