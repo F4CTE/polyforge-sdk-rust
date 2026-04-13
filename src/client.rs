@@ -265,6 +265,44 @@ impl PolyforgeClient {
             ));
         }
 
+        // --- SSRF: block private / reserved IP ranges -----------------------
+        // Exempt localhost-family hosts (already allowed above for HTTP dev),
+        // but reject all other private, loopback, link-local, CGNAT, and
+        // cloud-metadata addresses.  This prevents the API key from being
+        // sent to an attacker-controlled internal address.
+        if !is_local {
+            // Block cloud metadata hostnames
+            if host == "metadata.google.internal"
+                || host.ends_with(".internal")
+                || host.ends_with(".local")
+            {
+                return Err(PolyforgeError::Validation(
+                    "Base URL must not target cloud metadata or local network endpoints".into(),
+                ));
+            }
+
+            // Check literal IP addresses against the private/reserved blocklist
+            if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+                if Self::is_blocked_ip(ip) {
+                    return Err(PolyforgeError::Validation(
+                        "Base URL must not target private or reserved IP addresses (SSRF protection)".into(),
+                    ));
+                }
+            }
+
+            // Check bracketed IPv6 literals (the URL parser strips brackets)
+            let bare_host = host.trim_start_matches('[').trim_end_matches(']');
+            if bare_host != host {
+                if let Ok(ip) = bare_host.parse::<std::net::IpAddr>() {
+                    if Self::is_blocked_ip(ip) {
+                        return Err(PolyforgeError::Validation(
+                            "Base URL must not target private or reserved IP addresses (SSRF protection)".into(),
+                        ));
+                    }
+                }
+            }
+        }
+
         // --- normalise: strip trailing slashes ------------------------------
         let normalised = raw.trim_end_matches('/').to_string();
         Ok(normalised)
@@ -1213,6 +1251,112 @@ mod tests {
     fn test_base_url_strips_trailing_slash() {
         let client = PolyforgeClient::with_url("key", "https://api.example.com/").unwrap();
         assert_eq!(client.base_url, "https://api.example.com");
+    }
+
+    // --- SSRF protection for base URL (closes #26) ---
+
+    #[test]
+    fn test_base_url_rejects_private_192168() {
+        let result = PolyforgeClient::with_url("key", "https://192.168.1.1");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("SSRF") || err.contains("private"));
+    }
+
+    #[test]
+    fn test_base_url_rejects_private_10_range() {
+        let result = PolyforgeClient::with_url("key", "https://10.0.0.1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_private_172_16_range() {
+        let result = PolyforgeClient::with_url("key", "https://172.16.0.1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_cgnat_range() {
+        let result = PolyforgeClient::with_url("key", "https://100.64.0.1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_link_local_169254() {
+        let result = PolyforgeClient::with_url("key", "https://169.254.169.254");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_cloud_metadata_hostname() {
+        let result = PolyforgeClient::with_url("key", "https://metadata.google.internal");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_dot_internal_hostname() {
+        let result = PolyforgeClient::with_url("key", "https://something.internal");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_dot_local_hostname() {
+        let result = PolyforgeClient::with_url("key", "https://printer.local");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_ipv6_unique_local() {
+        let result = PolyforgeClient::with_url("key", "https://[fd00::1]");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_rejects_ipv6_link_local() {
+        let result = PolyforgeClient::with_url("key", "https://[fe80::1]");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base_url_allows_localhost_dev_exemption() {
+        // localhost is exempted for development use
+        let client = PolyforgeClient::with_url("key", "http://localhost:3002").unwrap();
+        assert_eq!(client.base_url, "http://localhost:3002");
+    }
+
+    #[test]
+    fn test_base_url_allows_127001_dev_exemption() {
+        // 127.0.0.1 is exempted for development use
+        let client = PolyforgeClient::with_url("key", "http://127.0.0.1:3002").unwrap();
+        assert_eq!(client.base_url, "http://127.0.0.1:3002");
+    }
+
+    #[test]
+    fn test_base_url_allows_ipv6_loopback_dev_exemption() {
+        // [::1] is exempted for development use
+        let client = PolyforgeClient::with_url("key", "http://[::1]:3002").unwrap();
+        assert_eq!(client.base_url, "http://[::1]:3002");
+    }
+
+    #[test]
+    fn test_base_url_allows_public_ip() {
+        // Public IPs should be accepted
+        let client = PolyforgeClient::with_url("key", "https://8.8.8.8").unwrap();
+        assert_eq!(client.base_url, "https://8.8.8.8");
+    }
+
+    #[test]
+    fn test_base_url_allows_public_domain() {
+        // Public domains should be accepted
+        let client = PolyforgeClient::with_url("key", "https://api.example.com").unwrap();
+        assert_eq!(client.base_url, "https://api.example.com");
+    }
+
+    #[test]
+    fn test_base_url_rejects_non_cgnat_boundary() {
+        // 100.128.0.1 is outside CGNAT range — should be accepted as public IP
+        let client = PolyforgeClient::with_url("key", "https://100.128.0.1").unwrap();
+        assert_eq!(client.base_url, "https://100.128.0.1");
     }
 
     #[tokio::test]

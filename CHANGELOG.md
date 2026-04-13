@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.12] — 2026-04-13
+
+### Security
+- **SSRF protection for base URL** — `validate_base_url()` now blocks private IPs (10.x, 172.16-31.x, 192.168.x), link-local (169.254.x), CGNAT (100.64.0.0/10), cloud metadata hostnames (`.internal`, `.local`), and IPv6 reserved ranges; reuses the existing `is_blocked_ip()` helper shared with `validate_webhook_url()`; localhost/127.0.0.1/[::1] remain exempted for development use — prevents API keys from being sent to attacker-controlled internal addresses via `PolyforgeClient::with_url()` (closes #26)
+
 ## [1.6.11] — 2026-04-13
 
 ### Fixed
