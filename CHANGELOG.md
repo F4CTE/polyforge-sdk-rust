@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.10] — 2026-04-13
+
+### Fixed
+- Add optional `suggestion` field to `PolyforgeError::Api` variant — the platform returns an optional `suggestion` string in error JSON bodies but it was being silently dropped; now extracted and available to callers (closes #93)
+
 ## [1.6.9] — 2026-04-13
 
 ### Fixed

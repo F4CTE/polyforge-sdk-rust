@@ -8,6 +8,7 @@ pub enum PolyforgeError {
         code: String,
         message: String,
         request_id: Option<String>,
+        suggestion: Option<String>,
     },
 
     /// An HTTP transport error from reqwest.
