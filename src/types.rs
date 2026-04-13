@@ -1037,6 +1037,54 @@ pub struct LpPosition {
 }
 
 // ---------------------------------------------------------------------------
+// Price History & Order Book
+// ---------------------------------------------------------------------------
+
+/// Query parameters for fetching price history.
+#[derive(Debug, Default, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PriceHistoryParams {
+    /// Candle resolution: `"1m"`, `"1h"`, or `"1d"` (default `"1h"`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolution: Option<String>,
+    /// Start of the time range (ISO 8601).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    /// End of the time range (ISO 8601).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to: Option<String>,
+    /// Maximum number of entries (1–1000, default 200).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+}
+
+/// A single price history entry (candle).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PriceHistoryEntry {
+    pub timestamp: String,
+    pub price: f64,
+    #[serde(default)]
+    pub volume: Option<f64>,
+}
+
+/// A single level in an order book (bid or ask).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderBookLevel {
+    pub price: f64,
+    pub size: f64,
+}
+
+/// An order book snapshot with bids and asks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderBook {
+    pub bids: Vec<OrderBookLevel>,
+    pub asks: Vec<OrderBookLevel>,
+}
+
+// ---------------------------------------------------------------------------
 // Strategy Execution Events (SSE)
 // ---------------------------------------------------------------------------
 
