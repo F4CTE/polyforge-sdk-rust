@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.17] — 2026-04-13
+
+### Added
+- `get_price_history(token_id, params)` — fetch price history candles for a market token with optional resolution, time range, and limit (closes #54)
+- `get_order_book(token_id)` — fetch the current order book (bids/asks) for a market token (closes #54)
+- `PriceHistoryParams` — typed query parameters for `get_price_history()`
+- `PriceHistoryEntry` — single candle with timestamp, price, and optional volume
+- `OrderBookLevel` — a price/size level in the order book
+- `OrderBook` — order book snapshot with bids and asks
+- 10 new unit tests covering all price history and order book types
+
 ## [1.6.16] — 2026-04-13
 
 ### Added

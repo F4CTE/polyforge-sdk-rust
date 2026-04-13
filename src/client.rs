@@ -455,6 +455,54 @@ impl PolyforgeClient {
         self.get(&format!("/api/v1/markets/{}", encode(id))).await
     }
 
+    /// Get price history for a market token.
+    ///
+    /// Pass `None` for `params` to use server defaults (`resolution = "1h"`,
+    /// `limit = 200`).
+    pub async fn get_price_history(
+        &self,
+        token_id: &str,
+        params: Option<PriceHistoryParams>,
+    ) -> Result<Vec<PriceHistoryEntry>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(ref p) = params {
+            if let Some(ref r) = p.resolution {
+                qp.push(("resolution", r.clone()));
+            }
+            if let Some(ref f) = p.from {
+                qp.push(("from", f.clone()));
+            }
+            if let Some(ref t) = p.to {
+                qp.push(("to", t.clone()));
+            }
+            if let Some(l) = p.limit {
+                qp.push(("limit", l.to_string()));
+            }
+        }
+
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+
+        self.get(&format!(
+            "/api/v1/markets/{}/price-history{qs}",
+            encode(token_id)
+        ))
+        .await
+    }
+
+    /// Get the order book for a market token.
+    pub async fn get_order_book(&self, token_id: &str) -> Result<OrderBook> {
+        self.get(&format!("/api/v1/markets/{}/book", encode(token_id)))
+            .await
+    }
+
     // -----------------------------------------------------------------------
     // Strategies
     // -----------------------------------------------------------------------
@@ -2446,5 +2494,110 @@ mod tests {
         assert!(result.success);
         assert_eq!(result.status_code, 200);
         assert_eq!(result.extra["latencyMs"], 42);
+    }
+
+    // --- Price history & order book (closes #54) ---
+
+    #[test]
+    fn test_price_history_params_default() {
+        let params = PriceHistoryParams::default();
+        assert!(params.resolution.is_none());
+        assert!(params.from.is_none());
+        assert!(params.to.is_none());
+        assert!(params.limit.is_none());
+    }
+
+    #[test]
+    fn test_price_history_params_serializes() {
+        let params = PriceHistoryParams {
+            resolution: Some("1d".into()),
+            from: Some("2026-01-01T00:00:00Z".into()),
+            to: Some("2026-01-31T23:59:59Z".into()),
+            limit: Some(500),
+        };
+        let val = serde_json::to_value(&params).unwrap();
+        assert_eq!(val["resolution"], "1d");
+        assert_eq!(val["from"], "2026-01-01T00:00:00Z");
+        assert_eq!(val["to"], "2026-01-31T23:59:59Z");
+        assert_eq!(val["limit"], 500);
+    }
+
+    #[test]
+    fn test_price_history_params_omits_none_fields() {
+        let params = PriceHistoryParams {
+            resolution: Some("1h".into()),
+            ..Default::default()
+        };
+        let val = serde_json::to_value(&params).unwrap();
+        assert_eq!(val["resolution"], "1h");
+        assert!(val.get("from").is_none());
+        assert!(val.get("to").is_none());
+        assert!(val.get("limit").is_none());
+    }
+
+    #[test]
+    fn test_price_history_entry_deserializes() {
+        let json = r#"{"timestamp": "2026-01-15T12:00:00Z", "price": 0.65, "volume": 1234.5}"#;
+        let entry: PriceHistoryEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.timestamp, "2026-01-15T12:00:00Z");
+        assert!((entry.price - 0.65).abs() < f64::EPSILON);
+        assert!((entry.volume.unwrap() - 1234.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_price_history_entry_deserializes_without_volume() {
+        let json = r#"{"timestamp": "2026-01-15T12:00:00Z", "price": 0.42}"#;
+        let entry: PriceHistoryEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.timestamp, "2026-01-15T12:00:00Z");
+        assert!((entry.price - 0.42).abs() < f64::EPSILON);
+        assert!(entry.volume.is_none());
+    }
+
+    #[test]
+    fn test_price_history_vec_deserializes() {
+        let json = r#"[
+            {"timestamp": "2026-01-15T12:00:00Z", "price": 0.65},
+            {"timestamp": "2026-01-15T13:00:00Z", "price": 0.67, "volume": 500.0}
+        ]"#;
+        let entries: Vec<PriceHistoryEntry> = serde_json::from_str(json).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!((entries[1].price - 0.67).abs() < f64::EPSILON);
+        assert!(entries[0].volume.is_none());
+        assert!(entries[1].volume.is_some());
+    }
+
+    #[test]
+    fn test_order_book_level_deserializes() {
+        let json = r#"{"price": 0.55, "size": 100.0}"#;
+        let level: OrderBookLevel = serde_json::from_str(json).unwrap();
+        assert!((level.price - 0.55).abs() < f64::EPSILON);
+        assert!((level.size - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_order_book_deserializes() {
+        let json = r#"{
+            "bids": [
+                {"price": 0.55, "size": 100.0},
+                {"price": 0.54, "size": 200.0}
+            ],
+            "asks": [
+                {"price": 0.56, "size": 150.0}
+            ]
+        }"#;
+        let book: OrderBook = serde_json::from_str(json).unwrap();
+        assert_eq!(book.bids.len(), 2);
+        assert_eq!(book.asks.len(), 1);
+        assert!((book.bids[0].price - 0.55).abs() < f64::EPSILON);
+        assert!((book.bids[1].size - 200.0).abs() < f64::EPSILON);
+        assert!((book.asks[0].price - 0.56).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_order_book_deserializes_empty() {
+        let json = r#"{"bids": [], "asks": []}"#;
+        let book: OrderBook = serde_json::from_str(json).unwrap();
+        assert!(book.bids.is_empty());
+        assert!(book.asks.is_empty());
     }
 }
