@@ -115,6 +115,21 @@ pub struct Strategy {
     pub extra: serde_json::Value,
 }
 
+/// Response from strategy lifecycle operations (start/stop/pause/resume).
+///
+/// The platform returns a minimal status object rather than the full `Strategy`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyStatusResponse {
+    pub status: StrategyStatus,
+    #[serde(default)]
+    pub started_at: Option<String>,
+    #[serde(default)]
+    pub stopped_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
 /// A strategy template.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyTemplate {
