@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.18] — 2026-04-13
+
+### Added
+- `list_conditional_orders(params)` — `GET /api/v1/orders/conditional` with optional status filter and limit (closes #40)
+- `create_conditional_order(params)` — `POST /api/v1/orders/conditional` with financial parameter validation (closes #40)
+- `get_conditional_order(order_id)` — `GET /api/v1/orders/conditional/:id` (closes #40)
+- `cancel_conditional_order(order_id)` — `DELETE /api/v1/orders/conditional/:id` (closes #40)
+- `create_alert(params)` — `POST /api/v1/alerts` with price validation (closes #40)
+- `delete_alert(alert_id)` — `DELETE /api/v1/alerts/:id` (closes #40)
+- `get_portfolio_pnl(params)` — `GET /api/v1/portfolio/pnl` with optional period and strategy filter (closes #40)
+- New types: `ConditionalOrder`, `ConditionalOrderStatus`, `CreateConditionalOrderParams`, `ListConditionalOrdersParams`, `AlertDirection`, `CreateAlertParams`, `PortfolioPnl`, `GetPortfolioPnlParams`
+- 18 new unit tests covering all new types and validation
+
 ## [1.6.17] — 2026-04-13
 
 ### Added

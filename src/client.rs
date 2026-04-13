@@ -991,6 +991,124 @@ impl PolyforgeClient {
         .await
     }
 
+    // -----------------------------------------------------------------------
+    // Conditional Orders
+    // -----------------------------------------------------------------------
+
+    /// List conditional orders with optional status filter and limit.
+    pub async fn list_conditional_orders(
+        &self,
+        params: &ListConditionalOrdersParams,
+    ) -> Result<PaginatedResponse<ConditionalOrder>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(ref s) = params.status {
+            let val = serde_json::to_value(s).unwrap_or_default();
+            if let Some(v) = val.as_str() {
+                qp.push(("status", v.to_string()));
+            }
+        }
+        if let Some(l) = params.limit {
+            qp.push(("limit", l.to_string()));
+        }
+
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+
+        self.get(&format!("/api/v1/orders/conditional{qs}")).await
+    }
+
+    /// Create a conditional order (limit, stop, trailing-stop, etc.).
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Validation`] if `size` or `trigger_price` is
+    /// NaN, infinite, zero, or negative.
+    pub async fn create_conditional_order(
+        &self,
+        params: &CreateConditionalOrderParams,
+    ) -> Result<ConditionalOrder> {
+        validate_financial_param("size", params.size)?;
+        validate_financial_param("trigger_price", params.trigger_price)?;
+        validate_optional_financial_param("limit_price", params.limit_price)?;
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/orders/conditional", &body).await
+    }
+
+    /// Get a single conditional order by ID.
+    pub async fn get_conditional_order(&self, order_id: &str) -> Result<ConditionalOrder> {
+        self.get(&format!(
+            "/api/v1/orders/conditional/{}",
+            encode(order_id)
+        ))
+        .await
+    }
+
+    /// Cancel a pending conditional order.
+    pub async fn cancel_conditional_order(&self, order_id: &str) -> Result<()> {
+        let _: serde_json::Value = self
+            .delete(&format!(
+                "/api/v1/orders/conditional/{}",
+                encode(order_id)
+            ))
+            .await?;
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Alert CRUD
+    // -----------------------------------------------------------------------
+
+    /// Create a new price alert.
+    pub async fn create_alert(&self, params: &CreateAlertParams) -> Result<Alert> {
+        validate_financial_param("price", params.price)?;
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/alerts", &body).await
+    }
+
+    /// Delete an alert by ID.
+    pub async fn delete_alert(&self, alert_id: &str) -> Result<()> {
+        let _: serde_json::Value = self
+            .delete(&format!("/api/v1/alerts/{}", encode(alert_id)))
+            .await?;
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Portfolio PnL
+    // -----------------------------------------------------------------------
+
+    /// Get aggregated portfolio PnL with optional period and strategy filter.
+    pub async fn get_portfolio_pnl(
+        &self,
+        params: &GetPortfolioPnlParams,
+    ) -> Result<PortfolioPnl> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(ref p) = params.period {
+            qp.push(("period", p.clone()));
+        }
+        if let Some(ref s) = params.strategy_id {
+            qp.push(("strategyId", s.clone()));
+        }
+
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+
+        self.get(&format!("/api/v1/portfolio/pnl{qs}")).await
+    }
+
     /// Returns `true` if the given IP is in a blocked range (loopback, private,
     /// link-local, CGNAT, cloud metadata, or unspecified).
     fn is_blocked_ip(ip: std::net::IpAddr) -> bool {
@@ -2599,5 +2717,237 @@ mod tests {
         let book: OrderBook = serde_json::from_str(json).unwrap();
         assert!(book.bids.is_empty());
         assert!(book.asks.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // Conditional orders, alert CRUD, portfolio PnL (#40)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_conditional_order_status_enum_deserializes_all_variants() {
+        let variants = ["PENDING", "TRIGGERED", "CANCELLED", "EXPIRED", "FAILED"];
+        for v in &variants {
+            let json = format!("\"{}\"", v);
+            let status: ConditionalOrderStatus = serde_json::from_str(&json).unwrap();
+            let serialized = serde_json::to_value(&status).unwrap();
+            assert_eq!(serialized, serde_json::Value::String(v.to_string()));
+        }
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_full() {
+        let json = r#"{
+            "id": "co-1",
+            "tokenId": "tok-abc",
+            "side": "BUY",
+            "outcome": "YES",
+            "size": "100",
+            "triggerPrice": "0.60",
+            "limitPrice": "0.62",
+            "conditionType": "STOP",
+            "status": "PENDING",
+            "createdAt": "2026-04-13T10:00:00Z",
+            "triggeredAt": null,
+            "expiresAt": "2026-04-20T10:00:00Z"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-1");
+        assert_eq!(co.token_id.as_deref(), Some("tok-abc"));
+        assert_eq!(co.trigger_price.as_deref(), Some("0.60"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
+        assert_eq!(co.expires_at.as_deref(), Some("2026-04-20T10:00:00Z"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_minimal() {
+        let json = r#"{"id": "co-2"}"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-2");
+        assert!(co.token_id.is_none());
+        assert!(co.status.is_none());
+    }
+
+    #[test]
+    fn test_create_conditional_order_params_serializes_camelcase() {
+        let params = CreateConditionalOrderParams {
+            token_id: "tok-1".into(),
+            side: "BUY".into(),
+            outcome: "YES".into(),
+            size: 50.0,
+            trigger_price: 0.65,
+            limit_price: Some(0.67),
+            condition_type: Some("STOP_LIMIT".into()),
+            expires_at: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["tokenId"], "tok-1");
+        assert_eq!(json["triggerPrice"], 0.65);
+        assert_eq!(json["limitPrice"], 0.67);
+        assert_eq!(json["conditionType"], "STOP_LIMIT");
+        assert!(json.get("expiresAt").is_none());
+    }
+
+    #[test]
+    fn test_create_conditional_order_validation_rejects_nan_size() {
+        let params = CreateConditionalOrderParams {
+            token_id: "tok-1".into(),
+            side: "BUY".into(),
+            outcome: "YES".into(),
+            size: f64::NAN,
+            trigger_price: 0.65,
+            limit_price: None,
+            condition_type: None,
+            expires_at: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.create_conditional_order(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("size"));
+    }
+
+    #[test]
+    fn test_create_conditional_order_validation_rejects_negative_trigger_price() {
+        let params = CreateConditionalOrderParams {
+            token_id: "tok-1".into(),
+            side: "BUY".into(),
+            outcome: "YES".into(),
+            size: 10.0,
+            trigger_price: -0.5,
+            limit_price: None,
+            condition_type: None,
+            expires_at: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.create_conditional_order(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("trigger_price"));
+    }
+
+    #[test]
+    fn test_create_conditional_order_validation_rejects_nan_limit_price() {
+        let params = CreateConditionalOrderParams {
+            token_id: "tok-1".into(),
+            side: "BUY".into(),
+            outcome: "YES".into(),
+            size: 10.0,
+            trigger_price: 0.5,
+            limit_price: Some(f64::NAN),
+            condition_type: None,
+            expires_at: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.create_conditional_order(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("limit_price"));
+    }
+
+    #[test]
+    fn test_list_conditional_orders_params_default() {
+        let params = ListConditionalOrdersParams::default();
+        assert!(params.status.is_none());
+        assert!(params.limit.is_none());
+    }
+
+    #[test]
+    fn test_alert_direction_serializes() {
+        let above = serde_json::to_value(AlertDirection::Above).unwrap();
+        assert_eq!(above, serde_json::Value::String("ABOVE".to_string()));
+        let below = serde_json::to_value(AlertDirection::Below).unwrap();
+        assert_eq!(below, serde_json::Value::String("BELOW".to_string()));
+    }
+
+    #[test]
+    fn test_create_alert_params_serializes_camelcase() {
+        let params = CreateAlertParams {
+            token_id: "tok-1".into(),
+            direction: AlertDirection::Above,
+            price: 0.75,
+            persistent: Some(true),
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["tokenId"], "tok-1");
+        assert_eq!(json["direction"], "ABOVE");
+        assert_eq!(json["price"], 0.75);
+        assert_eq!(json["persistent"], true);
+    }
+
+    #[test]
+    fn test_create_alert_params_omits_none_persistent() {
+        let params = CreateAlertParams {
+            token_id: "tok-1".into(),
+            direction: AlertDirection::Below,
+            price: 0.25,
+            persistent: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert!(json.get("persistent").is_none());
+    }
+
+    #[test]
+    fn test_create_alert_validation_rejects_zero_price() {
+        let params = CreateAlertParams {
+            token_id: "tok-1".into(),
+            direction: AlertDirection::Above,
+            price: 0.0,
+            persistent: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.create_alert(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("price"));
+    }
+
+    #[test]
+    fn test_portfolio_pnl_deserializes_full() {
+        let json = r#"{
+            "totalPnl": "125.50",
+            "realizedPnl": "100.00",
+            "unrealizedPnl": "25.50",
+            "period": "30d",
+            "strategyId": "strat-1",
+            "dataPoints": [{"timestamp": "2026-04-01", "pnl": "10.00"}]
+        }"#;
+        let pnl: PortfolioPnl = serde_json::from_str(json).unwrap();
+        assert_eq!(pnl.total_pnl.as_deref(), Some("125.50"));
+        assert_eq!(pnl.realized_pnl.as_deref(), Some("100.00"));
+        assert_eq!(pnl.unrealized_pnl.as_deref(), Some("25.50"));
+        assert_eq!(pnl.period.as_deref(), Some("30d"));
+        assert_eq!(pnl.strategy_id.as_deref(), Some("strat-1"));
+        assert_eq!(pnl.data_points.len(), 1);
+    }
+
+    #[test]
+    fn test_portfolio_pnl_deserializes_minimal() {
+        let json = r#"{}"#;
+        let pnl: PortfolioPnl = serde_json::from_str(json).unwrap();
+        assert!(pnl.total_pnl.is_none());
+        assert!(pnl.data_points.is_empty());
+    }
+
+    #[test]
+    fn test_get_portfolio_pnl_params_default() {
+        let params = GetPortfolioPnlParams::default();
+        assert!(params.period.is_none());
+        assert!(params.strategy_id.is_none());
+    }
+
+    #[test]
+    fn test_paginated_conditional_orders_deserializes() {
+        let json = r#"{
+            "data": [{"id": "co-1"}, {"id": "co-2"}],
+            "total": 2,
+            "page": 1,
+            "limit": 10,
+            "totalPages": 1,
+            "hasNext": false
+        }"#;
+        let resp: PaginatedResponse<ConditionalOrder> = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.data.len(), 2);
+        assert_eq!(resp.data[0].id, "co-1");
+        assert_eq!(resp.total, 2);
     }
 }
