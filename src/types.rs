@@ -1085,6 +1085,132 @@ pub struct OrderBook {
 }
 
 // ---------------------------------------------------------------------------
+// Conditional Orders
+// ---------------------------------------------------------------------------
+
+/// Conditional order status.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ConditionalOrderStatus {
+    Pending,
+    Triggered,
+    Cancelled,
+    Expired,
+    Failed,
+}
+
+/// A conditional order (limit, stop, trailing-stop, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConditionalOrder {
+    pub id: String,
+    #[serde(default)]
+    pub token_id: Option<String>,
+    #[serde(default)]
+    pub side: Option<String>,
+    #[serde(default)]
+    pub outcome: Option<String>,
+    #[serde(default)]
+    pub size: Option<String>,
+    #[serde(default)]
+    pub trigger_price: Option<String>,
+    #[serde(default)]
+    pub limit_price: Option<String>,
+    #[serde(default)]
+    pub condition_type: Option<String>,
+    #[serde(default)]
+    pub status: Option<ConditionalOrderStatus>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub triggered_at: Option<String>,
+    #[serde(default)]
+    pub expires_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for listing conditional orders.
+#[derive(Debug, Default)]
+pub struct ListConditionalOrdersParams {
+    pub status: Option<ConditionalOrderStatus>,
+    pub limit: Option<u32>,
+}
+
+/// Parameters for creating a conditional order.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateConditionalOrderParams {
+    pub token_id: String,
+    pub side: String,
+    pub outcome: String,
+    pub size: f64,
+    pub trigger_price: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit_price: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Alert CRUD
+// ---------------------------------------------------------------------------
+
+/// Alert direction (price movement direction).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AlertDirection {
+    Above,
+    Below,
+}
+
+/// Parameters for creating a price alert.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAlertParams {
+    pub token_id: String,
+    pub direction: AlertDirection,
+    pub price: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub persistent: Option<bool>,
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio PnL
+// ---------------------------------------------------------------------------
+
+/// Aggregated portfolio profit-and-loss data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortfolioPnl {
+    #[serde(default)]
+    pub total_pnl: Option<String>,
+    #[serde(default)]
+    pub realized_pnl: Option<String>,
+    #[serde(default)]
+    pub unrealized_pnl: Option<String>,
+    #[serde(default)]
+    pub period: Option<String>,
+    #[serde(default)]
+    pub strategy_id: Option<String>,
+    #[serde(default)]
+    pub data_points: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for fetching portfolio PnL.
+#[derive(Debug, Default)]
+pub struct GetPortfolioPnlParams {
+    /// Time period: `"1d"`, `"7d"`, `"30d"`, `"all"`.
+    pub period: Option<String>,
+    /// Filter by strategy ID.
+    pub strategy_id: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Strategy Execution Events (SSE)
 // ---------------------------------------------------------------------------
 
