@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Security
+- **Default URL updated to production** — changed `DEFAULT_BASE_URL` from `https://localhost:3002` to `https://api.polyforge.app` to match Python and TypeScript SDKs; localhost with HTTPS causes immediate TLS failures for new users and encourages insecure workarounds (closes #87, regression of #71)
 - **SSE buffer overflow protection** — `StrategyEventStream` now enforces a 1 MiB (`MAX_SSE_BUFFER_SIZE`) cap on its internal line buffer; if the server sends data without a newline beyond this limit the stream returns `PolyforgeError::Api` with code `SSE_BUFFER_OVERFLOW` instead of growing unboundedly toward OOM (closes #52)
 - **Cargo.lock committed for reproducible builds** — removed `Cargo.lock` from `.gitignore` and committed the lockfile so that `cargo audit` can run, builds are reproducible, and supply-chain attacks are detectable via dependency pinning (closes #42)
 - **DNS rebinding SSRF mitigation** — `validate_webhook_url()` now resolves domain names via `tokio::net::lookup_host()` and checks all resolved IPs against the private/loopback blocklist, preventing SSRF bypass via attacker-controlled DNS records; also adds CGNAT range (100.64.0.0/10, RFC 6598) to the blocklist; documents that this is a client-side best-effort check and the server must independently validate (closes #63, closes #41)
