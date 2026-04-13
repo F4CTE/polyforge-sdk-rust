@@ -82,6 +82,7 @@ impl StrategyEventStream {
                                     MAX_SSE_BUFFER_SIZE
                                 ),
                                 request_id: None,
+                                suggestion: None,
                             }));
                         }
                     }
@@ -91,6 +92,7 @@ impl StrategyEventStream {
                             code: "INVALID_UTF8".into(),
                             message: format!("Invalid UTF-8 in SSE stream: {}", e),
                             request_id: None,
+                            suggestion: None,
                         }))
                     }
                 },
@@ -352,6 +354,10 @@ impl PolyforgeClient {
                     .to_string(),
                 request_id: body
                     .get("requestId")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                suggestion: body
+                    .get("suggestion")
                     .and_then(|v| v.as_str())
                     .map(String::from),
             });
@@ -974,6 +980,10 @@ impl PolyforgeClient {
                     .unwrap_or("SSE stream request failed")
                     .to_string(),
                 request_id: None,
+                suggestion: body
+                    .get("suggestion")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
             });
         }
 
@@ -1034,6 +1044,7 @@ mod tests {
             code: "NOT_FOUND".to_string(),
             message: "Resource not found".to_string(),
             request_id: Some("req-123".to_string()),
+            suggestion: None,
         };
 
         if let PolyforgeError::Api {
@@ -1041,12 +1052,14 @@ mod tests {
             code,
             message,
             request_id,
+            suggestion,
         } = error
         {
             assert_eq!(status, 404);
             assert_eq!(code, "NOT_FOUND");
             assert_eq!(message, "Resource not found");
             assert_eq!(request_id, Some("req-123".to_string()));
+            assert_eq!(suggestion, None);
         } else {
             panic!("Expected Api error variant");
         }
@@ -1059,6 +1072,7 @@ mod tests {
             code: "INTERNAL_ERROR".to_string(),
             message: "Internal server error".to_string(),
             request_id: None,
+            suggestion: None,
         };
 
         if let PolyforgeError::Api {
@@ -1066,12 +1080,45 @@ mod tests {
             code,
             message,
             request_id,
+            suggestion,
         } = error
         {
             assert_eq!(status, 500);
             assert_eq!(code, "INTERNAL_ERROR");
             assert_eq!(message, "Internal server error");
             assert_eq!(request_id, None);
+            assert_eq!(suggestion, None);
+        } else {
+            panic!("Expected Api error variant");
+        }
+    }
+
+    #[test]
+    fn test_api_error_with_suggestion() {
+        let error = PolyforgeError::Api {
+            status: 429,
+            code: "RATE_LIMITED".to_string(),
+            message: "Too many requests".to_string(),
+            request_id: Some("req-456".to_string()),
+            suggestion: Some("Reduce request frequency or upgrade to Pro tier".to_string()),
+        };
+
+        if let PolyforgeError::Api {
+            status,
+            code,
+            message,
+            request_id,
+            suggestion,
+        } = error
+        {
+            assert_eq!(status, 429);
+            assert_eq!(code, "RATE_LIMITED");
+            assert_eq!(message, "Too many requests");
+            assert_eq!(request_id, Some("req-456".to_string()));
+            assert_eq!(
+                suggestion,
+                Some("Reduce request frequency or upgrade to Pro tier".to_string())
+            );
         } else {
             panic!("Expected Api error variant");
         }
