@@ -471,20 +471,15 @@ impl PolyforgeClient {
             .await
     }
 
-    /// Create a new strategy with a name and optional description.
+    /// Create a new strategy with full block configuration.
+    ///
+    /// Use [`CreateStrategyParams`] to specify blocks, visibility, execution mode,
+    /// tags, and other strategy properties.
     pub async fn create_strategy(
         &self,
-        name: &str,
-        description: Option<&str>,
-        market_id: Option<&str>,
+        params: &CreateStrategyParams,
     ) -> Result<Strategy> {
-        let mut body = json!({ "name": name });
-        if let Some(desc) = description {
-            body["description"] = json!(desc);
-        }
-        if let Some(mid) = market_id {
-            body["marketId"] = json!(mid);
-        }
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/strategies", &body).await
     }
 
@@ -598,6 +593,20 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
+    // Backtesting
+    // -----------------------------------------------------------------------
+
+    /// Run a backtest with the given parameters.
+    ///
+    /// The platform does **not** accept an `initialBalance` field.
+    /// Use [`RunBacktestParams`] to specify strategy ID, date range, quick mode,
+    /// strategy blocks, and market bindings.
+    pub async fn run_backtest(&self, params: &RunBacktestParams) -> Result<Backtest> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/backtests", &body).await
+    }
+
+    // -----------------------------------------------------------------------
     // Portfolio & Orders
     // -----------------------------------------------------------------------
 
@@ -613,7 +622,8 @@ impl PolyforgeClient {
             qp.push(("limit", l.to_string()));
         }
         if let Some(ref s) = params.status {
-            qp.push(("status", s.clone()));
+            let val = serde_json::to_value(s).unwrap_or_default();
+            qp.push(("status", val.as_str().unwrap_or_default().to_string()));
         }
         if let Some(ref s) = params.strategy_id {
             qp.push(("strategyId", s.clone()));
@@ -1864,5 +1874,224 @@ mod tests {
         let json = r#"[{"id":"s1"},{"id":"s2"}]"#;
         let result = serde_json::from_str::<PaginatedResponse<Strategy>>(json);
         assert!(result.is_err(), "bare array must not deserialize as PaginatedResponse");
+    }
+
+    // -----------------------------------------------------------------------
+    // Breaking compat fixes (#33, #34, #35, #36, #37, #51, #68)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_close_position_size_serializes_as_string() {
+        // #33: size must be a JSON string, not a number
+        let params = ClosePositionParams {
+            token_id: "tok-123".into(),
+            size: Some("100".into()),
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["size"], serde_json::Value::String("100".to_string()));
+    }
+
+    #[test]
+    fn test_close_position_size_omitted_when_none() {
+        // #33: size should not appear in JSON when None
+        let params = ClosePositionParams {
+            token_id: "tok-123".into(),
+            size: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert!(json.get("size").is_none());
+    }
+
+    #[test]
+    fn test_order_status_enum_deserializes_all_variants() {
+        // #34: All 12 OrderStatus variants must deserialize
+        let variants = [
+            "PENDING", "SUBMITTED", "LIVE", "MATCHED", "DELAYED", "MINED",
+            "CONFIRMED", "PARTIAL", "CANCELLED", "UNMATCHED", "FAILED", "ERROR",
+        ];
+        for v in &variants {
+            let json = format!("\"{}\"", v);
+            let status: OrderStatus = serde_json::from_str(&json).unwrap();
+            let serialized = serde_json::to_value(&status).unwrap();
+            assert_eq!(serialized, serde_json::Value::String(v.to_string()));
+        }
+    }
+
+    #[test]
+    fn test_order_status_used_in_order_struct() {
+        // #34: Order.status should be typed OrderStatus, not String
+        let json = r#"{"id":"o1","status":"CONFIRMED"}"#;
+        let order: Order = serde_json::from_str(json).unwrap();
+        assert_eq!(order.status, Some(OrderStatus::Confirmed));
+    }
+
+    #[test]
+    fn test_strategy_status_error_and_archived() {
+        // #35: ERROR and ARCHIVED must deserialize
+        let json = r#""ERROR""#;
+        let status: StrategyStatus = serde_json::from_str(json).unwrap();
+        assert_eq!(status, StrategyStatus::Error);
+
+        let json = r#""ARCHIVED""#;
+        let status: StrategyStatus = serde_json::from_str(json).unwrap();
+        assert_eq!(status, StrategyStatus::Archived);
+    }
+
+    #[test]
+    fn test_strategy_has_block_arrays() {
+        // #36: Strategy must have triggers, conditions, actions, safety arrays
+        let json = r#"{
+            "id": "s1",
+            "triggers": [{"type":"price_cross","enabled":true}],
+            "conditions": [],
+            "actions": [{"type":"place_order"}],
+            "safety": [{"type":"stop_loss"}],
+            "visibility": "PUBLIC",
+            "execMode": "TICK",
+            "tickMs": 5000,
+            "tags": ["crypto","automated"],
+            "forkCount": 12,
+            "likeCount": 42,
+            "version": 3
+        }"#;
+        let strategy: Strategy = serde_json::from_str(json).unwrap();
+        assert_eq!(strategy.triggers.len(), 1);
+        assert_eq!(strategy.actions.len(), 1);
+        assert_eq!(strategy.safety.len(), 1);
+        assert_eq!(strategy.visibility, Some(Visibility::Public));
+        assert_eq!(strategy.exec_mode, Some(ExecMode::Tick));
+        assert_eq!(strategy.tick_ms, Some(5000));
+        assert_eq!(strategy.tags, vec!["crypto", "automated"]);
+        assert_eq!(strategy.fork_count, Some(12));
+        assert_eq!(strategy.like_count, Some(42));
+        assert_eq!(strategy.version, Some(3));
+    }
+
+    #[test]
+    fn test_create_strategy_params_serializes_all_fields() {
+        // #37: CreateStrategyParams must include blocks, visibility, execMode, tags
+        let params = CreateStrategyParams {
+            name: "My Strategy".into(),
+            description: Some("Test".into()),
+            market_id: Some("m1".into()),
+            visibility: Some(Visibility::Public),
+            exec_mode: Some(ExecMode::Tick),
+            tick_ms: Some(5000),
+            triggers: Some(vec![]),
+            conditions: Some(vec![]),
+            actions: Some(vec![]),
+            safety: Some(vec![]),
+            logic_blocks: None,
+            calc_blocks: None,
+            tags: Some(vec!["test".into()]),
+            variables: None,
+            canvas: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["name"], "My Strategy");
+        assert_eq!(json["visibility"], "PUBLIC");
+        assert_eq!(json["execMode"], "TICK");
+        assert_eq!(json["tickMs"], 5000);
+        assert!(json["triggers"].is_array());
+        assert!(json["tags"].is_array());
+        // logicBlocks and calcBlocks omitted when None
+        assert!(json.get("logicBlocks").is_none());
+    }
+
+    #[test]
+    fn test_copy_config_deserializes_platform_fields() {
+        // #51: CopyConfig must use targetWallet, mode, maxExposure etc.
+        let json = r#"{
+            "id": "cc1",
+            "targetWallet": "0xabc123",
+            "mode": "PERCENTAGE",
+            "sizeValue": "50",
+            "maxExposure": "1000",
+            "maxDailyLoss": "100",
+            "priceOffset": "0.01",
+            "enabled": true
+        }"#;
+        let config: CopyConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.target_wallet, Some("0xabc123".to_string()));
+        assert_eq!(config.mode, Some(CopyMode::Percentage));
+        assert_eq!(config.size_value, Some("50".to_string()));
+        assert_eq!(config.max_exposure, Some("1000".to_string()));
+        assert_eq!(config.max_daily_loss, Some("100".to_string()));
+        assert_eq!(config.price_offset, Some("0.01".to_string()));
+        assert_eq!(config.enabled, Some(true));
+    }
+
+    #[test]
+    fn test_copy_config_no_source_trader_field() {
+        // #51: Verify that the old source_trader field name does NOT work
+        let json = r#"{"id":"cc1","sourceTrader":"0xabc"}"#;
+        let config: CopyConfig = serde_json::from_str(json).unwrap();
+        // sourceTrader goes into extra, not target_wallet
+        assert_eq!(config.target_wallet, None);
+    }
+
+    #[test]
+    fn test_run_backtest_params_no_initial_balance() {
+        // #68: RunBacktestParams must NOT have initialBalance
+        let params = RunBacktestParams {
+            strategy_id: Some("s1".into()),
+            date_range_start: Some("2025-01-01".into()),
+            date_range_end: Some("2025-12-31".into()),
+            quick_mode: Some(true),
+            strategy_blocks: None,
+            market_bindings: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert!(json.get("initialBalance").is_none());
+        assert_eq!(json["strategyId"], "s1");
+        assert_eq!(json["dateRangeStart"], "2025-01-01");
+        assert_eq!(json["dateRangeEnd"], "2025-12-31");
+        assert_eq!(json["quickMode"], true);
+    }
+
+    #[test]
+    fn test_run_backtest_params_with_market_bindings() {
+        // #68: market_bindings should serialize correctly
+        let mut bindings = std::collections::HashMap::new();
+        bindings.insert("block-1".to_string(), "market-abc".to_string());
+        let params = RunBacktestParams {
+            strategy_id: None,
+            date_range_start: None,
+            date_range_end: None,
+            quick_mode: None,
+            strategy_blocks: None,
+            market_bindings: Some(bindings),
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["marketBindings"]["block-1"], "market-abc");
+    }
+
+    #[test]
+    fn test_order_status_serializes_for_query_params() {
+        // #34: OrderStatus should serialize to correct string for query params
+        let status = OrderStatus::Live;
+        let val = serde_json::to_value(&status).unwrap();
+        assert_eq!(val.as_str().unwrap(), "LIVE");
+    }
+
+    #[test]
+    fn test_visibility_enum_serializes() {
+        assert_eq!(serde_json::to_value(Visibility::Private).unwrap(), "PRIVATE");
+        assert_eq!(serde_json::to_value(Visibility::Public).unwrap(), "PUBLIC");
+        assert_eq!(serde_json::to_value(Visibility::Unlisted).unwrap(), "UNLISTED");
+    }
+
+    #[test]
+    fn test_exec_mode_enum_serializes() {
+        assert_eq!(serde_json::to_value(ExecMode::Tick).unwrap(), "TICK");
+        assert_eq!(serde_json::to_value(ExecMode::Event).unwrap(), "EVENT");
+        assert_eq!(serde_json::to_value(ExecMode::Hybrid).unwrap(), "HYBRID");
+    }
+
+    #[test]
+    fn test_copy_mode_enum_serializes() {
+        assert_eq!(serde_json::to_value(CopyMode::Percentage).unwrap(), "PERCENTAGE");
+        assert_eq!(serde_json::to_value(CopyMode::Fixed).unwrap(), "FIXED");
+        assert_eq!(serde_json::to_value(CopyMode::Mirror).unwrap(), "MIRROR");
     }
 }

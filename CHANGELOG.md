@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.6.13] — 2026-04-13
+
+### Fixed
+- **BREAKING** `ClosePositionParams.size`: changed from `Option<f64>` to `Option<String>` — platform's `ClosePositionDto.size` uses `@IsNumberString()` which requires a string value, causing 400 Bad Request on every `close_position()` call with a size (closes #33)
+- **BREAKING** `Order.status`: changed from `Option<String>` to `Option<OrderStatus>` — added typed `OrderStatus` enum with all 12 platform variants (PENDING, SUBMITTED, LIVE, MATCHED, DELAYED, MINED, CONFIRMED, PARTIAL, CANCELLED, UNMATCHED, FAILED, ERROR); `ListOrdersParams.status` also changed to `Option<OrderStatus>` for compile-time safety (closes #34)
+- **BREAKING** `StrategyStatus`: added missing `Error` and `Archived` variants — deserialization failed when platform returned `"ERROR"` or `"ARCHIVED"` status, breaking `list_strategies()` and `get_strategy()` (closes #35)
+- **BREAKING** `Strategy` struct: added typed `triggers`, `conditions`, `actions`, `safety` (`Vec<Block>`), `logic_blocks`, `calc_blocks`, `visibility` (`Visibility` enum), `exec_mode` (`ExecMode` enum), `tick_ms`, `tags`, `version`, `fork_count`, `like_count` fields — strategy blocks were only accessible through the untyped `extra` catch-all (closes #36)
+- **BREAKING** `create_strategy()`: changed signature from `(name, description, market_id)` to `(&CreateStrategyParams)` — new `CreateStrategyParams` struct includes all 15 platform DTO fields (blocks, visibility, execMode, tickMs, tags, variables, canvas) so strategies can actually be created with block configuration (closes #37)
+- **BREAKING** `CopyConfig` struct: renamed `source_trader` to `target_wallet` (serde `"targetWallet"`), renamed `max_size` to `max_exposure` (serde `"maxExposure"`, type changed to `Option<String>`), added `mode` (`CopyMode` enum: PERCENTAGE/FIXED/MIRROR), `size_value`, `max_daily_loss`, `price_offset` fields — all fields were either wrong-named or missing, causing silent data loss on deserialization (closes #51)
+- Added `run_backtest()` method with `RunBacktestParams` struct matching platform's `CreateBacktestDto` (strategyId, dateRangeStart, dateRangeEnd, quickMode, strategyBlocks, marketBindings) — does NOT include `initialBalance` which the platform silently discards (closes #68)
+
+### Added
+- `OrderStatus` enum — 12-variant typed enum for order lifecycle status
+- `Visibility` enum — PRIVATE, PUBLIC, UNLISTED
+- `ExecMode` enum — TICK, EVENT, HYBRID
+- `CopyMode` enum — PERCENTAGE, FIXED, MIRROR
+- `Block`, `LogicBlock`, `CalcBlock` structs — typed strategy block representations
+- `CreateStrategyParams` struct — full strategy creation with all platform DTO fields
+- `RunBacktestParams` struct — backtest parameters matching platform contract
+- `Backtest` struct — backtest result type
+- 15 new unit tests covering all 7 fixes
+
 ## [1.6.12] — 2026-04-13
 
 ### Security

@@ -90,7 +90,73 @@ pub enum StrategyStatus {
     Idle,
     Running,
     Paused,
+    Error,
     Paper,
+    Archived,
+}
+
+/// Strategy visibility.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Visibility {
+    Private,
+    Public,
+    Unlisted,
+}
+
+/// Strategy execution mode.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ExecMode {
+    Tick,
+    Event,
+    Hybrid,
+}
+
+/// A strategy block (trigger, condition, action, or safety).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Block {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(rename = "type", default)]
+    pub block_type: Option<String>,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub config: Option<serde_json::Value>,
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A logic block used in strategy flow control.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogicBlock {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(rename = "type", default)]
+    pub block_type: Option<String>,
+    #[serde(default)]
+    pub config: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A calculation block used in strategy computations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalcBlock {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(rename = "type", default)]
+    pub block_type: Option<String>,
+    #[serde(default)]
+    pub config: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
 }
 
 /// Trading mode used when starting a strategy.
@@ -115,6 +181,32 @@ pub struct Strategy {
     pub status: Option<StrategyStatus>,
     #[serde(default)]
     pub mode: Option<TradingMode>,
+    #[serde(default)]
+    pub visibility: Option<Visibility>,
+    #[serde(default)]
+    pub exec_mode: Option<ExecMode>,
+    #[serde(default)]
+    pub tick_ms: Option<u64>,
+    #[serde(default)]
+    pub triggers: Vec<Block>,
+    #[serde(default)]
+    pub conditions: Vec<Block>,
+    #[serde(default)]
+    pub actions: Vec<Block>,
+    #[serde(default)]
+    pub safety: Vec<Block>,
+    #[serde(default)]
+    pub logic_blocks: Option<Vec<LogicBlock>>,
+    #[serde(default)]
+    pub calc_blocks: Option<Vec<CalcBlock>>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub version: Option<u32>,
+    #[serde(default)]
+    pub fork_count: Option<u64>,
+    #[serde(default)]
+    pub like_count: Option<u64>,
     #[serde(default)]
     pub pnl: Option<f64>,
     #[serde(default)]
@@ -150,6 +242,74 @@ pub struct StrategyTemplate {
     pub description: Option<String>,
     #[serde(default)]
     pub category: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for creating a strategy with full block configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateStrategyParams {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visibility: Option<Visibility>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exec_mode: Option<ExecMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tick_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<Vec<Block>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conditions: Option<Vec<Block>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actions: Option<Vec<Block>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub safety: Option<Vec<Block>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logic_blocks: Option<Vec<LogicBlock>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub calc_blocks: Option<Vec<CalcBlock>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variables: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub canvas: Option<serde_json::Value>,
+}
+
+/// Parameters for running a backtest.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RunBacktestParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_range_start: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_range_end: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quick_mode: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy_blocks: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_bindings: Option<std::collections::HashMap<String, String>>,
+}
+
+/// A backtest result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Backtest {
+    pub id: String,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub strategy_id: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -198,6 +358,24 @@ pub struct Position {
     pub extra: serde_json::Value,
 }
 
+/// Order lifecycle status.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum OrderStatus {
+    Pending,
+    Submitted,
+    Live,
+    Matched,
+    Delayed,
+    Mined,
+    Confirmed,
+    Partial,
+    Cancelled,
+    Unmatched,
+    Failed,
+    Error,
+}
+
 /// An order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -218,7 +396,7 @@ pub struct Order {
     #[serde(default)]
     pub fill_price: Option<String>,
     #[serde(default)]
-    pub status: Option<String>,
+    pub status: Option<OrderStatus>,
     #[serde(default)]
     pub created_at: Option<String>,
     #[serde(flatten)]
@@ -229,7 +407,7 @@ pub struct Order {
 #[derive(Debug, Default)]
 pub struct ListOrdersParams {
     pub limit: Option<u32>,
-    pub status: Option<String>,
+    pub status: Option<OrderStatus>,
     pub strategy_id: Option<String>,
     pub from: Option<String>,
     pub to: Option<String>,
@@ -240,8 +418,9 @@ pub struct ListOrdersParams {
 pub struct ClosePositionParams {
     #[serde(rename = "tokenId")]
     pub token_id: String,
+    /// Size as a number string (e.g. `"100"`). Platform validates with `@IsNumberString()`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub size: Option<f64>,
+    pub size: Option<String>,
 }
 
 /// Parameters for redeeming a resolved position.
@@ -393,15 +572,38 @@ pub struct Alert {
     pub extra: serde_json::Value,
 }
 
+/// Copy trading mode.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CopyMode {
+    Percentage,
+    Fixed,
+    Mirror,
+}
+
 /// A copy-trading configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyConfig {
     pub id: String,
+    /// The Ethereum wallet address to copy trades to.
     #[serde(default)]
-    pub source_trader: Option<String>,
+    pub target_wallet: Option<String>,
+    /// Copy mode: PERCENTAGE, FIXED, or MIRROR.
     #[serde(default)]
-    pub max_size: Option<f64>,
+    pub mode: Option<CopyMode>,
+    /// Size value used with the selected mode.
+    #[serde(default)]
+    pub size_value: Option<String>,
+    /// Maximum exposure as a number string.
+    #[serde(default)]
+    pub max_exposure: Option<String>,
+    /// Maximum daily loss as a number string.
+    #[serde(default)]
+    pub max_daily_loss: Option<String>,
+    /// Price offset as a number string.
+    #[serde(default)]
+    pub price_offset: Option<String>,
     #[serde(default)]
     pub enabled: Option<bool>,
     #[serde(flatten)]
