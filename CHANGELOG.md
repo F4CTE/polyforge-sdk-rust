@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.15] — 2026-04-13
+
+### Fixed
+- `ListMarketsParams`: added `sort` and `closed` fields — users can now sort markets by volume/endDate/newest/etc. and filter by resolution status (closes #75)
+- **BREAKING** `list_strategies()`: changed signature from `(Option<StrategyStatus>)` to `(&ListStrategiesParams)` — new `ListStrategiesParams` struct adds `sort`, `page`, and `limit` alongside the existing `status` filter, enabling full pagination and sorting (closes #77)
+
+### Added
+- `ListStrategiesParams` struct — typed query parameters for `list_strategies()`
+
 ## [1.6.14] — 2026-04-13
 
 ### Fixed

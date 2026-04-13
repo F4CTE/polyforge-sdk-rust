@@ -430,6 +430,12 @@ impl PolyforgeClient {
         if let Some(p) = params.page {
             qp.push(("page", p.to_string()));
         }
+        if let Some(ref s) = params.sort {
+            qp.push(("sort", s.clone()));
+        }
+        if let Some(c) = params.closed {
+            qp.push(("closed", c.to_string()));
+        }
 
         let qs = if qp.is_empty() {
             String::new()
@@ -453,14 +459,33 @@ impl PolyforgeClient {
     // Strategies
     // -----------------------------------------------------------------------
 
-    /// List strategies, optionally filtered by status.
-    pub async fn list_strategies(&self, status: Option<StrategyStatus>) -> Result<PaginatedResponse<Strategy>> {
-        let qs = match status {
-            Some(s) => {
-                let val = serde_json::to_value(&s).unwrap_or_default();
-                format!("?status={}", encode(val.as_str().unwrap_or_default()))
+    /// List strategies with optional filtering, sorting, and pagination.
+    pub async fn list_strategies(&self, params: &ListStrategiesParams) -> Result<PaginatedResponse<Strategy>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(ref s) = params.status {
+            let val = serde_json::to_value(s).unwrap_or_default();
+            if let Some(v) = val.as_str() {
+                qp.push(("status", v.to_string()));
             }
-            None => String::new(),
+        }
+        if let Some(ref s) = params.sort {
+            qp.push(("sort", s.clone()));
+        }
+        if let Some(p) = params.page {
+            qp.push(("page", p.to_string()));
+        }
+        if let Some(l) = params.limit {
+            qp.push(("limit", l.to_string()));
+        }
+
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
         };
         self.get(&format!("/api/v1/strategies{qs}")).await
     }

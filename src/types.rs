@@ -77,6 +77,10 @@ pub struct ListMarketsParams {
     pub category: Option<String>,
     pub limit: Option<u32>,
     pub page: Option<u32>,
+    /// Sort order: `"volume"`, `"endDate"`, `"firstSeenAt"`, `"newest"`, `"closing_soon"`, `"liquidity"`.
+    pub sort: Option<String>,
+    /// Whether to include closed/resolved markets.
+    pub closed: Option<bool>,
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +97,19 @@ pub enum StrategyStatus {
     Error,
     Paper,
     Archived,
+}
+
+/// Parameters for listing strategies.
+#[derive(Debug, Default)]
+pub struct ListStrategiesParams {
+    /// Filter by status: `IDLE`, `RUNNING`, `PAUSED`, `PAPER`, etc.
+    pub status: Option<StrategyStatus>,
+    /// Sort order: `"createdAt"`, `"updatedAt"`, `"name"`, `"status"`, `"likeCount"`.
+    pub sort: Option<String>,
+    /// Page number (1-based, default 1).
+    pub page: Option<u32>,
+    /// Items per page (default 20, max 100).
+    pub limit: Option<u32>,
 }
 
 /// Strategy visibility.
