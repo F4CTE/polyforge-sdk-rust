@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.8] — 2026-04-13
+
+### Fixed
+- **BREAKING** `ai_query()`: send `{ "query" }` instead of `{ "question" }` to match platform `AiQueryDto` — AI queries were returning HTTP 400 (closes #89, regression of #50)
+- **BREAKING** `create_strategy_from_description()`: send `{ "description" }` instead of `{ "query" }` to match platform `CreateFromDescriptionDto` — AI strategy creation was returning HTTP 400 (closes #90, regression of #44)
+- **BREAKING** `WebhookEvent`: change serde rename values from dot.notation (`order.filled`) to SCREAMING_SNAKE_CASE (`ORDER_FILLED`) to match platform `CreateWebhookDto` validation — webhook creation was returning HTTP 400 (closes #91, regression of #47)
+- **BREAKING** `TradingMode`: change serde rename from uppercase (`LIVE`/`PAPER`) to lowercase (`live`/`paper`) to match platform `StartStrategyDto` — strategy start was returning HTTP 400 (closes #92, regression of #46)
+
 ## [Unreleased]
 
 ### Security

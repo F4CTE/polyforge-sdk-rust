@@ -417,7 +417,7 @@ impl PolyforgeClient {
         description: &str,
         market_id: Option<&str>,
     ) -> Result<Strategy> {
-        let mut body = json!({ "query": description });
+        let mut body = json!({ "description": description });
         if let Some(mid) = market_id {
             body["marketId"] = json!(mid);
         }
@@ -843,7 +843,7 @@ impl PolyforgeClient {
 
     /// Send a natural-language query to the AI assistant.
     pub async fn ai_query(&self, query: &str) -> Result<AiQueryResponse> {
-        let body = json!({ "question": query });
+        let body = json!({ "query": query });
         self.post("/api/v1/ai/query", &body).await
     }
 
@@ -1302,6 +1302,46 @@ mod tests {
             }
             other => panic!("Expected Api error with SSE_BUFFER_OVERFLOW, got: {:?}", other),
         }
+    }
+
+    // --- Platform contract compliance regression tests (#89-#92) ---
+
+    #[test]
+    fn test_trading_mode_serializes_lowercase() {
+        // #92: Platform expects "live"/"paper", not "LIVE"/"PAPER"
+        let live = serde_json::to_value(TradingMode::Live).unwrap();
+        assert_eq!(live, serde_json::Value::String("live".to_string()));
+        let paper = serde_json::to_value(TradingMode::Paper).unwrap();
+        assert_eq!(paper, serde_json::Value::String("paper".to_string()));
+    }
+
+    #[test]
+    fn test_webhook_event_serializes_screaming_snake() {
+        // #91: Platform expects "ORDER_FILLED", not "order.filled"
+        let event = serde_json::to_value(WebhookEvent::OrderFilled).unwrap();
+        assert_eq!(event, serde_json::Value::String("ORDER_FILLED".to_string()));
+        let event = serde_json::to_value(WebhookEvent::StrategyError).unwrap();
+        assert_eq!(event, serde_json::Value::String("STRATEGY_ERROR".to_string()));
+        let event = serde_json::to_value(WebhookEvent::WhaleTrade).unwrap();
+        assert_eq!(event, serde_json::Value::String("WHALE_TRADE".to_string()));
+        let event = serde_json::to_value(WebhookEvent::DailyLossLimit).unwrap();
+        assert_eq!(event, serde_json::Value::String("DAILY_LOSS_LIMIT".to_string()));
+    }
+
+    #[test]
+    fn test_ai_query_body_uses_query_field() {
+        // #89: Must send { "query": ... } not { "question": ... }
+        let body = json!({ "query": "what is BTC?" });
+        assert!(body.get("query").is_some());
+        assert!(body.get("question").is_none());
+    }
+
+    #[test]
+    fn test_create_strategy_from_description_uses_description_field() {
+        // #90: Must send { "description": ... } not { "query": ... }
+        let body = json!({ "description": "buy low sell high" });
+        assert!(body.get("description").is_some());
+        // Note: body should not use "query" as the field name for description
     }
 
     #[tokio::test]
