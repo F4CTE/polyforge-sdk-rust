@@ -12,6 +12,14 @@ use crate::types::*;
 // StrategyEventStream — lazy SSE reader returned by watch_strategy()
 // ---------------------------------------------------------------------------
 
+/// Maximum size of the internal SSE line buffer (1 MiB).
+///
+/// A well-behaved SSE server sends newline-delimited events that are typically
+/// a few hundred bytes each.  Without a cap a malicious (or buggy) server could
+/// stream data without ever sending a newline, growing the buffer until the
+/// process runs out of memory.  This constant bounds that growth.
+const MAX_SSE_BUFFER_SIZE: usize = 1_048_576; // 1 MiB
+
 /// An open SSE connection to a strategy's execution event stream.
 ///
 /// Call [`StrategyEventStream::next`] in a loop to receive events one at a time.
@@ -62,7 +70,21 @@ impl StrategyEventStream {
             // Need more bytes from the network
             match self.response.chunk().await {
                 Ok(Some(chunk)) => match String::from_utf8(chunk.to_vec()) {
-                    Ok(s) => self.buffer.push_str(&s),
+                    Ok(s) => {
+                        self.buffer.push_str(&s);
+                        if self.buffer.len() > MAX_SSE_BUFFER_SIZE {
+                            return Some(Err(PolyforgeError::Api {
+                                status: 0,
+                                code: "SSE_BUFFER_OVERFLOW".into(),
+                                message: format!(
+                                    "SSE buffer exceeded {} bytes without a newline — \
+                                     possible denial-of-service; connection closed",
+                                    MAX_SSE_BUFFER_SIZE
+                                ),
+                                request_id: None,
+                            }));
+                        }
+                    }
                     Err(e) => {
                         return Some(Err(PolyforgeError::Api {
                             status: 0,
@@ -1244,5 +1266,64 @@ mod tests {
             "https://this-domain-definitely-does-not-exist-xyz123.example/hook",
         ).await;
         assert!(result.is_err());
+    }
+
+    // --- SSE buffer overflow protection tests (closes #52) ---
+
+    #[test]
+    fn test_max_sse_buffer_constant_is_1mib() {
+        assert_eq!(MAX_SSE_BUFFER_SIZE, 1_048_576);
+    }
+
+    #[tokio::test]
+    async fn test_sse_buffer_overflow_returns_error() {
+        // Build a mock response body that is larger than the buffer limit
+        // and contains no newlines, triggering the overflow guard.
+        let oversized = "x".repeat(MAX_SSE_BUFFER_SIZE + 1);
+        let body = reqwest::Response::from(
+            http::Response::builder()
+                .status(200)
+                .body(oversized)
+                .unwrap(),
+        );
+
+        let mut stream = StrategyEventStream {
+            response: body,
+            buffer: String::new(),
+        };
+
+        let result = stream.next().await;
+        assert!(result.is_some(), "stream should return an error, not None");
+        let err = result.unwrap();
+        assert!(err.is_err(), "should be Err variant");
+        match err.unwrap_err() {
+            PolyforgeError::Api { code, .. } => {
+                assert_eq!(code, "SSE_BUFFER_OVERFLOW");
+            }
+            other => panic!("Expected Api error with SSE_BUFFER_OVERFLOW, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sse_buffer_within_limit_does_not_error() {
+        // A payload just under the limit with a trailing newline should parse
+        // normally (as a non-SSE line it is simply skipped, then the stream
+        // ends with None when there are no more bytes).
+        let under_limit = format!("{}\n", "y".repeat(MAX_SSE_BUFFER_SIZE - 1));
+        let body = reqwest::Response::from(
+            http::Response::builder()
+                .status(200)
+                .body(under_limit)
+                .unwrap(),
+        );
+
+        let mut stream = StrategyEventStream {
+            response: body,
+            buffer: String::new(),
+        };
+
+        // The line is not a "data:" line so it is skipped; the stream ends.
+        let result = stream.next().await;
+        assert!(result.is_none(), "should return None (stream ended), not an error");
     }
 }
