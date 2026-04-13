@@ -559,9 +559,25 @@ impl PolyforgeClient {
         Ok(())
     }
 
-    /// Import a strategy from a .polyforge JSON export.
-    pub async fn import_strategy(&self, data: &serde_json::Value) -> Result<Strategy> {
-        let body = serde_json::json!({ "data": data });
+    /// Import a strategy from a `.polyforge` JSON export.
+    ///
+    /// # Arguments
+    /// * `polyforge_version` — format version string (e.g. `"1.0"`)
+    /// * `strategy` — the strategy payload object
+    /// * `exported_at` — optional ISO-8601 timestamp of when the export was created
+    pub async fn import_strategy(
+        &self,
+        polyforge_version: &str,
+        strategy: &serde_json::Value,
+        exported_at: Option<&str>,
+    ) -> Result<Strategy> {
+        let mut body = serde_json::json!({
+            "polyforge": polyforge_version,
+            "strategy": strategy,
+        });
+        if let Some(at) = exported_at {
+            body["exportedAt"] = serde_json::json!(at);
+        }
         self.post("/api/v1/strategies/import", &body).await
     }
 
@@ -693,8 +709,8 @@ impl PolyforgeClient {
         self.post("/api/v1/orders/split", &body).await
     }
 
-    /// Merge multiple positions into one.
-    pub async fn merge_positions(
+    /// Merge a position (combine token shares).
+    pub async fn merge_position(
         &self,
         params: &MergePositionParams,
     ) -> Result<PlaceOrderResponse> {
@@ -977,13 +993,12 @@ impl PolyforgeClient {
             .await
     }
 
-    /// Provide liquidity by placing two-sided quotes on a market token.
+    /// Provide liquidity on a market.
     ///
     /// # Errors
-    /// Returns [`PolyforgeError::Validation`] if `spread` or `size` is NaN,
-    /// infinite, zero, or negative.
+    /// Returns [`PolyforgeError::Validation`] if `size` is NaN, infinite, zero,
+    /// or negative.
     pub async fn provide_liquidity(&self, params: &ProvideLiquidityParams) -> Result<LpPosition> {
-        validate_financial_param("spread", params.spread)?;
         validate_financial_param("size", params.size)?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/lp/provide", &body).await
@@ -1747,24 +1762,22 @@ mod tests {
     }
 
     #[test]
-    fn test_provide_liquidity_params_validation_rejects_zero_spread() {
+    fn test_provide_liquidity_params_validation_rejects_zero_size() {
         let params = ProvideLiquidityParams {
-            token_id: "t1".into(),
-            spread: 0.0,
-            size: 100.0,
+            market_id: "m1".into(),
+            size: 0.0,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let client = PolyforgeClient::new("test-key").unwrap();
         let err = rt.block_on(client.provide_liquidity(&params)).unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
-        assert!(err.to_string().contains("spread"));
+        assert!(err.to_string().contains("size"));
     }
 
     #[test]
     fn test_provide_liquidity_params_validation_rejects_negative_size() {
         let params = ProvideLiquidityParams {
-            token_id: "t1".into(),
-            spread: 0.02,
+            market_id: "m1".into(),
             size: -50.0,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -2093,5 +2106,181 @@ mod tests {
         assert_eq!(serde_json::to_value(CopyMode::Percentage).unwrap(), "PERCENTAGE");
         assert_eq!(serde_json::to_value(CopyMode::Fixed).unwrap(), "FIXED");
         assert_eq!(serde_json::to_value(CopyMode::Mirror).unwrap(), "MIRROR");
+    }
+
+    // -----------------------------------------------------------------------
+    // Breaking compat fixes (#19, #20, #22, #23, #30, #31, #32)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_whale_trade_deserializes_wallet_field() {
+        // #23: WhaleTrade uses "wallet" not "trader", plus marketName and usdValue
+        let json = r#"{
+            "id": "wt1",
+            "marketId": "m1",
+            "marketName": "BTC > 100k",
+            "side": "BUY",
+            "size": 500.0,
+            "usdValue": 325.0,
+            "wallet": "0xabc123",
+            "timestamp": "2026-04-13T10:00:00Z"
+        }"#;
+        let trade: WhaleTrade = serde_json::from_str(json).unwrap();
+        assert_eq!(trade.wallet, Some("0xabc123".to_string()));
+        assert_eq!(trade.market_name, Some("BTC > 100k".to_string()));
+        assert_eq!(trade.usd_value, Some(325.0));
+        // Verify old "trader" field name does not populate wallet
+        let json_old = r#"{"id":"wt2","trader":"0xold"}"#;
+        let trade_old: WhaleTrade = serde_json::from_str(json_old).unwrap();
+        assert_eq!(trade_old.wallet, None);
+    }
+
+    #[test]
+    fn test_news_signal_deserializes_sentiment_and_related_markets() {
+        // #23: NewsSignal uses "sentiment" not "direction", "relatedMarkets" not "marketId", "publishedAt" not "timestamp"
+        let json = r#"{
+            "id": "ns1",
+            "headline": "Fed holds rates",
+            "source": "Reuters",
+            "confidence": 85,
+            "sentiment": "BULLISH",
+            "relatedMarkets": ["m1", "m2"],
+            "publishedAt": "2026-04-13T10:00:00Z"
+        }"#;
+        let signal: NewsSignal = serde_json::from_str(json).unwrap();
+        assert_eq!(signal.sentiment, Some("BULLISH".to_string()));
+        assert_eq!(signal.related_markets, vec!["m1", "m2"]);
+        assert_eq!(signal.published_at, Some("2026-04-13T10:00:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_news_signal_old_direction_field_does_not_work() {
+        // #23: Verify old field names don't populate the new fields
+        let json = r#"{"id":"ns2","direction":"BEARISH","marketId":"m1","timestamp":"2026-01-01T00:00:00Z"}"#;
+        let signal: NewsSignal = serde_json::from_str(json).unwrap();
+        assert_eq!(signal.sentiment, None);
+        assert!(signal.related_markets.is_empty());
+        assert_eq!(signal.published_at, None);
+    }
+
+    #[test]
+    fn test_alert_has_name_and_last_triggered_at() {
+        // #23: Alert must have name and lastTriggeredAt, no threshold
+        let json = r#"{
+            "id": "a1",
+            "name": "BTC price alert",
+            "marketId": "m1",
+            "condition": "price_above",
+            "enabled": true,
+            "lastTriggeredAt": "2026-04-13T09:00:00Z"
+        }"#;
+        let alert: Alert = serde_json::from_str(json).unwrap();
+        assert_eq!(alert.name, Some("BTC price alert".to_string()));
+        assert_eq!(alert.last_triggered_at, Some("2026-04-13T09:00:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_ai_query_response_sources_are_strings() {
+        // #23: AiQueryResponse.sources must be Vec<String>, plus suggestedActions
+        let json = r#"{
+            "answer": "BTC is bullish",
+            "confidence": 0.9,
+            "sources": ["source1", "source2"],
+            "suggestedActions": ["buy BTC", "increase position"]
+        }"#;
+        let resp: AiQueryResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.sources, vec!["source1", "source2"]);
+        assert_eq!(resp.suggested_actions, vec!["buy BTC", "increase position"]);
+    }
+
+    #[test]
+    fn test_redeem_position_params_uses_position_id_and_market_id() {
+        // #31: Must send positionId/marketId, not tokenId/conditionId
+        let params = RedeemPositionParams {
+            position_id: "pos-123".into(),
+            market_id: Some("mkt-456".into()),
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["positionId"], "pos-123");
+        assert_eq!(json["marketId"], "mkt-456");
+        assert!(json.get("tokenId").is_none());
+        assert!(json.get("conditionId").is_none());
+    }
+
+    #[test]
+    fn test_redeem_position_params_market_id_omitted_when_none() {
+        // #31: marketId should be omitted when None
+        let params = RedeemPositionParams {
+            position_id: "pos-123".into(),
+            market_id: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["positionId"], "pos-123");
+        assert!(json.get("marketId").is_none());
+    }
+
+    #[test]
+    fn test_split_position_params_uses_amount_string() {
+        // #30: SplitPositionParams must have {tokenId, amount} not {tokenId, size, price}
+        let params = SplitPositionParams {
+            token_id: "tok-1".into(),
+            amount: "100.5".into(),
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["tokenId"], "tok-1");
+        assert_eq!(json["amount"], "100.5");
+        assert!(json.get("size").is_none());
+        assert!(json.get("price").is_none());
+    }
+
+    #[test]
+    fn test_merge_position_params_uses_single_token_and_amount() {
+        // #30: MergePositionParams must have {tokenId, amount} not {tokenIds: [...]}
+        let params = MergePositionParams {
+            token_id: "tok-1".into(),
+            amount: "200".into(),
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["tokenId"], "tok-1");
+        assert_eq!(json["amount"], "200");
+        assert!(json.get("tokenIds").is_none());
+    }
+
+    #[test]
+    fn test_provide_liquidity_params_uses_market_id() {
+        // #30: ProvideLiquidityParams must have {marketId, size} not {tokenId, spread, size}
+        let params = ProvideLiquidityParams {
+            market_id: "mkt-1".into(),
+            size: 1000.0,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["marketId"], "mkt-1");
+        assert_eq!(json["size"], 1000.0);
+        assert!(json.get("tokenId").is_none());
+        assert!(json.get("spread").is_none());
+    }
+
+    #[test]
+    fn test_import_strategy_body_has_polyforge_and_strategy_fields() {
+        // #32: import_strategy must send {polyforge, strategy}, not {data}
+        let strategy = serde_json::json!({"name": "Test Strategy", "triggers": []});
+        let body = serde_json::json!({
+            "polyforge": "1.0",
+            "strategy": strategy,
+        });
+        assert_eq!(body["polyforge"], "1.0");
+        assert!(body.get("strategy").is_some());
+        assert!(body.get("data").is_none());
+    }
+
+    #[test]
+    fn test_import_strategy_body_with_exported_at() {
+        // #32: optional exportedAt field
+        let mut body = serde_json::json!({
+            "polyforge": "1.0",
+            "strategy": {"name": "Test"},
+        });
+        body["exportedAt"] = serde_json::json!("2026-04-13T10:00:00Z");
+        assert_eq!(body["exportedAt"], "2026-04-13T10:00:00Z");
     }
 }

@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.6.14] — 2026-04-13
+
+### Fixed
+- **BREAKING** `WhaleTrade` struct: renamed `trader` to `wallet`, replaced `price` with `usd_value` (serde `"usdValue"`), added `market_name` — aligns with platform response shape (closes #23 partial)
+- **BREAKING** `NewsSignal` struct: renamed `direction` to `sentiment`, changed `market_id: Option<String>` to `related_markets: Vec<String>` (serde `"relatedMarkets"`), renamed `timestamp` to `published_at` (serde `"publishedAt"`) — aligns with platform response shape (closes #23 partial)
+- **BREAKING** `Alert` struct: added `name` and `last_triggered_at` (serde `"lastTriggeredAt"`), removed `threshold` — platform does not return threshold as a top-level field (closes #23 partial)
+- **BREAKING** `AiQueryResponse` struct: changed `sources` from `Vec<serde_json::Value>` to `Vec<String>`, added `suggested_actions: Vec<String>` (serde `"suggestedActions"`) — aligns with platform response shape (closes #23 partial)
+- **BREAKING** `SplitPositionParams`: replaced `size: f64` and `price: f64` with `amount: String` — platform `SplitPositionDto` expects `{tokenId, amount}` not `{tokenId, size, price}` (closes #30 partial)
+- **BREAKING** `MergePositionParams`: replaced `token_ids: Vec<String>` with `token_id: String` and `amount: String` — platform `MergePositionDto` expects `{tokenId, amount}` not `{tokenIds: [...]}`, renamed `merge_positions()` to `merge_position()` (closes #30 partial)
+- **BREAKING** `ProvideLiquidityParams`: replaced `token_id` with `market_id` (serde `"marketId"`), removed `spread` — platform `ProvideLiquidityDto` expects `{marketId, size}` not `{tokenId, spread, size}` (closes #30 partial)
+- **BREAKING** `RedeemPositionParams`: renamed `token_id` to `position_id` (serde `"positionId"`), renamed `condition_id` to `market_id` (serde `"marketId"`) — platform `RedeemPositionDto` expects `{positionId, marketId}` not `{tokenId, conditionId}` (closes #31)
+- **BREAKING** `import_strategy()`: changed signature from `(&Value)` to `(polyforge_version, &Value, Option<&str>)` — platform `ImportStrategyDto` requires `{polyforge, strategy}` not `{data}` (closes #32)
+- Issues #19 and #20 were already fixed in v1.6.11 — whale feed sends `minSize` and news signals sends `minConfidence` correctly (closes #19, closes #20)
+- Issue #22 (Market name vs title) was already fixed in v1.6.11 — Market struct uses `name` field correctly (closes #22)
+
+### Added
+- 14 new unit tests covering all struct/payload fixes
+
 ## [1.6.13] — 2026-04-13
 
 ### Fixed
