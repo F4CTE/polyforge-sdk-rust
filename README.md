@@ -66,14 +66,14 @@ async fn main() -> polyforge::Result<()> {
 
 | Method | Description |
 |--------|-------------|
-| `list_markets(params)` | List markets with search, category, pagination |
+| `list_markets(params)` | List markets with search, category, sort, closed filter, pagination |
 | `get_market(id)` | Get a single market by ID |
 
 ### Strategies
 
 | Method | Description |
 |--------|-------------|
-| `list_strategies(status)` | List strategies, optionally filtered by status |
+| `list_strategies(params)` | List strategies with optional status filter, sorting, and pagination |
 | `get_strategy(id)` | Get a strategy by ID |
 | `create_strategy(name, description)` | Create a new strategy |
 | `create_strategy_from_description(desc, market_id)` | AI-powered strategy creation |
