@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.11] — 2026-04-13
+
+### Fixed
+- **BREAKING** `Order` and `Position` monetary fields (`size`, `price`, `fill_size`, `fill_price`, `pnl`, `avg_price`, `current_price`): changed from `Option<f64>` to `Option<String>` — platform returns decimal strings (`"0.65"`), not JSON numbers, causing serde deserialization failures (closes #38)
+- **BREAKING** `get_whale_feed()`: send `?minSize=X` instead of `?min_size=X`; `get_news_signals()`: send `?minConfidence=X` instead of `?min_confidence=X` — platform expects camelCase query parameters (closes #39)
+- **BREAKING** `Market` struct: rename `title` to `name`, replace `tokens: Vec<Token>` with `base_token`/`quote_token` fields, rename `volume` to `volume_24h` (serde `"volume24h"`), add `price`, `change_24h`, `liquidity`, `created_at` — aligns with actual platform response shape (closes #58)
+- **BREAKING** `Portfolio` struct: rename `balance` to `available_balance` (serde `"availableBalance"`), replace `total_pnl` with `unrealized_pnl`/`realized_pnl`, change monetary fields to `Option<String>`, add `updated_at` — aligns with actual platform response shape (closes #59)
+- **BREAKING** `TraderScore` struct: rename `score` to `overall`, remove phantom fields (`total_trades`, `win_rate`, `profit_factor`), add `profitability`, `consistency`, `risk_management`, `volume`, `percentile`, `updated_at` — aligns with actual platform response shape (closes #60)
+
 ## [1.6.10] — 2026-04-13
 
 ### Fixed

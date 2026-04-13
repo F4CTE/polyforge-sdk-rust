@@ -754,7 +754,7 @@ impl PolyforgeClient {
     /// Get the whale trade feed.
     pub async fn get_whale_feed(&self, min_size: Option<u64>) -> Result<PaginatedResponse<WhaleTrade>> {
         let qs = match min_size {
-            Some(s) => format!("?min_size={}", encode(&s.to_string())),
+            Some(s) => format!("?minSize={}", encode(&s.to_string())),
             None => String::new(),
         };
         self.get(&format!("/api/v1/whales/feed{qs}")).await
@@ -763,7 +763,7 @@ impl PolyforgeClient {
     /// Get AI-powered news signals.
     pub async fn get_news_signals(&self, min_confidence: Option<u32>) -> Result<PaginatedResponse<NewsSignal>> {
         let qs = match min_confidence {
-            Some(c) => format!("?min_confidence={}", encode(&c.to_string())),
+            Some(c) => format!("?minConfidence={}", encode(&c.to_string())),
             None => String::new(),
         };
         self.get(&format!("/api/v1/news/signals{qs}")).await
