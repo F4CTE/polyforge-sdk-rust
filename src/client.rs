@@ -2404,19 +2404,26 @@ mod tests {
     }
 
     #[test]
-    fn test_alert_has_name_and_last_triggered_at() {
-        // #23: Alert must have name and lastTriggeredAt, no threshold
+    fn test_alert_has_platform_fields() {
+        // #107: Alert must match platform PriceAlert Prisma model fields
         let json = r#"{
             "id": "a1",
-            "name": "BTC price alert",
-            "marketId": "m1",
-            "condition": "price_above",
-            "enabled": true,
-            "lastTriggeredAt": "2026-04-13T09:00:00Z"
+            "tokenId": "0xtoken123",
+            "direction": "above",
+            "price": "0.65",
+            "persistent": false,
+            "triggered": false,
+            "triggeredAt": null,
+            "createdAt": "2026-04-01T00:00:00Z"
         }"#;
         let alert: Alert = serde_json::from_str(json).unwrap();
-        assert_eq!(alert.name, Some("BTC price alert".to_string()));
-        assert_eq!(alert.last_triggered_at, Some("2026-04-13T09:00:00Z".to_string()));
+        assert_eq!(alert.token_id, Some("0xtoken123".to_string()));
+        assert_eq!(alert.direction, Some("above".to_string()));
+        assert_eq!(alert.price, Some("0.65".to_string()));
+        assert_eq!(alert.persistent, Some(false));
+        assert_eq!(alert.triggered, Some(false));
+        assert_eq!(alert.triggered_at, None);
+        assert_eq!(alert.created_at, Some("2026-04-01T00:00:00Z".to_string()));
     }
 
     #[test]
@@ -2949,5 +2956,47 @@ mod tests {
         assert_eq!(resp.data.len(), 2);
         assert_eq!(resp.data[0].id, "co-1");
         assert_eq!(resp.total, 2);
+    }
+
+    #[test]
+    fn test_position_has_platform_fields() {
+        // #108: Position must match platform response fields
+        let json = r#"{
+            "id": "pos-1",
+            "marketId": "m1",
+            "tokenId": "t1",
+            "side": "BUY",
+            "size": "100.5",
+            "avgPrice": "0.65",
+            "currentPrice": "0.72",
+            "unrealizedPnl": "7.035",
+            "realizedPnl": "12.50",
+            "openedAt": "2026-03-15T10:00:00Z"
+        }"#;
+        let pos: Position = serde_json::from_str(json).unwrap();
+        assert_eq!(pos.id, Some("pos-1".to_string()));
+        assert_eq!(pos.side, Some("BUY".to_string()));
+        assert_eq!(pos.unrealized_pnl, Some("7.035".to_string()));
+        assert_eq!(pos.realized_pnl, Some("12.50".to_string()));
+        assert_eq!(pos.opened_at, Some("2026-03-15T10:00:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_strategy_template_has_blocks_and_popularity() {
+        // #109: StrategyTemplate must include blocks and popularity
+        let json = r#"{
+            "id": "tmpl-1",
+            "name": "Mean Reversion",
+            "description": "Buy low sell high",
+            "category": "Technical",
+            "blocks": [
+                {"id": "b1", "type": "PRICE_TRIGGER", "label": "MA Cross"}
+            ],
+            "popularity": 342
+        }"#;
+        let tmpl: StrategyTemplate = serde_json::from_str(json).unwrap();
+        assert_eq!(tmpl.name, Some("Mean Reversion".to_string()));
+        assert_eq!(tmpl.blocks.len(), 1);
+        assert_eq!(tmpl.popularity, 342);
     }
 }

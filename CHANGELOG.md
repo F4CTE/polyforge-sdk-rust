@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.19] — 2026-04-14
+
+### Fixed
+- **BREAKING:** `Alert` struct: replaced phantom fields (`name`, `market_id`, `condition`, `enabled`) with correct platform fields (`token_id`, `direction`, `price`, `persistent`, `triggered`, `triggered_at`, `created_at`) matching `PriceAlert` Prisma model (closes #107)
+- **BREAKING:** `Position` struct: added missing fields (`id`, `side`, `unrealized_pnl`, `realized_pnl`, `opened_at`) and removed incorrect `pnl` field — platform returns separate unrealized/realized PnL (closes #108)
+- `StrategyTemplate` struct: added `blocks: Vec<Block>` and `popularity: u32` fields for template block configuration and usage score (closes #109)
+- Added `#[serde(rename_all = "camelCase")]` to `StrategyTemplate` for consistent field deserialization
+
 ## [1.6.18] — 2026-04-13
 
 ### Added

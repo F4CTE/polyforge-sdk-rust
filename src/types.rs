@@ -249,8 +249,9 @@ pub struct StrategyStatusResponse {
     pub extra: serde_json::Value,
 }
 
-/// A strategy template.
+/// A strategy template with block configuration and popularity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StrategyTemplate {
     pub id: String,
     #[serde(default)]
@@ -259,6 +260,12 @@ pub struct StrategyTemplate {
     pub description: Option<String>,
     #[serde(default)]
     pub category: Option<String>,
+    /// The template's block configuration.
+    #[serde(default)]
+    pub blocks: Vec<Block>,
+    /// Usage/popularity score.
+    #[serde(default)]
+    pub popularity: u32,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -356,13 +363,22 @@ pub struct Portfolio {
 }
 
 /// A portfolio position.
+///
+/// Field names match the platform position response: `id`, `marketId`,
+/// `tokenId`, `side`, `size`, `avgPrice`, `currentPrice`,
+/// `unrealizedPnl`, `realizedPnl`, `openedAt`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Position {
     #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
     pub market_id: Option<String>,
     #[serde(default)]
     pub token_id: Option<String>,
+    /// Position direction: "BUY" or "SELL".
+    #[serde(default)]
+    pub side: Option<String>,
     #[serde(default)]
     pub size: Option<String>,
     #[serde(default)]
@@ -370,7 +386,11 @@ pub struct Position {
     #[serde(default)]
     pub current_price: Option<String>,
     #[serde(default)]
-    pub pnl: Option<String>,
+    pub unrealized_pnl: Option<String>,
+    #[serde(default)]
+    pub realized_pnl: Option<String>,
+    #[serde(default)]
+    pub opened_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -576,21 +596,30 @@ pub struct NewsSignal {
 // Configuration: Alerts, Copy Trading, Webhooks
 // ---------------------------------------------------------------------------
 
-/// A price or event alert.
+/// A price alert on a specific token.
+///
+/// Field names match the platform `PriceAlert` Prisma model:
+/// `tokenId`, `direction`, `price`, `persistent`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Alert {
     pub id: String,
     #[serde(default)]
-    pub name: Option<String>,
+    pub token_id: Option<String>,
+    /// Alert direction: "above" or "below".
     #[serde(default)]
-    pub market_id: Option<String>,
+    pub direction: Option<String>,
+    /// Price threshold as a decimal string.
     #[serde(default)]
-    pub condition: Option<String>,
+    pub price: Option<String>,
     #[serde(default)]
-    pub enabled: Option<bool>,
+    pub persistent: Option<bool>,
     #[serde(default)]
-    pub last_triggered_at: Option<String>,
+    pub triggered: Option<bool>,
+    #[serde(default)]
+    pub triggered_at: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
