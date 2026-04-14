@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.1] — 2026-04-14
+
+### Security
+- **Error response body size cap** — `handle_response()` now checks the `Content-Length` header on error responses and rejects bodies larger than 1 MiB (`MAX_RESPONSE_BODY_SIZE`), returning `PolyforgeError::Api` with code `RESPONSE_BODY_TOO_LARGE`; prevents memory amplification attacks where a malicious server returns an extremely large error body (closes #48)
+
 ## [1.7.0] — 2026-04-14
 
 ### Added
