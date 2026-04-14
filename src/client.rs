@@ -685,6 +685,41 @@ impl PolyforgeClient {
     // Backtesting
     // -----------------------------------------------------------------------
 
+    /// List backtests with optional filtering by strategy, status, and pagination.
+    pub async fn list_backtests(
+        &self,
+        params: &ListBacktestsParams,
+    ) -> Result<PaginatedResponse<Backtest>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(ref s) = params.strategy_id {
+            qp.push(("strategyId", s.clone()));
+        }
+        if let Some(ref s) = params.status {
+            qp.push(("status", s.clone()));
+        }
+        if let Some(p) = params.page {
+            qp.push(("page", p.to_string()));
+        }
+        if let Some(l) = params.limit {
+            qp.push(("limit", l.to_string()));
+        }
+
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> =
+                qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            format!("?{}", pairs.join("&"))
+        };
+
+        self.get(&format!("/api/v1/backtests{qs}")).await
+    }
+
+    /// Get a single backtest by ID.
+    pub async fn get_backtest(&self, id: &str) -> Result<Backtest> {
+        self.get(&format!("/api/v1/backtests/{}", encode(id))).await
+    }
+
     /// Run a backtest with the given parameters.
     ///
     /// The platform does **not** accept an `initialBalance` field.
@@ -693,6 +728,18 @@ impl PolyforgeClient {
     pub async fn run_backtest(&self, params: &RunBacktestParams) -> Result<Backtest> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/backtests", &body).await
+    }
+
+    /// Run a quick synchronous backtest (returns results immediately, no polling).
+    pub async fn run_quick_backtest(&self, params: &RunBacktestParams) -> Result<Backtest> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/backtests/quick", &body).await
+    }
+
+    /// Get the order list for a completed backtest.
+    pub async fn get_backtest_orders(&self, id: &str) -> Result<Vec<Order>> {
+        self.get(&format!("/api/v1/backtests/{}/orders", encode(id)))
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -3020,5 +3067,50 @@ mod tests {
     fn test_browse_marketplace_params_offset_default() {
         let params = BrowseMarketplaceParams::default();
         assert_eq!(params.offset, None);
+    }
+
+    // -- Backtest endpoints (#57, #74) --
+
+    #[test]
+    fn test_list_backtests_params_default() {
+        let params = ListBacktestsParams::default();
+        assert!(params.strategy_id.is_none());
+        assert!(params.status.is_none());
+        assert!(params.page.is_none());
+        assert!(params.limit.is_none());
+    }
+
+    #[test]
+    fn test_list_backtests_params_with_filters() {
+        let params = ListBacktestsParams {
+            strategy_id: Some("strat-1".into()),
+            status: Some("COMPLETED".into()),
+            page: Some(2),
+            limit: Some(10),
+        };
+        assert_eq!(params.strategy_id.as_deref(), Some("strat-1"));
+        assert_eq!(params.status.as_deref(), Some("COMPLETED"));
+        assert_eq!(params.page, Some(2));
+        assert_eq!(params.limit, Some(10));
+    }
+
+    #[test]
+    fn test_backtest_deserializes_platform_fields() {
+        let json = r#"{
+            "id": "bt-1",
+            "status": "COMPLETED",
+            "strategyId": "s1",
+            "createdAt": "2026-04-14T00:00:00Z",
+            "pnl": 150.5,
+            "tradeCount": 42
+        }"#;
+        let bt: Backtest = serde_json::from_str(json).unwrap();
+        assert_eq!(bt.id, "bt-1");
+        assert_eq!(bt.status.as_deref(), Some("COMPLETED"));
+        assert_eq!(bt.strategy_id.as_deref(), Some("s1"));
+        assert_eq!(bt.created_at.as_deref(), Some("2026-04-14T00:00:00Z"));
+        // Extra fields captured via flatten
+        assert_eq!(bt.extra["pnl"], 150.5);
+        assert_eq!(bt.extra["tradeCount"], 42);
     }
 }

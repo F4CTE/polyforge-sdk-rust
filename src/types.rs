@@ -323,6 +323,15 @@ pub struct RunBacktestParams {
     pub market_bindings: Option<std::collections::HashMap<String, String>>,
 }
 
+/// Parameters for listing backtests with optional filtering.
+#[derive(Debug, Clone, Default)]
+pub struct ListBacktestsParams {
+    pub strategy_id: Option<String>,
+    pub status: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
 /// A backtest result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.0] — 2026-04-14
+
+### Added
+- **Backtest endpoints** — `list_backtests()` with query params (strategyId, status, page, limit), `get_backtest()`, `run_quick_backtest()`, `get_backtest_orders()`. New `ListBacktestsParams` struct. (closes #57, closes #74)
+
 ## [1.6.20] — 2026-04-14
 
 ### Fixed
