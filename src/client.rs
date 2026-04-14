@@ -4,9 +4,9 @@ use serde_json::json;
 use url::Url;
 use urlencoding::encode;
 
-use std::time::Duration;
 use crate::errors::{PolyforgeError, Result};
 use crate::types::*;
+use std::time::Duration;
 
 // ---------------------------------------------------------------------------
 // StrategyEventStream — lazy SSE reader returned by watch_strategy()
@@ -19,6 +19,14 @@ use crate::types::*;
 /// stream data without ever sending a newline, growing the buffer until the
 /// process runs out of memory.  This constant bounds that growth.
 const MAX_SSE_BUFFER_SIZE: usize = 1_048_576; // 1 MiB
+
+/// Maximum size of an error response body that the SDK will read (1 MiB).
+///
+/// A malicious or misconfigured server could return an extremely large error
+/// body (e.g. a multi-gigabyte HTML page) which `resp.json()` would buffer
+/// entirely in memory.  This constant caps the readable size so that an
+/// oversized error response is rejected early instead of causing OOM.
+const MAX_RESPONSE_BODY_SIZE: usize = 1_048_576; // 1 MiB
 
 /// An open SSE connection to a strategy's execution event stream.
 ///
@@ -162,7 +170,8 @@ impl PolyforgeClient {
     /// Returns [`PolyforgeError::Http`] if the underlying HTTP client fails to build.
     /// Returns [`PolyforgeError::Validation`] if the URL is invalid.
     pub fn new(api_key: impl Into<String>) -> Result<Self> {
-        let url = std::env::var("POLYFORGE_API_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string());
+        let url =
+            std::env::var("POLYFORGE_API_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string());
         Self::with_url(api_key, url)
     }
 
@@ -208,9 +217,8 @@ impl PolyforgeClient {
     ///   parts that could lead to injection.
     /// - Trailing slashes are stripped for consistent path joining.
     fn validate_base_url(raw: &str) -> Result<String> {
-        let parsed = Url::parse(raw).map_err(|e| {
-            PolyforgeError::Validation(format!("Malformed base URL: {e}"))
-        })?;
+        let parsed = Url::parse(raw)
+            .map_err(|e| PolyforgeError::Validation(format!("Malformed base URL: {e}")))?;
 
         // --- scheme check ---------------------------------------------------
         let scheme = parsed.scheme();
@@ -224,7 +232,7 @@ impl PolyforgeClient {
             || host.starts_with("127.");
 
         match scheme {
-            "https" => {} // always OK
+            "https" => {}            // always OK
             "http" if is_local => {} // allowed for local dev
             "http" => {
                 return Err(PolyforgeError::Validation(
@@ -317,8 +325,9 @@ impl PolyforgeClient {
     }
 
     fn auth_header(&self) -> Result<HeaderValue> {
-        HeaderValue::from_str(&format!("Bearer {}", self.api_key.expose_secret()))
-            .map_err(|_| PolyforgeError::Validation("API key contains invalid HTTP header characters".into()))
+        HeaderValue::from_str(&format!("Bearer {}", self.api_key.expose_secret())).map_err(|_| {
+            PolyforgeError::Validation("API key contains invalid HTTP header characters".into())
+        })
     }
 
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
@@ -377,6 +386,28 @@ impl PolyforgeClient {
     ) -> Result<T> {
         let status = resp.status().as_u16();
         if !resp.status().is_success() {
+            // Guard: reject error responses whose Content-Length exceeds
+            // MAX_RESPONSE_BODY_SIZE to prevent memory amplification attacks
+            // where a malicious server returns a multi-gigabyte error body.
+            let content_length = resp
+                .headers()
+                .get(reqwest::header::CONTENT_LENGTH)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse::<u64>().ok());
+            if let Some(cl) = content_length {
+                if cl > MAX_RESPONSE_BODY_SIZE as u64 {
+                    return Err(PolyforgeError::Api {
+                        status,
+                        code: "RESPONSE_BODY_TOO_LARGE".to_string(),
+                        message: format!(
+                            "Error response body too large ({cl} bytes, limit {MAX_RESPONSE_BODY_SIZE})"
+                        ),
+                        request_id: None,
+                        suggestion: None,
+                    });
+                }
+            }
+
             let body: serde_json::Value = resp.json().await.unwrap_or_default();
             return Err(PolyforgeError::Api {
                 status,
@@ -401,8 +432,7 @@ impl PolyforgeClient {
             });
         }
         if status == 204 {
-            return serde_json::from_value(serde_json::Value::Null)
-                .map_err(PolyforgeError::from);
+            return serde_json::from_value(serde_json::Value::Null).map_err(PolyforgeError::from);
         }
         let body = resp.text().await?;
         serde_json::from_str(&body).map_err(PolyforgeError::from)
@@ -508,7 +538,10 @@ impl PolyforgeClient {
     // -----------------------------------------------------------------------
 
     /// List strategies with optional filtering, sorting, and pagination.
-    pub async fn list_strategies(&self, params: &ListStrategiesParams) -> Result<PaginatedResponse<Strategy>> {
+    pub async fn list_strategies(
+        &self,
+        params: &ListStrategiesParams,
+    ) -> Result<PaginatedResponse<Strategy>> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(ref s) = params.status {
             let val = serde_json::to_value(s).unwrap_or_default();
@@ -548,10 +581,7 @@ impl PolyforgeClient {
     ///
     /// Use [`CreateStrategyParams`] to specify blocks, visibility, execution mode,
     /// tags, and other strategy properties.
-    pub async fn create_strategy(
-        &self,
-        params: &CreateStrategyParams,
-    ) -> Result<Strategy> {
+    pub async fn create_strategy(&self, params: &CreateStrategyParams) -> Result<Strategy> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/strategies", &body).await
     }
@@ -574,7 +604,11 @@ impl PolyforgeClient {
     ///
     /// Returns a [`StrategyStatusResponse`] with the new status and `startedAt`
     /// timestamp — not a full [`Strategy`] object.
-    pub async fn start_strategy(&self, id: &str, mode: TradingMode) -> Result<StrategyStatusResponse> {
+    pub async fn start_strategy(
+        &self,
+        id: &str,
+        mode: TradingMode,
+    ) -> Result<StrategyStatusResponse> {
         let body = json!({ "mode": mode });
         self.post(&format!("/api/v1/strategies/{}/start", encode(id)), &body)
             .await
@@ -707,8 +741,10 @@ impl PolyforgeClient {
         let qs = if qp.is_empty() {
             String::new()
         } else {
-            let pairs: Vec<String> =
-                qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
             format!("?{}", pairs.join("&"))
         };
 
@@ -774,7 +810,10 @@ impl PolyforgeClient {
         let qs = if qp.is_empty() {
             String::new()
         } else {
-            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
             format!("?{}", pairs.join("&"))
         };
 
@@ -830,10 +869,7 @@ impl PolyforgeClient {
     }
 
     /// Merge a position (combine token shares).
-    pub async fn merge_position(
-        &self,
-        params: &MergePositionParams,
-    ) -> Result<PlaceOrderResponse> {
+    pub async fn merge_position(&self, params: &MergePositionParams) -> Result<PlaceOrderResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/orders/merge", &body).await
     }
@@ -939,7 +975,10 @@ impl PolyforgeClient {
     // -----------------------------------------------------------------------
 
     /// Get the whale trade feed.
-    pub async fn get_whale_feed(&self, min_size: Option<u64>) -> Result<PaginatedResponse<WhaleTrade>> {
+    pub async fn get_whale_feed(
+        &self,
+        min_size: Option<u64>,
+    ) -> Result<PaginatedResponse<WhaleTrade>> {
         let qs = match min_size {
             Some(s) => format!("?minSize={}", encode(&s.to_string())),
             None => String::new(),
@@ -948,7 +987,10 @@ impl PolyforgeClient {
     }
 
     /// Get AI-powered news signals.
-    pub async fn get_news_signals(&self, min_confidence: Option<u32>) -> Result<PaginatedResponse<NewsSignal>> {
+    pub async fn get_news_signals(
+        &self,
+        min_confidence: Option<u32>,
+    ) -> Result<PaginatedResponse<NewsSignal>> {
         let qs = match min_confidence {
             Some(c) => format!("?minConfidence={}", encode(&c.to_string())),
             None => String::new(),
@@ -1002,11 +1044,8 @@ impl PolyforgeClient {
 
     /// Send a test event to a registered webhook and return the delivery result.
     pub async fn test_webhook(&self, id: &str) -> Result<WebhookTestResult> {
-        self.post(
-            &format!("/api/v1/webhooks/{}/test", encode(id)),
-            &json!({}),
-        )
-        .await
+        self.post(&format!("/api/v1/webhooks/{}/test", encode(id)), &json!({}))
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -1034,11 +1073,8 @@ impl PolyforgeClient {
 
     /// Check whether a specific market is on the watchlist.
     pub async fn get_watchlist_status(&self, market_id: &str) -> Result<WatchlistStatus> {
-        self.get(&format!(
-            "/api/v1/watchlist/status/{}",
-            encode(market_id)
-        ))
-        .await
+        self.get(&format!("/api/v1/watchlist/status/{}", encode(market_id)))
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -1092,20 +1128,14 @@ impl PolyforgeClient {
 
     /// Get a single conditional order by ID.
     pub async fn get_conditional_order(&self, order_id: &str) -> Result<ConditionalOrder> {
-        self.get(&format!(
-            "/api/v1/orders/conditional/{}",
-            encode(order_id)
-        ))
-        .await
+        self.get(&format!("/api/v1/orders/conditional/{}", encode(order_id)))
+            .await
     }
 
     /// Cancel a pending conditional order.
     pub async fn cancel_conditional_order(&self, order_id: &str) -> Result<()> {
         let _: serde_json::Value = self
-            .delete(&format!(
-                "/api/v1/orders/conditional/{}",
-                encode(order_id)
-            ))
+            .delete(&format!("/api/v1/orders/conditional/{}", encode(order_id)))
             .await?;
         Ok(())
     }
@@ -1134,10 +1164,7 @@ impl PolyforgeClient {
     // -----------------------------------------------------------------------
 
     /// Get aggregated portfolio PnL with optional period and strategy filter.
-    pub async fn get_portfolio_pnl(
-        &self,
-        params: &GetPortfolioPnlParams,
-    ) -> Result<PortfolioPnl> {
+    pub async fn get_portfolio_pnl(&self, params: &GetPortfolioPnlParams) -> Result<PortfolioPnl> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(ref p) = params.period {
             qp.push(("period", p.clone()));
@@ -1230,9 +1257,9 @@ impl PolyforgeClient {
         let port = parsed.port().unwrap_or(443);
         let lookup = format!("{host}:{port}");
 
-        let addrs = tokio::net::lookup_host(&lookup).await.map_err(|_| {
-            PolyforgeError::Validation("Cannot resolve webhook hostname".into())
-        })?;
+        let addrs = tokio::net::lookup_host(&lookup)
+            .await
+            .map_err(|_| PolyforgeError::Validation("Cannot resolve webhook hostname".into()))?;
 
         let mut resolved_any = false;
         for addr in addrs {
@@ -1706,7 +1733,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_webhook_url_accepts_valid_https() {
-        let result = PolyforgeClient::validate_webhook_url("https://hooks.example.com/polyforge").await;
+        let result =
+            PolyforgeClient::validate_webhook_url("https://hooks.example.com/polyforge").await;
         // May fail if DNS can't resolve in CI — the important thing is it
         // doesn't error with "private address" when given a public domain.
         // If DNS resolution fails, that's also an acceptable rejection.
@@ -1763,7 +1791,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_webhook_url_rejects_dot_internal_domain() {
-        let result = PolyforgeClient::validate_webhook_url("https://metadata.google.internal/hook").await;
+        let result =
+            PolyforgeClient::validate_webhook_url("https://metadata.google.internal/hook").await;
         assert!(result.is_err());
     }
 
@@ -1801,13 +1830,25 @@ mod tests {
     fn test_is_blocked_ip_cgnat() {
         use std::net::IpAddr;
         // 100.64.0.0 - 100.127.255.255 should be blocked
-        assert!(PolyforgeClient::is_blocked_ip("100.64.0.0".parse::<IpAddr>().unwrap()));
-        assert!(PolyforgeClient::is_blocked_ip("100.100.100.100".parse::<IpAddr>().unwrap()));
-        assert!(PolyforgeClient::is_blocked_ip("100.127.255.255".parse::<IpAddr>().unwrap()));
+        assert!(PolyforgeClient::is_blocked_ip(
+            "100.64.0.0".parse::<IpAddr>().unwrap()
+        ));
+        assert!(PolyforgeClient::is_blocked_ip(
+            "100.100.100.100".parse::<IpAddr>().unwrap()
+        ));
+        assert!(PolyforgeClient::is_blocked_ip(
+            "100.127.255.255".parse::<IpAddr>().unwrap()
+        ));
         // Outside CGNAT
-        assert!(!PolyforgeClient::is_blocked_ip("100.128.0.0".parse::<IpAddr>().unwrap()));
-        assert!(!PolyforgeClient::is_blocked_ip("100.63.255.255".parse::<IpAddr>().unwrap()));
-        assert!(!PolyforgeClient::is_blocked_ip("8.8.8.8".parse::<IpAddr>().unwrap()));
+        assert!(!PolyforgeClient::is_blocked_ip(
+            "100.128.0.0".parse::<IpAddr>().unwrap()
+        ));
+        assert!(!PolyforgeClient::is_blocked_ip(
+            "100.63.255.255".parse::<IpAddr>().unwrap()
+        ));
+        assert!(!PolyforgeClient::is_blocked_ip(
+            "8.8.8.8".parse::<IpAddr>().unwrap()
+        ));
     }
 
     #[test]
@@ -1832,7 +1873,8 @@ mod tests {
     async fn test_webhook_url_rejects_unresolvable_domain() {
         let result = PolyforgeClient::validate_webhook_url(
             "https://this-domain-definitely-does-not-exist-xyz123.example/hook",
-        ).await;
+        )
+        .await;
         assert!(result.is_err());
     }
 
@@ -1868,7 +1910,74 @@ mod tests {
             PolyforgeError::Api { code, .. } => {
                 assert_eq!(code, "SSE_BUFFER_OVERFLOW");
             }
-            other => panic!("Expected Api error with SSE_BUFFER_OVERFLOW, got: {:?}", other),
+            other => panic!(
+                "Expected Api error with SSE_BUFFER_OVERFLOW, got: {:?}",
+                other
+            ),
+        }
+    }
+
+    // --- Response body size cap tests (closes #48) ---
+
+    #[test]
+    fn test_max_response_body_size_constant_is_1mib() {
+        assert_eq!(MAX_RESPONSE_BODY_SIZE, 1_048_576);
+    }
+
+    #[tokio::test]
+    async fn test_handle_response_rejects_oversized_error_body() {
+        // Simulate a 500 error response with Content-Length exceeding the cap.
+        let body = http::Response::builder()
+            .status(500)
+            .header("content-length", (MAX_RESPONSE_BODY_SIZE + 1).to_string())
+            .body("")
+            .unwrap();
+        let resp = reqwest::Response::from(body);
+
+        let client = PolyforgeClient::with_url("test-key", "http://localhost:3002").unwrap();
+        let result: std::result::Result<serde_json::Value, _> = client.handle_response(resp).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            PolyforgeError::Api { code, status, .. } => {
+                assert_eq!(code, "RESPONSE_BODY_TOO_LARGE");
+                assert_eq!(status, 500);
+            }
+            other => panic!(
+                "Expected Api error with RESPONSE_BODY_TOO_LARGE, got: {:?}",
+                other
+            ),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_response_allows_small_error_body() {
+        // A normal-sized error response should still be parsed normally.
+        let error_json = r#"{"code":"NOT_FOUND","message":"Resource not found"}"#;
+        let body = http::Response::builder()
+            .status(404)
+            .header("content-length", error_json.len().to_string())
+            .header("content-type", "application/json")
+            .body(error_json.to_string())
+            .unwrap();
+        let resp = reqwest::Response::from(body);
+
+        let client = PolyforgeClient::with_url("test-key", "http://localhost:3002").unwrap();
+        let result: std::result::Result<serde_json::Value, _> = client.handle_response(resp).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            PolyforgeError::Api {
+                code,
+                message,
+                status,
+                ..
+            } => {
+                assert_eq!(status, 404);
+                assert_eq!(code, "NOT_FOUND");
+                assert_eq!(message, "Resource not found");
+            }
+            other => panic!("Expected Api error with NOT_FOUND, got: {:?}", other),
         }
     }
 
@@ -1889,11 +1998,17 @@ mod tests {
         let event = serde_json::to_value(WebhookEvent::OrderFilled).unwrap();
         assert_eq!(event, serde_json::Value::String("ORDER_FILLED".to_string()));
         let event = serde_json::to_value(WebhookEvent::StrategyError).unwrap();
-        assert_eq!(event, serde_json::Value::String("STRATEGY_ERROR".to_string()));
+        assert_eq!(
+            event,
+            serde_json::Value::String("STRATEGY_ERROR".to_string())
+        );
         let event = serde_json::to_value(WebhookEvent::WhaleTrade).unwrap();
         assert_eq!(event, serde_json::Value::String("WHALE_TRADE".to_string()));
         let event = serde_json::to_value(WebhookEvent::DailyLossLimit).unwrap();
-        assert_eq!(event, serde_json::Value::String("DAILY_LOSS_LIMIT".to_string()));
+        assert_eq!(
+            event,
+            serde_json::Value::String("DAILY_LOSS_LIMIT".to_string())
+        );
     }
 
     #[test]
@@ -2097,7 +2212,10 @@ mod tests {
 
         // The line is not a "data:" line so it is skipped; the stream ends.
         let result = stream.next().await;
-        assert!(result.is_none(), "should return None (stream ended), not an error");
+        assert!(
+            result.is_none(),
+            "should return None (stream ended), not an error"
+        );
     }
 
     // --- Breaking compat fixes (#49, #65, #76) ---
@@ -2176,7 +2294,10 @@ mod tests {
         // #76: Verify that a bare JSON array fails to deserialize as PaginatedResponse
         let json = r#"[{"id":"s1"},{"id":"s2"}]"#;
         let result = serde_json::from_str::<PaginatedResponse<Strategy>>(json);
-        assert!(result.is_err(), "bare array must not deserialize as PaginatedResponse");
+        assert!(
+            result.is_err(),
+            "bare array must not deserialize as PaginatedResponse"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2209,8 +2330,18 @@ mod tests {
     fn test_order_status_enum_deserializes_all_variants() {
         // #34: All 12 OrderStatus variants must deserialize
         let variants = [
-            "PENDING", "SUBMITTED", "LIVE", "MATCHED", "DELAYED", "MINED",
-            "CONFIRMED", "PARTIAL", "CANCELLED", "UNMATCHED", "FAILED", "ERROR",
+            "PENDING",
+            "SUBMITTED",
+            "LIVE",
+            "MATCHED",
+            "DELAYED",
+            "MINED",
+            "CONFIRMED",
+            "PARTIAL",
+            "CANCELLED",
+            "UNMATCHED",
+            "FAILED",
+            "ERROR",
         ];
         for v in &variants {
             let json = format!("\"{}\"", v);
@@ -2379,9 +2510,15 @@ mod tests {
 
     #[test]
     fn test_visibility_enum_serializes() {
-        assert_eq!(serde_json::to_value(Visibility::Private).unwrap(), "PRIVATE");
+        assert_eq!(
+            serde_json::to_value(Visibility::Private).unwrap(),
+            "PRIVATE"
+        );
         assert_eq!(serde_json::to_value(Visibility::Public).unwrap(), "PUBLIC");
-        assert_eq!(serde_json::to_value(Visibility::Unlisted).unwrap(), "UNLISTED");
+        assert_eq!(
+            serde_json::to_value(Visibility::Unlisted).unwrap(),
+            "UNLISTED"
+        );
     }
 
     #[test]
@@ -2393,7 +2530,10 @@ mod tests {
 
     #[test]
     fn test_copy_mode_enum_serializes() {
-        assert_eq!(serde_json::to_value(CopyMode::Percentage).unwrap(), "PERCENTAGE");
+        assert_eq!(
+            serde_json::to_value(CopyMode::Percentage).unwrap(),
+            "PERCENTAGE"
+        );
         assert_eq!(serde_json::to_value(CopyMode::Fixed).unwrap(), "FIXED");
         assert_eq!(serde_json::to_value(CopyMode::Mirror).unwrap(), "MIRROR");
     }
@@ -2440,7 +2580,10 @@ mod tests {
         let signal: NewsSignal = serde_json::from_str(json).unwrap();
         assert_eq!(signal.sentiment, Some("BULLISH".to_string()));
         assert_eq!(signal.related_markets, vec!["m1", "m2"]);
-        assert_eq!(signal.published_at, Some("2026-04-13T10:00:00Z".to_string()));
+        assert_eq!(
+            signal.published_at,
+            Some("2026-04-13T10:00:00Z".to_string())
+        );
     }
 
     #[test]
@@ -2858,7 +3001,9 @@ mod tests {
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let client = PolyforgeClient::new("test-key").unwrap();
-        let err = rt.block_on(client.create_conditional_order(&params)).unwrap_err();
+        let err = rt
+            .block_on(client.create_conditional_order(&params))
+            .unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
         assert!(err.to_string().contains("size"));
     }
@@ -2877,7 +3022,9 @@ mod tests {
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let client = PolyforgeClient::new("test-key").unwrap();
-        let err = rt.block_on(client.create_conditional_order(&params)).unwrap_err();
+        let err = rt
+            .block_on(client.create_conditional_order(&params))
+            .unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
         assert!(err.to_string().contains("trigger_price"));
     }
@@ -2896,7 +3043,9 @@ mod tests {
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let client = PolyforgeClient::new("test-key").unwrap();
-        let err = rt.block_on(client.create_conditional_order(&params)).unwrap_err();
+        let err = rt
+            .block_on(client.create_conditional_order(&params))
+            .unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
         assert!(err.to_string().contains("limit_price"));
     }
