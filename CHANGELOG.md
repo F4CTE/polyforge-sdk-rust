@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.20] — 2026-04-14
+
+### Fixed
+- `browse_marketplace()`: `offset` query parameter was defined in `BrowseMarketplaceParams` but never serialized into the URL — users could not paginate past the first page of marketplace results (closes #28)
+
 ## [1.6.19] — 2026-04-14
 
 ### Fixed
