@@ -861,6 +861,9 @@ impl PolyforgeClient {
         if let Some(limit) = params.limit {
             qp.push(format!("limit={limit}"));
         }
+        if let Some(offset) = params.offset {
+            qp.push(format!("offset={offset}"));
+        }
         let qs = if qp.is_empty() {
             String::new()
         } else {
@@ -2998,5 +3001,24 @@ mod tests {
         assert_eq!(tmpl.name, Some("Mean Reversion".to_string()));
         assert_eq!(tmpl.blocks.len(), 1);
         assert_eq!(tmpl.popularity, 342);
+    }
+
+    #[test]
+    fn test_browse_marketplace_params_has_offset() {
+        // Verify BrowseMarketplaceParams has offset field and it's usable
+        let params = BrowseMarketplaceParams {
+            sort: Some("newest".to_string()),
+            tag: Some("crypto".to_string()),
+            limit: Some(20),
+            offset: Some(40),
+        };
+        assert_eq!(params.offset, Some(40));
+        assert_eq!(params.limit, Some(20));
+    }
+
+    #[test]
+    fn test_browse_marketplace_params_offset_default() {
+        let params = BrowseMarketplaceParams::default();
+        assert_eq!(params.offset, None);
     }
 }
