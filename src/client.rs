@@ -340,6 +340,42 @@ impl PolyforgeClient {
         self.handle_response(resp).await
     }
 
+    /// Send a GET and return the body as plain text (for CSV endpoints).
+    async fn get_text(&self, path: &str) -> Result<String> {
+        let resp = self
+            .http
+            .get(self.url(path))
+            .header(AUTHORIZATION, self.auth_header()?)
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        if !resp.status().is_success() {
+            let body: serde_json::Value = resp.json().await.unwrap_or_default();
+            return Err(PolyforgeError::Api {
+                status,
+                code: body
+                    .get("code")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("UNKNOWN")
+                    .to_string(),
+                message: body
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown error")
+                    .to_string(),
+                request_id: body
+                    .get("requestId")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                suggestion: body
+                    .get("suggestion")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+            });
+        }
+        Ok(resp.text().await?)
+    }
+
     async fn post<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
@@ -871,6 +907,34 @@ impl PolyforgeClient {
     pub async fn merge_position(&self, params: &MergePositionParams) -> Result<PlaceOrderResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/orders/merge", &body).await
+    }
+
+    /// Export order history as CSV.
+    ///
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = polyforge::PolyforgeClient::new("key")?;
+    /// let csv = client.export_orders_csv().await?;
+    /// std::fs::write("orders.csv", &csv)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn export_orders_csv(&self) -> Result<String> {
+        self.get_text("/api/v1/orders/export/csv").await
+    }
+
+    /// Export portfolio positions as CSV.
+    ///
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = polyforge::PolyforgeClient::new("key")?;
+    /// let csv = client.export_portfolio_csv().await?;
+    /// std::fs::write("portfolio.csv", &csv)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn export_portfolio_csv(&self) -> Result<String> {
+        self.get_text("/api/v1/portfolio/export/csv").await
     }
 
     // -----------------------------------------------------------------------

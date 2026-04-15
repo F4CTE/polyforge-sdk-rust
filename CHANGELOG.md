@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.5] — 2026-04-15
+
+### Added
+- **export_orders_csv()** — download order history as CSV text. (closes #121)
+- **export_portfolio_csv()** — download portfolio positions as CSV text. (closes #121)
+- Internal `get_text()` helper for endpoints that return non-JSON responses.
+
 ## [1.7.4] — 2026-04-15
 
 ### Fixed
