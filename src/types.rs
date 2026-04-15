@@ -143,7 +143,7 @@ pub struct Block {
     #[serde(default)]
     pub config: Option<serde_json::Value>,
     #[serde(default)]
-    pub enabled: Option<bool>,
+    pub connections: Vec<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -342,7 +342,27 @@ pub struct Backtest {
     #[serde(default)]
     pub strategy_id: Option<String>,
     #[serde(default)]
+    pub start_date: Option<String>,
+    #[serde(default)]
+    pub end_date: Option<String>,
+    #[serde(default)]
+    pub initial_balance: Option<f64>,
+    #[serde(default)]
+    pub final_balance: Option<f64>,
+    #[serde(default)]
+    pub pnl: Option<f64>,
+    #[serde(default)]
+    pub trade_count: Option<i64>,
+    #[serde(default)]
+    pub win_rate: Option<f64>,
+    #[serde(default)]
+    pub sharpe_ratio: Option<f64>,
+    #[serde(default)]
+    pub max_drawdown: Option<f64>,
+    #[serde(default)]
     pub created_at: Option<String>,
+    #[serde(default)]
+    pub completed_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -1173,7 +1193,10 @@ pub struct ListConditionalOrdersParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateConditionalOrderParams {
+    pub market_id: String,
     pub token_id: String,
+    #[serde(rename = "type")]
+    pub order_type: String,
     pub side: String,
     pub outcome: String,
     pub size: f64,
@@ -1181,7 +1204,7 @@ pub struct CreateConditionalOrderParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit_price: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub condition_type: Option<String>,
+    pub trailing_pct: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<String>,
 }
