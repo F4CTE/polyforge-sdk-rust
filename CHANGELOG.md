@@ -4,6 +4,9 @@
 
 ### Fixed
 - **GetPortfolioPnlParams** — replace `Option<String>` with typed `PnlPeriod` enum. Removes phantom `"1d"` value, renames `"all"` → `"allTime"`, adds missing `"90d"` variant. (closes #120)
+- **ListOrdersParams** — add missing `page` and `market_id` query parameters to match platform `OrderQueryDto`. (closes #119)
+- **ListConditionalOrdersParams** — add missing `order_type` (serialized as `type`) and `page` query parameters to match platform `ConditionalOrderQueryDto`. (closes #118)
+- New `ConditionalOrderType` enum: `TakeProfit`, `StopLoss`, `TrailingStop`, `Limit`, `Pegged`
 
 ## [1.7.3] — 2026-04-15
 

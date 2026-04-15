@@ -472,9 +472,11 @@ pub struct Order {
 /// Parameters for listing orders.
 #[derive(Debug, Default)]
 pub struct ListOrdersParams {
+    pub page: Option<u32>,
     pub limit: Option<u32>,
     pub status: Option<OrderStatus>,
     pub strategy_id: Option<String>,
+    pub market_id: Option<String>,
     pub from: Option<String>,
     pub to: Option<String>,
 }
@@ -1151,6 +1153,17 @@ pub enum ConditionalOrderStatus {
     Failed,
 }
 
+/// Conditional order type.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ConditionalOrderType {
+    TakeProfit,
+    StopLoss,
+    TrailingStop,
+    Limit,
+    Pegged,
+}
+
 /// A conditional order (limit, stop, trailing-stop, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1186,6 +1199,8 @@ pub struct ConditionalOrder {
 #[derive(Debug, Default)]
 pub struct ListConditionalOrdersParams {
     pub status: Option<ConditionalOrderStatus>,
+    pub order_type: Option<ConditionalOrderType>,
+    pub page: Option<u32>,
     pub limit: Option<u32>,
 }
 
