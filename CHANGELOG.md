@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.4] — 2026-04-15
+
+### Fixed
+- **GetPortfolioPnlParams** — replace `Option<String>` with typed `PnlPeriod` enum. Removes phantom `"1d"` value, renames `"all"` → `"allTime"`, adds missing `"90d"` variant. (closes #120)
+
 ## [1.7.3] — 2026-04-15
 
 ### Fixed

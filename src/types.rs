@@ -1256,11 +1256,24 @@ pub struct PortfolioPnl {
     pub extra: serde_json::Value,
 }
 
+/// Valid periods for portfolio PnL queries.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PnlPeriod {
+    #[serde(rename = "7d")]
+    SevenDays,
+    #[serde(rename = "30d")]
+    ThirtyDays,
+    #[serde(rename = "90d")]
+    NinetyDays,
+    #[serde(rename = "allTime")]
+    AllTime,
+}
+
 /// Parameters for fetching portfolio PnL.
 #[derive(Debug, Default)]
 pub struct GetPortfolioPnlParams {
-    /// Time period: `"1d"`, `"7d"`, `"30d"`, `"all"`.
-    pub period: Option<String>,
+    /// Time period: `"7d"`, `"30d"`, `"90d"`, `"allTime"`.
+    pub period: Option<PnlPeriod>,
     /// Filter by strategy ID.
     pub strategy_id: Option<String>,
 }
