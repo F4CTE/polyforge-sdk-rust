@@ -783,6 +783,9 @@ impl PolyforgeClient {
     /// Get orders with optional filtering.
     pub async fn get_orders(&self, params: &ListOrdersParams) -> Result<PaginatedResponse<Order>> {
         let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params.page {
+            qp.push(("page", p.to_string()));
+        }
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
         }
@@ -792,6 +795,9 @@ impl PolyforgeClient {
         }
         if let Some(ref s) = params.strategy_id {
             qp.push(("strategyId", s.clone()));
+        }
+        if let Some(ref m) = params.market_id {
+            qp.push(("marketId", m.clone()));
         }
         if let Some(ref f) = params.from {
             qp.push(("from", f.clone()));
@@ -1074,7 +1080,7 @@ impl PolyforgeClient {
     // Conditional Orders
     // -----------------------------------------------------------------------
 
-    /// List conditional orders with optional status filter and limit.
+    /// List conditional orders with optional status, type, page, and limit filters.
     pub async fn list_conditional_orders(
         &self,
         params: &ListConditionalOrdersParams,
@@ -1085,6 +1091,15 @@ impl PolyforgeClient {
             if let Some(v) = val.as_str() {
                 qp.push(("status", v.to_string()));
             }
+        }
+        if let Some(ref t) = params.order_type {
+            let val = serde_json::to_value(t).unwrap_or_default();
+            if let Some(v) = val.as_str() {
+                qp.push(("type", v.to_string()));
+            }
+        }
+        if let Some(p) = params.page {
+            qp.push(("page", p.to_string()));
         }
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
@@ -3050,7 +3065,44 @@ mod tests {
     fn test_list_conditional_orders_params_default() {
         let params = ListConditionalOrdersParams::default();
         assert!(params.status.is_none());
+        assert!(params.order_type.is_none());
+        assert!(params.page.is_none());
         assert!(params.limit.is_none());
+    }
+
+    #[test]
+    fn test_list_orders_params_has_page_and_market_id() {
+        let params = ListOrdersParams {
+            page: Some(2),
+            market_id: Some("mkt-1".into()),
+            ..Default::default()
+        };
+        assert_eq!(params.page, Some(2));
+        assert_eq!(params.market_id.as_deref(), Some("mkt-1"));
+    }
+
+    #[test]
+    fn test_conditional_order_type_serializes() {
+        assert_eq!(
+            serde_json::to_value(ConditionalOrderType::TakeProfit).unwrap(),
+            serde_json::Value::String("TAKE_PROFIT".to_string())
+        );
+        assert_eq!(
+            serde_json::to_value(ConditionalOrderType::StopLoss).unwrap(),
+            serde_json::Value::String("STOP_LOSS".to_string())
+        );
+        assert_eq!(
+            serde_json::to_value(ConditionalOrderType::TrailingStop).unwrap(),
+            serde_json::Value::String("TRAILING_STOP".to_string())
+        );
+        assert_eq!(
+            serde_json::to_value(ConditionalOrderType::Limit).unwrap(),
+            serde_json::Value::String("LIMIT".to_string())
+        );
+        assert_eq!(
+            serde_json::to_value(ConditionalOrderType::Pegged).unwrap(),
+            serde_json::Value::String("PEGGED".to_string())
+        );
     }
 
     #[test]
