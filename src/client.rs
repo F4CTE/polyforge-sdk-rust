@@ -487,8 +487,7 @@ impl PolyforgeClient {
 
     /// Get price history for a market token.
     ///
-    /// Pass `None` for `params` to use server defaults (`resolution = "1h"`,
-    /// `limit = 200`).
+    /// Pass `None` for `params` to use server defaults (`period = "1h"`).
     pub async fn get_price_history(
         &self,
         token_id: &str,
@@ -496,14 +495,8 @@ impl PolyforgeClient {
     ) -> Result<Vec<PriceHistoryEntry>> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(ref p) = params {
-            if let Some(ref r) = p.resolution {
-                qp.push(("resolution", r.clone()));
-            }
-            if let Some(ref f) = p.from {
-                qp.push(("from", f.clone()));
-            }
-            if let Some(ref t) = p.to {
-                qp.push(("to", t.clone()));
+            if let Some(ref r) = p.period {
+                qp.push(("period", r.clone()));
             }
             if let Some(l) = p.limit {
                 qp.push(("limit", l.to_string()));
@@ -2819,37 +2812,29 @@ mod tests {
     #[test]
     fn test_price_history_params_default() {
         let params = PriceHistoryParams::default();
-        assert!(params.resolution.is_none());
-        assert!(params.from.is_none());
-        assert!(params.to.is_none());
+        assert!(params.period.is_none());
         assert!(params.limit.is_none());
     }
 
     #[test]
     fn test_price_history_params_serializes() {
         let params = PriceHistoryParams {
-            resolution: Some("1d".into()),
-            from: Some("2026-01-01T00:00:00Z".into()),
-            to: Some("2026-01-31T23:59:59Z".into()),
+            period: Some("6h".into()),
             limit: Some(500),
         };
         let val = serde_json::to_value(&params).unwrap();
-        assert_eq!(val["resolution"], "1d");
-        assert_eq!(val["from"], "2026-01-01T00:00:00Z");
-        assert_eq!(val["to"], "2026-01-31T23:59:59Z");
+        assert_eq!(val["period"], "6h");
         assert_eq!(val["limit"], 500);
     }
 
     #[test]
     fn test_price_history_params_omits_none_fields() {
         let params = PriceHistoryParams {
-            resolution: Some("1h".into()),
+            period: Some("1h".into()),
             ..Default::default()
         };
         let val = serde_json::to_value(&params).unwrap();
-        assert_eq!(val["resolution"], "1h");
-        assert!(val.get("from").is_none());
-        assert!(val.get("to").is_none());
+        assert_eq!(val["period"], "1h");
         assert!(val.get("limit").is_none());
     }
 

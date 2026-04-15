@@ -1082,16 +1082,10 @@ pub struct LpPosition {
 #[derive(Debug, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PriceHistoryParams {
-    /// Candle resolution: `"1m"`, `"1h"`, or `"1d"` (default `"1h"`).
+    /// Candle period: `"1h"`, `"6h"`, or `"24h"` (default `"1h"`).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub resolution: Option<String>,
-    /// Start of the time range (ISO 8601).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub from: Option<String>,
-    /// End of the time range (ISO 8601).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub to: Option<String>,
-    /// Maximum number of entries (1–1000, default 200).
+    pub period: Option<String>,
+    /// Maximum number of entries (1–500, default server-side).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
 }
