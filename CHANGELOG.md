@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.3] — 2026-04-15
+
+### Fixed
+- **CreateConditionalOrderParams** — add required `market_id` field, rename `condition_type` to `order_type` (serializes as `type`), add `trailing_pct` field. (closes #115)
+- **Block struct** — replace `enabled: Option<bool>` with `connections: Vec<String>` to match platform's strategy block graph. (closes #116)
+- **Backtest struct** — add 10 missing platform fields: `start_date`, `end_date`, `initial_balance`, `final_balance`, `pnl`, `trade_count`, `win_rate`, `sharpe_ratio`, `max_drawdown`, `completed_at`. (closes #117)
+
 ## [1.7.2] — 2026-04-15
 
 ### Fixed

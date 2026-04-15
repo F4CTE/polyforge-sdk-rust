@@ -2955,33 +2955,39 @@ mod tests {
     #[test]
     fn test_create_conditional_order_params_serializes_camelcase() {
         let params = CreateConditionalOrderParams {
+            market_id: "mkt-1".into(),
             token_id: "tok-1".into(),
+            order_type: "STOP_LOSS".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
             size: 50.0,
             trigger_price: 0.65,
             limit_price: Some(0.67),
-            condition_type: Some("STOP_LIMIT".into()),
+            trailing_pct: None,
             expires_at: None,
         };
         let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["marketId"], "mkt-1");
         assert_eq!(json["tokenId"], "tok-1");
+        assert_eq!(json["type"], "STOP_LOSS");
         assert_eq!(json["triggerPrice"], 0.65);
         assert_eq!(json["limitPrice"], 0.67);
-        assert_eq!(json["conditionType"], "STOP_LIMIT");
         assert!(json.get("expiresAt").is_none());
+        assert!(json.get("trailingPct").is_none());
     }
 
     #[test]
     fn test_create_conditional_order_validation_rejects_nan_size() {
         let params = CreateConditionalOrderParams {
+            market_id: "mkt-1".into(),
             token_id: "tok-1".into(),
+            order_type: "STOP_LOSS".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
             size: f64::NAN,
             trigger_price: 0.65,
             limit_price: None,
-            condition_type: None,
+            trailing_pct: None,
             expires_at: None,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -2996,13 +3002,15 @@ mod tests {
     #[test]
     fn test_create_conditional_order_validation_rejects_negative_trigger_price() {
         let params = CreateConditionalOrderParams {
+            market_id: "mkt-1".into(),
             token_id: "tok-1".into(),
+            order_type: "STOP_LOSS".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
             size: 10.0,
             trigger_price: -0.5,
             limit_price: None,
-            condition_type: None,
+            trailing_pct: None,
             expires_at: None,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -3017,13 +3025,15 @@ mod tests {
     #[test]
     fn test_create_conditional_order_validation_rejects_nan_limit_price() {
         let params = CreateConditionalOrderParams {
+            market_id: "mkt-1".into(),
             token_id: "tok-1".into(),
+            order_type: "LIMIT".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
             size: 10.0,
             trigger_price: 0.5,
             limit_price: Some(f64::NAN),
-            condition_type: None,
+            trailing_pct: None,
             expires_at: None,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -3234,17 +3244,32 @@ mod tests {
             "id": "bt-1",
             "status": "COMPLETED",
             "strategyId": "s1",
-            "createdAt": "2026-04-14T00:00:00Z",
+            "startDate": "2026-01-01T00:00:00Z",
+            "endDate": "2026-03-01T00:00:00Z",
+            "initialBalance": 10000.0,
+            "finalBalance": 10150.5,
             "pnl": 150.5,
-            "tradeCount": 42
+            "tradeCount": 42,
+            "winRate": 0.62,
+            "sharpeRatio": 1.8,
+            "maxDrawdown": 0.05,
+            "createdAt": "2026-04-14T00:00:00Z",
+            "completedAt": "2026-04-14T00:01:00Z"
         }"#;
         let bt: Backtest = serde_json::from_str(json).unwrap();
         assert_eq!(bt.id, "bt-1");
         assert_eq!(bt.status.as_deref(), Some("COMPLETED"));
         assert_eq!(bt.strategy_id.as_deref(), Some("s1"));
+        assert_eq!(bt.start_date.as_deref(), Some("2026-01-01T00:00:00Z"));
+        assert_eq!(bt.end_date.as_deref(), Some("2026-03-01T00:00:00Z"));
+        assert_eq!(bt.initial_balance, Some(10000.0));
+        assert_eq!(bt.final_balance, Some(10150.5));
+        assert_eq!(bt.pnl, Some(150.5));
+        assert_eq!(bt.trade_count, Some(42));
+        assert_eq!(bt.win_rate, Some(0.62));
+        assert_eq!(bt.sharpe_ratio, Some(1.8));
+        assert_eq!(bt.max_drawdown, Some(0.05));
         assert_eq!(bt.created_at.as_deref(), Some("2026-04-14T00:00:00Z"));
-        // Extra fields captured via flatten
-        assert_eq!(bt.extra["pnl"], 150.5);
-        assert_eq!(bt.extra["tradeCount"], 42);
+        assert_eq!(bt.completed_at.as_deref(), Some("2026-04-14T00:01:00Z"));
     }
 }
