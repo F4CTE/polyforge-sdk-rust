@@ -1160,7 +1160,8 @@ impl PolyforgeClient {
     pub async fn get_portfolio_pnl(&self, params: &GetPortfolioPnlParams) -> Result<PortfolioPnl> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(ref p) = params.period {
-            qp.push(("period", p.clone()));
+            let val = serde_json::to_value(p).unwrap_or_default();
+            qp.push(("period", val.as_str().unwrap_or_default().to_string()));
         }
         if let Some(ref s) = params.strategy_id {
             qp.push(("strategyId", s.clone()));
@@ -3134,6 +3135,26 @@ mod tests {
         let params = GetPortfolioPnlParams::default();
         assert!(params.period.is_none());
         assert!(params.strategy_id.is_none());
+    }
+
+    #[test]
+    fn test_pnl_period_serializes_correctly() {
+        assert_eq!(
+            serde_json::to_value(PnlPeriod::SevenDays).unwrap(),
+            serde_json::Value::String("7d".to_string())
+        );
+        assert_eq!(
+            serde_json::to_value(PnlPeriod::ThirtyDays).unwrap(),
+            serde_json::Value::String("30d".to_string())
+        );
+        assert_eq!(
+            serde_json::to_value(PnlPeriod::NinetyDays).unwrap(),
+            serde_json::Value::String("90d".to_string())
+        );
+        assert_eq!(
+            serde_json::to_value(PnlPeriod::AllTime).unwrap(),
+            serde_json::Value::String("allTime".to_string())
+        );
     }
 
     #[test]
