@@ -523,7 +523,7 @@ impl PolyforgeClient {
 
     /// Get price history for a market token.
     ///
-    /// Pass `None` for `params` to use server defaults (`period = "1h"`).
+    /// Pass `None` for `params` to use server defaults (`resolution = "1h"`).
     pub async fn get_price_history(
         &self,
         token_id: &str,
@@ -531,8 +531,14 @@ impl PolyforgeClient {
     ) -> Result<Vec<PriceHistoryEntry>> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(ref p) = params {
-            if let Some(ref r) = p.period {
-                qp.push(("period", r.clone()));
+            if let Some(ref r) = p.resolution {
+                qp.push(("resolution", r.clone()));
+            }
+            if let Some(ref f) = p.from {
+                qp.push(("from", f.clone()));
+            }
+            if let Some(ref t) = p.to {
+                qp.push(("to", t.clone()));
             }
             if let Some(l) = p.limit {
                 qp.push(("limit", l.to_string()));
@@ -742,6 +748,139 @@ impl PolyforgeClient {
             &serde_json::json!({}),
         )
         .await
+    }
+
+    // -----------------------------------------------------------------------
+    // Strategy Social
+    // -----------------------------------------------------------------------
+
+    /// Like or unlike a strategy (toggle). Returns `{"liked": bool, "likeCount": i64}`.
+    pub async fn like_strategy(&self, id: &str) -> Result<serde_json::Value> {
+        self.post(
+            &format!("/api/v1/strategies/{}/like", encode(id)),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// List comments on a strategy with optional pagination.
+    pub async fn list_strategy_comments(
+        &self,
+        id: &str,
+        page: Option<u32>,
+        limit: Option<u32>,
+    ) -> Result<serde_json::Value> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = page { qp.push(("page", p.to_string())); }
+        if let Some(l) = limit { qp.push(("limit", l.to_string())); }
+        let qs = if qp.is_empty() { String::new() } else {
+            format!("?{}", qp.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>().join("&"))
+        };
+        self.get(&format!("/api/v1/strategies/{}/comments{}", encode(id), qs)).await
+    }
+
+    /// Add a comment to a strategy.
+    pub async fn add_strategy_comment(&self, id: &str, content: &str) -> Result<serde_json::Value> {
+        self.post(
+            &format!("/api/v1/strategies/{}/comments", encode(id)),
+            &serde_json::json!({ "content": content }),
+        )
+        .await
+    }
+
+    /// Delete a comment on a strategy (must be the comment author).
+    pub async fn delete_strategy_comment(&self, strategy_id: &str, comment_id: &str) -> Result<()> {
+        self.delete(&format!(
+            "/api/v1/strategies/{}/comments/{}",
+            encode(strategy_id),
+            encode(comment_id),
+        ))
+        .await
+    }
+
+    /// List child strategies (forks) of a strategy.
+    pub async fn list_strategy_children(&self, id: &str) -> Result<serde_json::Value> {
+        self.get(&format!("/api/v1/strategies/{}/children", encode(id))).await
+    }
+
+    /// Report a strategy for violating guidelines.
+    ///
+    /// `reason` should be one of `"SPAM"`, `"INAPPROPRIATE"`, `"MISLEADING"`, `"OTHER"`.
+    pub async fn report_strategy(
+        &self,
+        id: &str,
+        reason: &str,
+        description: Option<&str>,
+    ) -> Result<serde_json::Value> {
+        let mut body = serde_json::json!({ "reason": reason });
+        if let Some(d) = description {
+            body["description"] = serde_json::json!(d);
+        }
+        self.post(&format!("/api/v1/strategies/{}/report", encode(id)), &body).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Strategy Versioning
+    // -----------------------------------------------------------------------
+
+    /// List all saved versions of a strategy.
+    pub async fn list_strategy_versions(&self, id: &str) -> Result<serde_json::Value> {
+        self.get(&format!("/api/v1/strategies/{}/versions", encode(id))).await
+    }
+
+    /// Rollback a strategy to a previous version.
+    pub async fn rollback_strategy(&self, id: &str, version_id: &str) -> Result<serde_json::Value> {
+        self.post(
+            &format!("/api/v1/strategies/{}/versions/{}/rollback", encode(id), encode(version_id)),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    // -----------------------------------------------------------------------
+    // Strategy Event Log
+    // -----------------------------------------------------------------------
+
+    /// Get the execution event log for a strategy.
+    pub async fn get_strategy_event_log(
+        &self,
+        id: &str,
+        limit: Option<u32>,
+    ) -> Result<serde_json::Value> {
+        let qs = limit.map_or(String::new(), |l| format!("?limit={}", l));
+        self.get(&format!("/api/v1/strategies/{}/event-log{}", encode(id), qs)).await
+    }
+
+    // -----------------------------------------------------------------------
+    // API Key Management
+    // -----------------------------------------------------------------------
+
+    /// List all API keys for the authenticated user.
+    ///
+    /// The raw token is never returned — only the prefix is available.
+    pub async fn list_api_keys(&self) -> Result<serde_json::Value> {
+        self.get("/api/v1/api-keys").await
+    }
+
+    /// Create a new API key.
+    ///
+    /// The raw token is returned only once and cannot be retrieved later.
+    /// `scopes` should be a subset of `["READ", "WRITE", "TRADE"]`.
+    pub async fn create_api_key(
+        &self,
+        name: &str,
+        scopes: Option<&[&str]>,
+    ) -> Result<serde_json::Value> {
+        let mut body = serde_json::json!({ "name": name });
+        if let Some(s) = scopes {
+            body["scopes"] = serde_json::json!(s);
+        }
+        self.post("/api/v1/api-keys", &body).await
+    }
+
+    /// Revoke an API key by ID. The key is permanently deactivated.
+    pub async fn revoke_api_key(&self, id: &str) -> Result<()> {
+        self.delete(&format!("/api/v1/api-keys/{}", encode(id))).await
     }
 
     // -----------------------------------------------------------------------
@@ -1136,7 +1275,7 @@ impl PolyforgeClient {
 
     /// Check whether a specific market is on the watchlist.
     pub async fn get_watchlist_status(&self, market_id: &str) -> Result<WatchlistStatus> {
-        self.get(&format!("/api/v1/watchlist/status/{}", encode(market_id)))
+        self.get(&format!("/api/v1/watchlist/{}/status", encode(market_id)))
             .await
     }
 
@@ -1386,10 +1525,10 @@ impl PolyforgeClient {
     /// Provide liquidity on a market.
     ///
     /// # Errors
-    /// Returns [`PolyforgeError::Validation`] if `size` is NaN, infinite, zero,
+    /// Returns [`PolyforgeError::Validation`] if `amount_usdc` is NaN, infinite, zero,
     /// or negative.
     pub async fn provide_liquidity(&self, params: &ProvideLiquidityParams) -> Result<LpPosition> {
-        validate_financial_param("size", params.size)?;
+        validate_financial_param("amount_usdc", params.amount_usdc)?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/lp/provide", &body).await
     }
@@ -2240,29 +2379,34 @@ mod tests {
     }
 
     #[test]
-    fn test_provide_liquidity_params_validation_rejects_zero_size() {
+    fn test_provide_liquidity_params_validation_rejects_zero_amount_usdc() {
+        // Platform expects {marketId, tokenId, amountUsdc} — validate amountUsdc
         let params = ProvideLiquidityParams {
             market_id: "m1".into(),
-            size: 0.0,
+            token_id: "tok-1".into(),
+            amount_usdc: 0.0,
+            target_spread: None,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let client = PolyforgeClient::new("test-key").unwrap();
         let err = rt.block_on(client.provide_liquidity(&params)).unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
-        assert!(err.to_string().contains("size"));
+        assert!(err.to_string().contains("amount_usdc"));
     }
 
     #[test]
-    fn test_provide_liquidity_params_validation_rejects_negative_size() {
+    fn test_provide_liquidity_params_validation_rejects_negative_amount_usdc() {
         let params = ProvideLiquidityParams {
             market_id: "m1".into(),
-            size: -50.0,
+            token_id: "tok-1".into(),
+            amount_usdc: -50.0,
+            target_spread: None,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let client = PolyforgeClient::new("test-key").unwrap();
         let err = rt.block_on(client.provide_liquidity(&params)).unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
-        assert!(err.to_string().contains("size"));
+        assert!(err.to_string().contains("amount_usdc"));
     }
 
     #[tokio::test]
@@ -2760,17 +2904,33 @@ mod tests {
     }
 
     #[test]
-    fn test_provide_liquidity_params_uses_market_id() {
-        // #30: ProvideLiquidityParams must have {marketId, size} not {tokenId, spread, size}
+    fn test_provide_liquidity_params_serializes_correct_fields() {
+        // Platform contract: {marketId, tokenId, amountUsdc, targetSpread?}
         let params = ProvideLiquidityParams {
             market_id: "mkt-1".into(),
-            size: 1000.0,
+            token_id: "tok-1".into(),
+            amount_usdc: 1000.0,
+            target_spread: Some(0.02),
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["marketId"], "mkt-1");
-        assert_eq!(json["size"], 1000.0);
-        assert!(json.get("tokenId").is_none());
+        assert_eq!(json["tokenId"], "tok-1");
+        assert_eq!(json["amountUsdc"], 1000.0);
+        assert_eq!(json["targetSpread"], 0.02);
+        assert!(json.get("size").is_none());
         assert!(json.get("spread").is_none());
+    }
+
+    #[test]
+    fn test_provide_liquidity_params_omits_optional_target_spread() {
+        let params = ProvideLiquidityParams {
+            market_id: "mkt-1".into(),
+            token_id: "tok-1".into(),
+            amount_usdc: 500.0,
+            target_spread: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert!(json.get("targetSpread").is_none());
     }
 
     #[test]
@@ -2891,31 +3051,43 @@ mod tests {
 
     #[test]
     fn test_price_history_params_default() {
+        // Platform uses resolution/from/to/limit — no period field
         let params = PriceHistoryParams::default();
-        assert!(params.period.is_none());
+        assert!(params.resolution.is_none());
+        assert!(params.from.is_none());
+        assert!(params.to.is_none());
         assert!(params.limit.is_none());
     }
 
     #[test]
     fn test_price_history_params_serializes() {
+        // resolution accepts "1m", "1h", "1d" (enum values from platform)
         let params = PriceHistoryParams {
-            period: Some("6h".into()),
+            resolution: Some("1h".into()),
+            from: Some("2026-01-01T00:00:00Z".into()),
+            to: Some("2026-01-02T00:00:00Z".into()),
             limit: Some(500),
         };
         let val = serde_json::to_value(&params).unwrap();
-        assert_eq!(val["period"], "6h");
+        assert_eq!(val["resolution"], "1h");
+        assert_eq!(val["from"], "2026-01-01T00:00:00Z");
+        assert_eq!(val["to"], "2026-01-02T00:00:00Z");
         assert_eq!(val["limit"], 500);
+        assert!(val.get("period").is_none());
     }
 
     #[test]
     fn test_price_history_params_omits_none_fields() {
         let params = PriceHistoryParams {
-            period: Some("1h".into()),
+            resolution: Some("1d".into()),
             ..Default::default()
         };
         let val = serde_json::to_value(&params).unwrap();
-        assert_eq!(val["period"], "1h");
+        assert_eq!(val["resolution"], "1d");
         assert!(val.get("limit").is_none());
+        assert!(val.get("from").is_none());
+        assert!(val.get("to").is_none());
+        assert!(val.get("period").is_none());
     }
 
     #[test]
@@ -3171,10 +3343,11 @@ mod tests {
 
     #[test]
     fn test_alert_direction_serializes() {
+        // Platform expects lowercase: "above" / "below" (not "ABOVE" / "BELOW")
         let above = serde_json::to_value(AlertDirection::Above).unwrap();
-        assert_eq!(above, serde_json::Value::String("ABOVE".to_string()));
+        assert_eq!(above, serde_json::Value::String("above".to_string()));
         let below = serde_json::to_value(AlertDirection::Below).unwrap();
-        assert_eq!(below, serde_json::Value::String("BELOW".to_string()));
+        assert_eq!(below, serde_json::Value::String("below".to_string()));
     }
 
     #[test]
@@ -3187,7 +3360,7 @@ mod tests {
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["tokenId"], "tok-1");
-        assert_eq!(json["direction"], "ABOVE");
+        assert_eq!(json["direction"], "above");
         assert_eq!(json["price"], 0.75);
         assert_eq!(json["persistent"], true);
     }
