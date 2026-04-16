@@ -1077,7 +1077,12 @@ pub struct MarketSentiment {
 pub struct ProvideLiquidityParams {
     #[serde(rename = "marketId")]
     pub market_id: String,
-    pub size: f64,
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    #[serde(rename = "amountUsdc")]
+    pub amount_usdc: f64,
+    #[serde(rename = "targetSpread", skip_serializing_if = "Option::is_none")]
+    pub target_spread: Option<f64>,
 }
 
 /// A liquidity position resulting from a provide_liquidity call.
@@ -1102,12 +1107,17 @@ pub struct LpPosition {
 
 /// Query parameters for fetching price history.
 #[derive(Debug, Default, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PriceHistoryParams {
-    /// Candle period: `"1h"`, `"6h"`, or `"24h"` (default `"1h"`).
+    /// Candle resolution: `"1m"`, `"1h"`, or `"1d"` (default `"1h"`).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub period: Option<String>,
-    /// Maximum number of entries (1–500, default server-side).
+    pub resolution: Option<String>,
+    /// ISO 8601 start datetime (e.g. `"2026-01-01T00:00:00Z"`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    /// ISO 8601 end datetime (e.g. `"2026-01-31T23:59:59Z"`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to: Option<String>,
+    /// Maximum number of entries (1–1000, default server-side).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
 }
@@ -1230,7 +1240,7 @@ pub struct CreateConditionalOrderParams {
 
 /// Alert direction (price movement direction).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(rename_all = "lowercase")]
 pub enum AlertDirection {
     Above,
     Below,
