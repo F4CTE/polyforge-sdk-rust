@@ -1033,6 +1033,34 @@ impl PolyforgeClient {
         .await
     }
 
+    /// Rate a purchased marketplace strategy (1–5 stars).
+    pub async fn rate_listing(&self, id: &str, params: &RateListingParams) -> Result<serde_json::Value> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post(&format!("/api/v1/marketplace/{}/rate", encode(id)), &body).await
+    }
+
+    /// List your own marketplace listings (sell-side).
+    pub async fn get_my_listings(&self) -> Result<Vec<MarketplaceListing>> {
+        self.get("/api/v1/marketplace/my/listings").await
+    }
+
+    /// List strategies you have purchased from the marketplace.
+    pub async fn get_my_purchases(&self) -> Result<Vec<serde_json::Value>> {
+        self.get("/api/v1/marketplace/my/purchases").await
+    }
+
+    /// Create a new marketplace listing for one of your strategies.
+    pub async fn create_listing(&self, params: &CreateListingParams) -> Result<MarketplaceListing> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/marketplace", &body).await
+    }
+
+    /// Update an existing marketplace listing.
+    pub async fn update_listing(&self, id: &str, params: &UpdateListingParams) -> Result<MarketplaceListing> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.patch(&format!("/api/v1/marketplace/{}", encode(id)), &body).await
+    }
+
     // -----------------------------------------------------------------------
     // Social & Signals
     // -----------------------------------------------------------------------
@@ -1049,6 +1077,49 @@ impl PolyforgeClient {
         self.get(&format!("/api/v1/whales/feed{qs}")).await
     }
 
+    /// Get top whale wallets ranked by volume, PnL, win rate, or trade count.
+    pub async fn get_top_whales(&self, params: Option<&GetTopWhalesParams>) -> Result<Vec<WhaleProfile>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(ref sort_by) = p.sort_by {
+                qp.push(("sortBy", sort_by.clone()));
+            }
+            if let Some(ref period) = p.period {
+                qp.push(("period", period.clone()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/whales/top{qs}")).await
+    }
+
+    /// Get the full trading profile of a specific whale wallet.
+    pub async fn get_whale_profile(&self, address: &str) -> Result<WhaleProfile> {
+        self.get(&format!("/api/v1/whales/{}", encode(address))).await
+    }
+
+    /// Follow a whale wallet to receive alerts when it trades.
+    pub async fn follow_whale(&self, address: &str) -> Result<serde_json::Value> {
+        self.post(&format!("/api/v1/whales/{}/follow", encode(address)), &json!({})).await
+    }
+
+    /// Unfollow a whale wallet.
+    pub async fn unfollow_whale(&self, address: &str) -> Result<serde_json::Value> {
+        self.post(&format!("/api/v1/whales/{}/unfollow", encode(address)), &json!({})).await
+    }
+
+    /// List whale wallets you are currently following.
+    pub async fn get_following_whales(&self) -> Result<Vec<WhaleProfile>> {
+        self.get("/api/v1/whales/following").await
+    }
+
     /// Get AI-powered news signals.
     pub async fn get_news_signals(
         &self,
@@ -1059,6 +1130,70 @@ impl PolyforgeClient {
             None => String::new(),
         };
         self.get(&format!("/api/v1/news/signals{qs}")).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Discover & Leaderboard
+    // -----------------------------------------------------------------------
+
+    /// Discover publicly shared strategies.
+    pub async fn discover_strategies(&self, params: Option<&DiscoverParams>) -> Result<serde_json::Value> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(ref sort) = p.sort { qp.push(("sort", sort.clone())); }
+            if let Some(ref category) = p.category { qp.push(("category", category.clone())); }
+            if let Some(ref search) = p.search { qp.push(("search", search.clone())); }
+            if let Some(page) = p.page { qp.push(("page", page.to_string())); }
+            if let Some(limit) = p.limit { qp.push(("limit", limit.to_string())); }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/discover{qs}")).await
+    }
+
+    /// Get the trader leaderboard ranked by realized P&L.
+    pub async fn get_leaderboard(&self, params: Option<&LeaderboardParams>) -> Result<serde_json::Value> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(ref period) = p.period { qp.push(("period", period.clone())); }
+            if let Some(page) = p.page { qp.push(("page", page.to_string())); }
+            if let Some(limit) = p.limit { qp.push(("limit", limit.to_string())); }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/leaderboard{qs}")).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Paper trading
+    // -----------------------------------------------------------------------
+
+    /// Get a summary of the paper trading account.
+    pub async fn get_paper_summary(&self) -> Result<PaperSummary> {
+        self.get("/api/v1/paper/summary").await
+    }
+
+    /// Reset the paper trading account to its initial balance.
+    pub async fn reset_paper_account(&self) -> Result<serde_json::Value> {
+        self.post("/api/v1/paper/reset", &json!({})).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Batch API
+    // -----------------------------------------------------------------------
+
+    /// Execute multiple API calls in a single round-trip.
+    pub async fn batch_requests(&self, items: &[BatchRequestItem]) -> Result<BatchResponse> {
+        let body = json!({ "items": items });
+        self.post("/api/v1/batch", &body).await
     }
 
     // -----------------------------------------------------------------------
@@ -1073,6 +1208,62 @@ impl PolyforgeClient {
     /// List copy-trading configurations.
     pub async fn list_copy_configs(&self) -> Result<PaginatedResponse<CopyConfig>> {
         self.get("/api/v1/copy").await
+    }
+
+    /// Create a new copy trading configuration.
+    pub async fn create_copy_config(&self, params: &CreateCopyConfigParams) -> Result<CopyConfig> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/copy", &body).await
+    }
+
+    /// Get a single copy trading configuration by ID.
+    pub async fn get_copy_config(&self, id: &str) -> Result<CopyConfig> {
+        self.get(&format!("/api/v1/copy/{}", encode(id))).await
+    }
+
+    /// Update an existing copy trading configuration.
+    pub async fn update_copy_config(&self, id: &str, params: &UpdateCopyConfigParams) -> Result<CopyConfig> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.patch(&format!("/api/v1/copy/{}", encode(id)), &body).await
+    }
+
+    /// Pause a copy trading configuration.
+    pub async fn pause_copy_config(&self, id: &str) -> Result<CopyConfig> {
+        self.post(&format!("/api/v1/copy/{}/pause", encode(id)), &json!({})).await
+    }
+
+    /// Resume a paused copy trading configuration.
+    pub async fn resume_copy_config(&self, id: &str) -> Result<CopyConfig> {
+        self.post(&format!("/api/v1/copy/{}/resume", encode(id)), &json!({})).await
+    }
+
+    /// Delete (stop) a copy trading configuration.
+    pub async fn delete_copy_config(&self, id: &str) -> Result<serde_json::Value> {
+        self.delete(&format!("/api/v1/copy/{}", encode(id))).await
+    }
+
+    /// Get trades executed by a copy trading configuration.
+    pub async fn get_copy_trades(
+        &self,
+        id: &str,
+        params: Option<&GetCopyTradesParams>,
+    ) -> Result<PaginatedResponse<Order>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/copy/{}/trades{qs}", encode(id))).await
     }
 
     /// List registered webhooks.
@@ -3408,5 +3599,148 @@ mod tests {
         assert_eq!(bt.max_drawdown, Some(0.05));
         assert_eq!(bt.created_at.as_deref(), Some("2026-04-14T00:00:00Z"));
         assert_eq!(bt.completed_at.as_deref(), Some("2026-04-14T00:01:00Z"));
+    }
+
+    // ── Copy trading CRUD (#51) ───────────────────────────────────────────────
+
+    #[test]
+    fn test_create_copy_config_params_serializes_target_wallet() {
+        let params = CreateCopyConfigParams {
+            target_wallet: "0xabcdef1234567890abcdef1234567890abcdef12".to_string(),
+            mode: Some(CopyMode::Percentage),
+            ..Default::default()
+        };
+        let body = serde_json::to_value(&params).unwrap();
+        assert_eq!(body["targetWallet"], "0xabcdef1234567890abcdef1234567890abcdef12");
+        assert_eq!(body["mode"], "PERCENTAGE");
+    }
+
+    #[test]
+    fn test_update_copy_config_params_skips_none_fields() {
+        let params = UpdateCopyConfigParams {
+            size_value: Some("100".to_string()),
+            ..Default::default()
+        };
+        let body = serde_json::to_value(&params).unwrap();
+        assert!(body.get("sizeValue").is_some());
+        // None fields should be absent due to skip_serializing_if
+        assert!(body.get("mode").is_none());
+        assert!(body.get("maxExposure").is_none());
+    }
+
+    #[test]
+    fn test_get_copy_trades_params_default() {
+        let params = GetCopyTradesParams::default();
+        assert!(params.page.is_none());
+        assert!(params.limit.is_none());
+    }
+
+    // ── Whale extended (#66) ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_whale_profile_deserializes() {
+        let json = r#"{
+            "walletAddress": "0xabc",
+            "stats": {
+                "totalVolume": "10000",
+                "totalPnl": "500",
+                "tradeCount": 42,
+                "winRate": "0.62"
+            },
+            "recentTrades": [],
+            "sparkline": [0, 1, 2],
+            "isFollowing": true
+        }"#;
+        let profile: WhaleProfile = serde_json::from_str(json).unwrap();
+        assert_eq!(profile.wallet_address, "0xabc");
+        assert!(profile.stats.is_some());
+        assert!(profile.is_following);
+        assert_eq!(profile.sparkline, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_get_top_whales_params_default() {
+        let params = GetTopWhalesParams::default();
+        assert!(params.sort_by.is_none());
+        assert!(params.period.is_none());
+        assert!(params.limit.is_none());
+    }
+
+    // ── Paper trading (#66) ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_paper_summary_deserializes() {
+        let json = r#"{"balance": 10000.0, "pnl": 500.0, "tradeCount": 12, "openPositions": 3}"#;
+        let summary: PaperSummary = serde_json::from_str(json).unwrap();
+        assert_eq!(summary.balance, 10000.0);
+        assert_eq!(summary.pnl, 500.0);
+        assert_eq!(summary.trade_count, 12);
+        assert_eq!(summary.open_positions, 3);
+    }
+
+    // ── Batch API (#66) ──────────────────────────────────────────────────────
+
+    #[test]
+    fn test_batch_request_item_serializes() {
+        let item = BatchRequestItem {
+            method: "GET".to_string(),
+            path: "/api/v1/portfolio".to_string(),
+            body: None,
+        };
+        let val = serde_json::to_value(&item).unwrap();
+        assert_eq!(val["method"], "GET");
+        assert_eq!(val["path"], "/api/v1/portfolio");
+        // body is None — skip_serializing_if should omit it
+        assert!(val.get("body").is_none());
+    }
+
+    #[test]
+    fn test_batch_response_deserializes() {
+        let json = r#"{"results":[{"status":200,"body":{"ok":true}}]}"#;
+        let resp: BatchResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.results.len(), 1);
+        assert_eq!(resp.results[0].status, 200);
+    }
+
+    // ── Marketplace seller (#66) ─────────────────────────────────────────────
+
+    #[test]
+    fn test_create_listing_params_serializes() {
+        let params = CreateListingParams {
+            strategy_id: "strat-1".to_string(),
+            title: "My Strategy".to_string(),
+            description: None,
+            price_usdc: 10.0,
+            tags: Some(vec!["algo".to_string()]),
+        };
+        let body = serde_json::to_value(&params).unwrap();
+        assert_eq!(body["strategyId"], "strat-1");
+        assert_eq!(body["title"], "My Strategy");
+        assert_eq!(body["priceUsdc"], 10.0);
+        assert!(body.get("description").is_none());
+        assert_eq!(body["tags"][0], "algo");
+    }
+
+    #[test]
+    fn test_update_listing_params_skips_none_fields() {
+        let params = UpdateListingParams {
+            status: Some("PAUSED".to_string()),
+            ..Default::default()
+        };
+        let body = serde_json::to_value(&params).unwrap();
+        assert_eq!(body["status"], "PAUSED");
+        assert!(body.get("title").is_none());
+        assert!(body.get("priceUsdc").is_none());
+    }
+
+    #[test]
+    fn test_rate_listing_params_serializes() {
+        let params = RateListingParams {
+            rating: 5,
+            review: Some("Excellent!".to_string()),
+        };
+        let body = serde_json::to_value(&params).unwrap();
+        assert_eq!(body["rating"], 5);
+        assert_eq!(body["review"], "Excellent!");
     }
 }

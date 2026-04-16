@@ -1294,6 +1294,199 @@ pub struct GetPortfolioPnlParams {
 }
 
 // ---------------------------------------------------------------------------
+// Copy trading CRUD params
+// ---------------------------------------------------------------------------
+
+/// Parameters for creating a copy trading configuration.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCopyConfigParams {
+    /// Ethereum wallet address to copy (0x…40 hex chars).
+    pub target_wallet: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<CopyMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_exposure: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_daily_loss: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_offset: Option<String>,
+}
+
+/// Parameters for updating a copy trading configuration.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCopyConfigParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<CopyMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_exposure: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_daily_loss: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_offset: Option<String>,
+}
+
+/// Parameters for fetching trades of a copy config.
+#[derive(Debug, Default)]
+pub struct GetCopyTradesParams {
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+// ---------------------------------------------------------------------------
+// Whale extended types
+// ---------------------------------------------------------------------------
+
+/// Statistics for a whale wallet.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WhaleStats {
+    #[serde(default)]
+    pub total_volume: String,
+    #[serde(default)]
+    pub total_pnl: String,
+    #[serde(default)]
+    pub trade_count: u64,
+    #[serde(default)]
+    pub win_rate: String,
+}
+
+/// Full trading profile for a whale wallet.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WhaleProfile {
+    pub wallet_address: String,
+    #[serde(default)]
+    pub stats: Option<WhaleStats>,
+    #[serde(default)]
+    pub recent_trades: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub sparkline: Vec<u64>,
+    #[serde(default)]
+    pub is_following: bool,
+}
+
+/// Parameters for fetching top whale wallets.
+#[derive(Debug, Default)]
+pub struct GetTopWhalesParams {
+    pub sort_by: Option<String>,
+    pub period: Option<String>,
+    pub limit: Option<u32>,
+}
+
+// ---------------------------------------------------------------------------
+// Discover & Leaderboard params
+// ---------------------------------------------------------------------------
+
+/// Parameters for the strategy discover endpoint.
+#[derive(Debug, Default)]
+pub struct DiscoverParams {
+    pub sort: Option<String>,
+    pub category: Option<String>,
+    pub search: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+/// Parameters for the leaderboard endpoint.
+#[derive(Debug, Default)]
+pub struct LeaderboardParams {
+    pub period: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+// ---------------------------------------------------------------------------
+// Paper trading
+// ---------------------------------------------------------------------------
+
+/// Summary of the paper trading account.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PaperSummary {
+    #[serde(default)]
+    pub balance: f64,
+    #[serde(default)]
+    pub pnl: f64,
+    #[serde(default)]
+    pub trade_count: u64,
+    #[serde(default)]
+    pub open_positions: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Batch API
+// ---------------------------------------------------------------------------
+
+/// A single request item in a batch call.
+#[derive(Debug, Serialize)]
+pub struct BatchRequestItem {
+    pub method: String,
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<serde_json::Value>,
+}
+
+/// Response from a batch API call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchResponse {
+    pub results: Vec<BatchResultItem>,
+}
+
+/// Individual result within a batch response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchResultItem {
+    pub status: u16,
+    pub body: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace seller params
+// ---------------------------------------------------------------------------
+
+/// Parameters for creating a marketplace listing.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateListingParams {
+    pub strategy_id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub price_usdc: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+}
+
+/// Parameters for updating a marketplace listing.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateListingParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_usdc: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+}
+
+/// Parameters for rating a marketplace listing.
+#[derive(Debug, Serialize)]
+pub struct RateListingParams {
+    pub rating: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Strategy Execution Events (SSE)
 // ---------------------------------------------------------------------------
 
