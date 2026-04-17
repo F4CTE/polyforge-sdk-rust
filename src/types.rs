@@ -1381,6 +1381,32 @@ pub struct WhaleProfile {
     pub is_following: bool,
 }
 
+/// Parameters for fetching the whale-trade feed.
+#[derive(Debug, Default)]
+pub struct GetWhaleFeedParams {
+    /// Minimum trade size in USDC (e.g. `10000` for $10k+).
+    pub min_size: Option<u64>,
+    /// Filter by market ID.
+    pub market_id: Option<String>,
+    /// Filter by wallet address.
+    pub wallet_address: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+/// Parameters for fetching AI-powered news signals.
+#[derive(Debug, Default)]
+pub struct GetNewsSignalsParams {
+    /// Minimum confidence threshold (0–100).
+    pub min_confidence: Option<u32>,
+    /// Filter by market ID.
+    pub market_id: Option<String>,
+    /// Filter by direction: `"BUY"` or `"SELL"`.
+    pub direction: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
 /// Parameters for fetching top whale wallets.
 #[derive(Debug, Default)]
 pub struct GetTopWhalesParams {

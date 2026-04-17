@@ -805,7 +805,7 @@ impl PolyforgeClient {
 
     /// Report a strategy for violating guidelines.
     ///
-    /// `reason` should be one of `"SPAM"`, `"INAPPROPRIATE"`, `"MISLEADING"`, `"OTHER"`.
+    /// `reason` should be one of `"SPAM"`, `"MISLEADING"`, `"HARMFUL"`, `"OTHER"`.
     pub async fn report_strategy(
         &self,
         id: &str,
@@ -1207,11 +1207,21 @@ impl PolyforgeClient {
     /// Get the whale trade feed.
     pub async fn get_whale_feed(
         &self,
-        min_size: Option<u64>,
+        params: Option<&GetWhaleFeedParams>,
     ) -> Result<PaginatedResponse<WhaleTrade>> {
-        let qs = match min_size {
-            Some(s) => format!("?minSize={}", encode(&s.to_string())),
-            None => String::new(),
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(min_size) = p.min_size { qp.push(("minSize", min_size.to_string())); }
+            if let Some(ref market_id) = p.market_id { qp.push(("marketId", market_id.clone())); }
+            if let Some(ref wallet) = p.wallet_address { qp.push(("walletAddress", wallet.clone())); }
+            if let Some(page) = p.page { qp.push(("page", page.to_string())); }
+            if let Some(limit) = p.limit { qp.push(("limit", limit.to_string())); }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            format!("?{}", pairs.join("&"))
         };
         self.get(&format!("/api/v1/whales/feed{qs}")).await
     }
@@ -1262,11 +1272,21 @@ impl PolyforgeClient {
     /// Get AI-powered news signals.
     pub async fn get_news_signals(
         &self,
-        min_confidence: Option<u32>,
+        params: Option<&GetNewsSignalsParams>,
     ) -> Result<PaginatedResponse<NewsSignal>> {
-        let qs = match min_confidence {
-            Some(c) => format!("?minConfidence={}", encode(&c.to_string())),
-            None => String::new(),
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(c) = p.min_confidence { qp.push(("minConfidence", c.to_string())); }
+            if let Some(ref market_id) = p.market_id { qp.push(("marketId", market_id.clone())); }
+            if let Some(ref direction) = p.direction { qp.push(("direction", direction.clone())); }
+            if let Some(page) = p.page { qp.push(("page", page.to_string())); }
+            if let Some(limit) = p.limit { qp.push(("limit", limit.to_string())); }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            format!("?{}", pairs.join("&"))
         };
         self.get(&format!("/api/v1/news/signals{qs}")).await
     }
