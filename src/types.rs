@@ -1497,6 +1497,48 @@ pub struct RateListingParams {
 }
 
 // ---------------------------------------------------------------------------
+// Risk Settings
+// ---------------------------------------------------------------------------
+
+/// Current risk / circuit-breaker settings for the authenticated user.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RiskSettings {
+    #[serde(default)]
+    pub drawdown_enabled: bool,
+    #[serde(default = "default_lookback")]
+    pub drawdown_lookback_hours: u32,
+    /// Drawdown threshold as a decimal, e.g. 0.10 = 10%.
+    #[serde(default = "default_threshold")]
+    pub drawdown_threshold_pct: f64,
+    #[serde(default)]
+    pub circuit_breaker_tripped: bool,
+    #[serde(default)]
+    pub circuit_breaker_tripped_at: Option<String>,
+}
+
+fn default_lookback() -> u32 {
+    24
+}
+fn default_threshold() -> f64 {
+    0.1
+}
+
+/// Parameters for updating risk settings. Only supplied fields are changed.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateRiskSettingsParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drawdown_enabled: Option<bool>,
+    /// Lookback window in hours (1–168).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drawdown_lookback_hours: Option<u32>,
+    /// Drawdown threshold as a decimal, e.g. 0.10 = 10% (0.01–0.99).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drawdown_threshold_pct: Option<f64>,
+}
+
+// ---------------------------------------------------------------------------
 // Strategy Execution Events (SSE)
 // ---------------------------------------------------------------------------
 

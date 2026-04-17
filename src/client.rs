@@ -1077,6 +1077,32 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
+    // Risk Settings
+    // -----------------------------------------------------------------------
+
+    /// Get the current risk / circuit-breaker settings.
+    pub async fn get_risk_settings(&self) -> Result<RiskSettings> {
+        self.get("/api/v1/settings/risk").await
+    }
+
+    /// Update risk settings. Only supplied fields are changed.
+    pub async fn update_risk_settings(
+        &self,
+        params: &UpdateRiskSettingsParams,
+    ) -> Result<RiskSettings> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.patch("/api/v1/settings/risk", &body).await
+    }
+
+    /// Reset the circuit breaker after it has been tripped.
+    ///
+    /// Returns the updated risk settings with `circuit_breaker_tripped: false`.
+    pub async fn reset_circuit_breaker(&self) -> Result<RiskSettings> {
+        self.post("/api/v1/settings/risk/reset", &serde_json::Value::Object(Default::default()))
+            .await
+    }
+
+    // -----------------------------------------------------------------------
     // Arbitrage
     // -----------------------------------------------------------------------
 
@@ -3915,5 +3941,80 @@ mod tests {
         let body = serde_json::to_value(&params).unwrap();
         assert_eq!(body["rating"], 5);
         assert_eq!(body["review"], "Excellent!");
+    }
+
+    // ── Risk Settings (#124) ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_risk_settings_deserializes_full() {
+        let json = r#"{
+            "drawdownEnabled": true,
+            "drawdownLookbackHours": 8,
+            "drawdownThresholdPct": 0.15,
+            "circuitBreakerTripped": false,
+            "circuitBreakerTrippedAt": null
+        }"#;
+        let rs: RiskSettings = serde_json::from_str(json).unwrap();
+        assert!(rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 8);
+        assert!((rs.drawdown_threshold_pct - 0.15).abs() < f64::EPSILON);
+        assert!(!rs.circuit_breaker_tripped);
+        assert!(rs.circuit_breaker_tripped_at.is_none());
+    }
+
+    #[test]
+    fn test_risk_settings_deserializes_minimal() {
+        let json = r#"{}"#;
+        let rs: RiskSettings = serde_json::from_str(json).unwrap();
+        assert!(!rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 24);
+        assert!((rs.drawdown_threshold_pct - 0.1).abs() < f64::EPSILON);
+        assert!(!rs.circuit_breaker_tripped);
+    }
+
+    #[test]
+    fn test_risk_settings_with_tripped_at() {
+        let json = r#"{
+            "drawdownEnabled": true,
+            "drawdownLookbackHours": 24,
+            "drawdownThresholdPct": 0.10,
+            "circuitBreakerTripped": true,
+            "circuitBreakerTrippedAt": "2026-04-17T10:00:00Z"
+        }"#;
+        let rs: RiskSettings = serde_json::from_str(json).unwrap();
+        assert!(rs.circuit_breaker_tripped);
+        assert_eq!(rs.circuit_breaker_tripped_at.as_deref(), Some("2026-04-17T10:00:00Z"));
+    }
+
+    #[test]
+    fn test_update_risk_settings_params_omits_none_fields() {
+        let params = UpdateRiskSettingsParams {
+            drawdown_enabled: Some(true),
+            ..Default::default()
+        };
+        let body = serde_json::to_value(&params).unwrap();
+        assert_eq!(body["drawdownEnabled"], true);
+        assert!(body.get("drawdownLookbackHours").is_none());
+        assert!(body.get("drawdownThresholdPct").is_none());
+    }
+
+    #[test]
+    fn test_update_risk_settings_params_all_fields() {
+        let params = UpdateRiskSettingsParams {
+            drawdown_enabled: Some(false),
+            drawdown_lookback_hours: Some(8),
+            drawdown_threshold_pct: Some(0.2),
+        };
+        let body = serde_json::to_value(&params).unwrap();
+        assert_eq!(body["drawdownEnabled"], false);
+        assert_eq!(body["drawdownLookbackHours"], 8);
+        assert!((body["drawdownThresholdPct"].as_f64().unwrap() - 0.2).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_update_risk_settings_params_default_is_empty() {
+        let params = UpdateRiskSettingsParams::default();
+        let body = serde_json::to_value(&params).unwrap();
+        assert!(body.as_object().unwrap().is_empty());
     }
 }
