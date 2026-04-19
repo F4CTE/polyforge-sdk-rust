@@ -2,7 +2,7 @@
 name = "polyforge"
 version = "1.0.0"
 edition = "2021"
-license = "MIT"
+license = "Apache-2.0"
 description = "Rust SDK for the Polyforge trading platform REST API"
 keywords = ["polyforge", "trading", "api", "sdk", "async"]
 categories = ["api-bindings", "web-programming::http-client"]
