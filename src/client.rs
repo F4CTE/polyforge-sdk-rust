@@ -528,7 +528,7 @@ impl PolyforgeClient {
         &self,
         token_id: &str,
         params: Option<PriceHistoryParams>,
-    ) -> Result<Vec<PriceHistoryEntry>> {
+    ) -> Result<PriceHistoryResponse> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(ref p) = params {
             if let Some(ref r) = p.resolution {
@@ -771,12 +771,25 @@ impl PolyforgeClient {
         limit: Option<u32>,
     ) -> Result<serde_json::Value> {
         let mut qp: Vec<(&str, String)> = Vec::new();
-        if let Some(p) = page { qp.push(("page", p.to_string())); }
-        if let Some(l) = limit { qp.push(("limit", l.to_string())); }
-        let qs = if qp.is_empty() { String::new() } else {
-            format!("?{}", qp.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>().join("&"))
+        if let Some(p) = page {
+            qp.push(("page", p.to_string()));
+        }
+        if let Some(l) = limit {
+            qp.push(("limit", l.to_string()));
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "?{}",
+                qp.iter()
+                    .map(|(k, v)| format!("{}={}", k, v))
+                    .collect::<Vec<_>>()
+                    .join("&")
+            )
         };
-        self.get(&format!("/api/v1/strategies/{}/comments{}", encode(id), qs)).await
+        self.get(&format!("/api/v1/strategies/{}/comments{}", encode(id), qs))
+            .await
     }
 
     /// Add a comment to a strategy.
@@ -800,7 +813,8 @@ impl PolyforgeClient {
 
     /// List child strategies (forks) of a strategy.
     pub async fn list_strategy_children(&self, id: &str) -> Result<serde_json::Value> {
-        self.get(&format!("/api/v1/strategies/{}/children", encode(id))).await
+        self.get(&format!("/api/v1/strategies/{}/children", encode(id)))
+            .await
     }
 
     /// Report a strategy for violating guidelines.
@@ -816,7 +830,8 @@ impl PolyforgeClient {
         if let Some(d) = description {
             body["description"] = serde_json::json!(d);
         }
-        self.post(&format!("/api/v1/strategies/{}/report", encode(id)), &body).await
+        self.post(&format!("/api/v1/strategies/{}/report", encode(id)), &body)
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -825,13 +840,18 @@ impl PolyforgeClient {
 
     /// List all saved versions of a strategy.
     pub async fn list_strategy_versions(&self, id: &str) -> Result<serde_json::Value> {
-        self.get(&format!("/api/v1/strategies/{}/versions", encode(id))).await
+        self.get(&format!("/api/v1/strategies/{}/versions", encode(id)))
+            .await
     }
 
     /// Rollback a strategy to a previous version.
     pub async fn rollback_strategy(&self, id: &str, version_id: &str) -> Result<serde_json::Value> {
         self.post(
-            &format!("/api/v1/strategies/{}/versions/{}/rollback", encode(id), encode(version_id)),
+            &format!(
+                "/api/v1/strategies/{}/versions/{}/rollback",
+                encode(id),
+                encode(version_id)
+            ),
             &serde_json::json!({}),
         )
         .await
@@ -848,7 +868,12 @@ impl PolyforgeClient {
         limit: Option<u32>,
     ) -> Result<serde_json::Value> {
         let qs = limit.map_or(String::new(), |l| format!("?limit={}", l));
-        self.get(&format!("/api/v1/strategies/{}/event-log{}", encode(id), qs)).await
+        self.get(&format!(
+            "/api/v1/strategies/{}/event-log{}",
+            encode(id),
+            qs
+        ))
+        .await
     }
 
     // -----------------------------------------------------------------------
@@ -880,7 +905,8 @@ impl PolyforgeClient {
 
     /// Revoke an API key by ID. The key is permanently deactivated.
     pub async fn revoke_api_key(&self, id: &str) -> Result<()> {
-        self.delete(&format!("/api/v1/api-keys/{}", encode(id))).await
+        self.delete(&format!("/api/v1/api-keys/{}", encode(id)))
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -1098,8 +1124,11 @@ impl PolyforgeClient {
     ///
     /// Returns the updated risk settings with `circuit_breaker_tripped: false`.
     pub async fn reset_circuit_breaker(&self) -> Result<RiskSettings> {
-        self.post("/api/v1/settings/risk/reset", &serde_json::Value::Object(Default::default()))
-            .await
+        self.post(
+            "/api/v1/settings/risk/reset",
+            &serde_json::Value::Object(Default::default()),
+        )
+        .await
     }
 
     // -----------------------------------------------------------------------
@@ -1199,9 +1228,14 @@ impl PolyforgeClient {
     }
 
     /// Rate a purchased marketplace strategy (1–5 stars).
-    pub async fn rate_listing(&self, id: &str, params: &RateListingParams) -> Result<serde_json::Value> {
+    pub async fn rate_listing(
+        &self,
+        id: &str,
+        params: &RateListingParams,
+    ) -> Result<serde_json::Value> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post(&format!("/api/v1/marketplace/{}/rate", encode(id)), &body).await
+        self.post(&format!("/api/v1/marketplace/{}/rate", encode(id)), &body)
+            .await
     }
 
     /// List your own marketplace listings (sell-side).
@@ -1221,9 +1255,14 @@ impl PolyforgeClient {
     }
 
     /// Update an existing marketplace listing.
-    pub async fn update_listing(&self, id: &str, params: &UpdateListingParams) -> Result<MarketplaceListing> {
+    pub async fn update_listing(
+        &self,
+        id: &str,
+        params: &UpdateListingParams,
+    ) -> Result<MarketplaceListing> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.patch(&format!("/api/v1/marketplace/{}", encode(id)), &body).await
+        self.patch(&format!("/api/v1/marketplace/{}", encode(id)), &body)
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -1237,23 +1276,39 @@ impl PolyforgeClient {
     ) -> Result<PaginatedResponse<WhaleTrade>> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(p) = params {
-            if let Some(min_size) = p.min_size { qp.push(("minSize", min_size.to_string())); }
-            if let Some(ref market_id) = p.market_id { qp.push(("marketId", market_id.clone())); }
-            if let Some(ref wallet) = p.wallet_address { qp.push(("walletAddress", wallet.clone())); }
-            if let Some(page) = p.page { qp.push(("page", page.to_string())); }
-            if let Some(limit) = p.limit { qp.push(("limit", limit.to_string())); }
+            if let Some(min_size) = p.min_size {
+                qp.push(("minSize", min_size.to_string()));
+            }
+            if let Some(ref market_id) = p.market_id {
+                qp.push(("marketId", market_id.clone()));
+            }
+            if let Some(ref wallet) = p.wallet_address {
+                qp.push(("walletAddress", wallet.clone()));
+            }
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
         }
         let qs = if qp.is_empty() {
             String::new()
         } else {
-            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
             format!("?{}", pairs.join("&"))
         };
         self.get(&format!("/api/v1/whales/feed{qs}")).await
     }
 
     /// Get top whale wallets ranked by volume, PnL, win rate, or trade count.
-    pub async fn get_top_whales(&self, params: Option<&GetTopWhalesParams>) -> Result<Vec<WhaleProfile>> {
+    pub async fn get_top_whales(
+        &self,
+        params: Option<&GetTopWhalesParams>,
+    ) -> Result<Vec<WhaleProfile>> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(p) = params {
             if let Some(ref sort_by) = p.sort_by {
@@ -1269,7 +1324,10 @@ impl PolyforgeClient {
         let qs = if qp.is_empty() {
             String::new()
         } else {
-            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
             format!("?{}", pairs.join("&"))
         };
         self.get(&format!("/api/v1/whales/top{qs}")).await
@@ -1277,17 +1335,26 @@ impl PolyforgeClient {
 
     /// Get the full trading profile of a specific whale wallet.
     pub async fn get_whale_profile(&self, address: &str) -> Result<WhaleProfile> {
-        self.get(&format!("/api/v1/whales/{}", encode(address))).await
+        self.get(&format!("/api/v1/whales/{}", encode(address)))
+            .await
     }
 
     /// Follow a whale wallet to receive alerts when it trades.
     pub async fn follow_whale(&self, address: &str) -> Result<serde_json::Value> {
-        self.post(&format!("/api/v1/whales/{}/follow", encode(address)), &json!({})).await
+        self.post(
+            &format!("/api/v1/whales/{}/follow", encode(address)),
+            &json!({}),
+        )
+        .await
     }
 
     /// Unfollow a whale wallet.
     pub async fn unfollow_whale(&self, address: &str) -> Result<serde_json::Value> {
-        self.post(&format!("/api/v1/whales/{}/unfollow", encode(address)), &json!({})).await
+        self.post(
+            &format!("/api/v1/whales/{}/unfollow", encode(address)),
+            &json!({}),
+        )
+        .await
     }
 
     /// List whale wallets you are currently following.
@@ -1302,16 +1369,29 @@ impl PolyforgeClient {
     ) -> Result<PaginatedResponse<NewsSignal>> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(p) = params {
-            if let Some(c) = p.min_confidence { qp.push(("minConfidence", c.to_string())); }
-            if let Some(ref market_id) = p.market_id { qp.push(("marketId", market_id.clone())); }
-            if let Some(ref direction) = p.direction { qp.push(("direction", direction.clone())); }
-            if let Some(page) = p.page { qp.push(("page", page.to_string())); }
-            if let Some(limit) = p.limit { qp.push(("limit", limit.to_string())); }
+            if let Some(c) = p.min_confidence {
+                qp.push(("minConfidence", c.to_string()));
+            }
+            if let Some(ref market_id) = p.market_id {
+                qp.push(("marketId", market_id.clone()));
+            }
+            if let Some(ref direction) = p.direction {
+                qp.push(("direction", direction.clone()));
+            }
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
         }
         let qs = if qp.is_empty() {
             String::new()
         } else {
-            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
             format!("?{}", pairs.join("&"))
         };
         self.get(&format!("/api/v1/news/signals{qs}")).await
@@ -1322,36 +1402,64 @@ impl PolyforgeClient {
     // -----------------------------------------------------------------------
 
     /// Discover publicly shared strategies.
-    pub async fn discover_strategies(&self, params: Option<&DiscoverParams>) -> Result<serde_json::Value> {
+    pub async fn discover_strategies(
+        &self,
+        params: Option<&DiscoverParams>,
+    ) -> Result<serde_json::Value> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(p) = params {
-            if let Some(ref sort) = p.sort { qp.push(("sort", sort.clone())); }
-            if let Some(ref category) = p.category { qp.push(("category", category.clone())); }
-            if let Some(ref search) = p.search { qp.push(("search", search.clone())); }
-            if let Some(page) = p.page { qp.push(("page", page.to_string())); }
-            if let Some(limit) = p.limit { qp.push(("limit", limit.to_string())); }
+            if let Some(ref sort) = p.sort {
+                qp.push(("sort", sort.clone()));
+            }
+            if let Some(ref category) = p.category {
+                qp.push(("category", category.clone()));
+            }
+            if let Some(ref search) = p.search {
+                qp.push(("search", search.clone()));
+            }
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
         }
         let qs = if qp.is_empty() {
             String::new()
         } else {
-            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
             format!("?{}", pairs.join("&"))
         };
         self.get(&format!("/api/v1/discover{qs}")).await
     }
 
     /// Get the trader leaderboard ranked by realized P&L.
-    pub async fn get_leaderboard(&self, params: Option<&LeaderboardParams>) -> Result<serde_json::Value> {
+    pub async fn get_leaderboard(
+        &self,
+        params: Option<&LeaderboardParams>,
+    ) -> Result<serde_json::Value> {
         let mut qp: Vec<(&str, String)> = Vec::new();
         if let Some(p) = params {
-            if let Some(ref period) = p.period { qp.push(("period", period.clone())); }
-            if let Some(page) = p.page { qp.push(("page", page.to_string())); }
-            if let Some(limit) = p.limit { qp.push(("limit", limit.to_string())); }
+            if let Some(ref period) = p.period {
+                qp.push(("period", period.clone()));
+            }
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
         }
         let qs = if qp.is_empty() {
             String::new()
         } else {
-            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
             format!("?{}", pairs.join("&"))
         };
         self.get(&format!("/api/v1/leaderboard{qs}")).await
@@ -1407,19 +1515,26 @@ impl PolyforgeClient {
     }
 
     /// Update an existing copy trading configuration.
-    pub async fn update_copy_config(&self, id: &str, params: &UpdateCopyConfigParams) -> Result<CopyConfig> {
+    pub async fn update_copy_config(
+        &self,
+        id: &str,
+        params: &UpdateCopyConfigParams,
+    ) -> Result<CopyConfig> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.patch(&format!("/api/v1/copy/{}", encode(id)), &body).await
+        self.patch(&format!("/api/v1/copy/{}", encode(id)), &body)
+            .await
     }
 
     /// Pause a copy trading configuration.
     pub async fn pause_copy_config(&self, id: &str) -> Result<CopyConfig> {
-        self.post(&format!("/api/v1/copy/{}/pause", encode(id)), &json!({})).await
+        self.post(&format!("/api/v1/copy/{}/pause", encode(id)), &json!({}))
+            .await
     }
 
     /// Resume a paused copy trading configuration.
     pub async fn resume_copy_config(&self, id: &str) -> Result<CopyConfig> {
-        self.post(&format!("/api/v1/copy/{}/resume", encode(id)), &json!({})).await
+        self.post(&format!("/api/v1/copy/{}/resume", encode(id)), &json!({}))
+            .await
     }
 
     /// Delete (stop) a copy trading configuration.
@@ -1445,10 +1560,14 @@ impl PolyforgeClient {
         let qs = if qp.is_empty() {
             String::new()
         } else {
-            let pairs: Vec<String> = qp.iter().map(|(k, v)| format!("{}={}", k, encode(v))).collect();
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
             format!("?{}", pairs.join("&"))
         };
-        self.get(&format!("/api/v1/copy/{}/trades{qs}", encode(id))).await
+        self.get(&format!("/api/v1/copy/{}/trades{qs}", encode(id)))
+            .await
     }
 
     /// List registered webhooks.
@@ -2583,8 +2702,14 @@ mod tests {
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["marketId"], "mkt-abc");
         assert_eq!(json["tokenId"], "tok-1");
-        assert!(json.get("market_id").is_none(), "must use camelCase marketId");
-        assert!(json.get("orderType").is_none(), "None fields should be skipped");
+        assert!(
+            json.get("market_id").is_none(),
+            "must use camelCase marketId"
+        );
+        assert!(
+            json.get("orderType").is_none(),
+            "None fields should be skipped"
+        );
     }
 
     #[test]
@@ -3348,6 +3473,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_price_history_entry_deserializes() {
         let json = r#"{"timestamp": "2026-01-15T12:00:00Z", "price": 0.65, "volume": 1234.5}"#;
         let entry: PriceHistoryEntry = serde_json::from_str(json).unwrap();
@@ -3357,6 +3483,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_price_history_entry_deserializes_without_volume() {
         let json = r#"{"timestamp": "2026-01-15T12:00:00Z", "price": 0.42}"#;
         let entry: PriceHistoryEntry = serde_json::from_str(json).unwrap();
@@ -3366,6 +3493,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_price_history_vec_deserializes() {
         let json = r#"[
             {"timestamp": "2026-01-15T12:00:00Z", "price": 0.65},
@@ -3376,6 +3504,87 @@ mod tests {
         assert!((entries[1].price - 0.67).abs() < f64::EPSILON);
         assert!(entries[0].volume.is_none());
         assert!(entries[1].volume.is_some());
+    }
+
+    #[test]
+    fn test_candle_deserializes_string_fields() {
+        let json = r#"{
+            "time": "2026-04-19T12:00:00.000Z",
+            "open": "0.65",
+            "high": "0.72",
+            "low": "0.63",
+            "close": "0.70",
+            "volume": "1500"
+        }"#;
+        let candle: Candle = serde_json::from_str(json).unwrap();
+        assert_eq!(candle.time, "2026-04-19T12:00:00.000Z");
+        assert!((candle.open - 0.65).abs() < f64::EPSILON);
+        assert!((candle.high - 0.72).abs() < f64::EPSILON);
+        assert!((candle.low - 0.63).abs() < f64::EPSILON);
+        assert!((candle.close - 0.70).abs() < f64::EPSILON);
+        assert!((candle.volume - 1500.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_candle_deserializes_zero_defaults() {
+        let json = r#"{
+            "time": "2026-04-19T12:00:00.000Z",
+            "open": "0",
+            "high": "0",
+            "low": "0",
+            "close": "0",
+            "volume": "0"
+        }"#;
+        let candle: Candle = serde_json::from_str(json).unwrap();
+        assert!((candle.open).abs() < f64::EPSILON);
+        assert!((candle.volume).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_price_history_response_deserializes() {
+        let json = r#"{
+            "tokenId": "token-abc",
+            "resolution": "1h",
+            "hasGaps": false,
+            "data": [
+                {
+                    "time": "2026-04-19T12:00:00.000Z",
+                    "open": "0.65",
+                    "high": "0.72",
+                    "low": "0.63",
+                    "close": "0.70",
+                    "volume": "1500"
+                },
+                {
+                    "time": "2026-04-19T13:00:00.000Z",
+                    "open": "0.70",
+                    "high": "0.75",
+                    "low": "0.68",
+                    "close": "0.73",
+                    "volume": "2000"
+                }
+            ]
+        }"#;
+        let resp: PriceHistoryResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.token_id, "token-abc");
+        assert_eq!(resp.resolution, "1h");
+        assert!(!resp.has_gaps);
+        assert_eq!(resp.data.len(), 2);
+        assert!((resp.data[0].close - 0.70).abs() < f64::EPSILON);
+        assert!((resp.data[1].volume - 2000.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_price_history_response_with_gaps() {
+        let json = r#"{
+            "tokenId": "token-xyz",
+            "resolution": "1d",
+            "hasGaps": true,
+            "data": []
+        }"#;
+        let resp: PriceHistoryResponse = serde_json::from_str(json).unwrap();
+        assert!(resp.has_gaps);
+        assert!(resp.data.is_empty());
     }
 
     #[test]
@@ -3850,7 +4059,10 @@ mod tests {
             ..Default::default()
         };
         let body = serde_json::to_value(&params).unwrap();
-        assert_eq!(body["targetWallet"], "0xabcdef1234567890abcdef1234567890abcdef12");
+        assert_eq!(
+            body["targetWallet"],
+            "0xabcdef1234567890abcdef1234567890abcdef12"
+        );
         assert_eq!(body["mode"], "PERCENTAGE");
     }
 
@@ -4023,7 +4235,10 @@ mod tests {
         }"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
         assert!(rs.circuit_breaker_tripped);
-        assert_eq!(rs.circuit_breaker_tripped_at.as_deref(), Some("2026-04-17T10:00:00Z"));
+        assert_eq!(
+            rs.circuit_breaker_tripped_at.as_deref(),
+            Some("2026-04-17T10:00:00Z")
+        );
     }
 
     #[test]

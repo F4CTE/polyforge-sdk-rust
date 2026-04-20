@@ -1124,7 +1124,45 @@ pub struct PriceHistoryParams {
     pub limit: Option<u32>,
 }
 
-/// A single price history entry (candle).
+fn deserialize_string_as_f64<'de, D>(deserializer: D) -> std::result::Result<f64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    s.parse::<f64>().map_err(serde::de::Error::custom)
+}
+
+/// A single OHLCV candle returned by the price-history endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Candle {
+    pub time: String,
+    #[serde(deserialize_with = "deserialize_string_as_f64")]
+    pub open: f64,
+    #[serde(deserialize_with = "deserialize_string_as_f64")]
+    pub high: f64,
+    #[serde(deserialize_with = "deserialize_string_as_f64")]
+    pub low: f64,
+    #[serde(deserialize_with = "deserialize_string_as_f64")]
+    pub close: f64,
+    #[serde(deserialize_with = "deserialize_string_as_f64")]
+    pub volume: f64,
+}
+
+/// Envelope returned by `GET /api/v1/markets/{tokenId}/price-history`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PriceHistoryResponse {
+    pub token_id: String,
+    pub resolution: String,
+    pub has_gaps: bool,
+    pub data: Vec<Candle>,
+}
+
+#[deprecated(
+    since = "1.8.0",
+    note = "Use `Candle` instead — the platform returns OHLCV data"
+)]
+/// Legacy type — does not match the platform's OHLCV response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PriceHistoryEntry {
