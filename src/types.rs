@@ -521,6 +521,8 @@ pub struct MergePositionParams {
 /// Parameters for placing a direct order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlaceOrderParams {
+    #[serde(rename = "marketId")]
+    pub market_id: String,
     #[serde(rename = "tokenId")]
     pub token_id: String,
     pub side: String,

@@ -2536,6 +2536,7 @@ mod tests {
     #[test]
     fn test_place_order_params_validation_rejects_nan_size() {
         let params = PlaceOrderParams {
+            market_id: "m1".into(),
             token_id: "t1".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
@@ -2553,6 +2554,7 @@ mod tests {
     #[test]
     fn test_place_order_params_validation_rejects_negative_price() {
         let params = PlaceOrderParams {
+            market_id: "m1".into(),
             token_id: "t1".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
@@ -2565,6 +2567,24 @@ mod tests {
         let err = rt.block_on(client.place_order(&params)).unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
         assert!(err.to_string().contains("price"));
+    }
+
+    #[test]
+    fn test_place_order_params_serializes_market_id() {
+        let params = PlaceOrderParams {
+            market_id: "mkt-abc".into(),
+            token_id: "tok-1".into(),
+            side: "BUY".into(),
+            outcome: "YES".into(),
+            size: 25.0,
+            price: 0.65,
+            order_type: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["marketId"], "mkt-abc");
+        assert_eq!(json["tokenId"], "tok-1");
+        assert!(json.get("market_id").is_none(), "must use camelCase marketId");
+        assert!(json.get("orderType").is_none(), "None fields should be skipped");
     }
 
     #[test]
