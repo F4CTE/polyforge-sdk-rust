@@ -185,6 +185,38 @@ pub enum TradingMode {
     Paper,
 }
 
+/// Request body for `POST /api/v1/strategies/{id}/start`.
+///
+/// The platform expects `paperMode` + optional `deploymentMode`, not the legacy
+/// `mode` string. Use [`StartStrategyParams::live`] / [`StartStrategyParams::paper`]
+/// or construct directly. `TradingMode` converts into this via `From`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StartStrategyParams {
+    pub paper_mode: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deployment_mode: Option<String>,
+}
+
+impl StartStrategyParams {
+    pub fn live() -> Self {
+        Self { paper_mode: false, deployment_mode: Some("LIVE".to_string()) }
+    }
+
+    pub fn paper() -> Self {
+        Self { paper_mode: true, deployment_mode: Some("SIMULATION".to_string()) }
+    }
+}
+
+impl From<TradingMode> for StartStrategyParams {
+    fn from(mode: TradingMode) -> Self {
+        match mode {
+            TradingMode::Live => Self::live(),
+            TradingMode::Paper => Self::paper(),
+        }
+    }
+}
+
 /// A trading strategy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

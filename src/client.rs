@@ -637,14 +637,17 @@ impl PolyforgeClient {
 
     /// Start a strategy in the given trading mode.
     ///
+    /// Accepts a [`StartStrategyParams`] or anything that converts into one
+    /// (e.g. `TradingMode::Live.into()`).
+    ///
     /// Returns a [`StrategyStatusResponse`] with the new status and `startedAt`
     /// timestamp — not a full [`Strategy`] object.
     pub async fn start_strategy(
         &self,
         id: &str,
-        mode: TradingMode,
+        params: impl Into<StartStrategyParams>,
     ) -> Result<StrategyStatusResponse> {
-        let body = json!({ "mode": mode });
+        let body = serde_json::to_value(params.into())?;
         self.post(&format!("/api/v1/strategies/{}/start", encode(id)), &body)
             .await
     }
@@ -2430,15 +2433,50 @@ mod tests {
         }
     }
 
-    // --- Platform contract compliance regression tests (#89-#92) ---
+    // --- Platform contract compliance regression tests (#89-#92, #145) ---
 
     #[test]
     fn test_trading_mode_serializes_lowercase() {
-        // #92: Platform expects "live"/"paper", not "LIVE"/"PAPER"
+        // #92: TradingMode still deserializes from Strategy response fields
         let live = serde_json::to_value(TradingMode::Live).unwrap();
         assert_eq!(live, serde_json::Value::String("live".to_string()));
         let paper = serde_json::to_value(TradingMode::Paper).unwrap();
         assert_eq!(paper, serde_json::Value::String("paper".to_string()));
+    }
+
+    #[test]
+    fn test_start_strategy_params_serializes_platform_contract() {
+        // #145: start_strategy must send {paperMode, deploymentMode}, not {mode}
+        let live = serde_json::to_value(StartStrategyParams::live()).unwrap();
+        assert_eq!(live["paperMode"], serde_json::Value::Bool(false));
+        assert_eq!(live["deploymentMode"], serde_json::Value::String("LIVE".to_string()));
+        assert!(live.get("mode").is_none(), "legacy 'mode' field must not be present");
+
+        let paper = serde_json::to_value(StartStrategyParams::paper()).unwrap();
+        assert_eq!(paper["paperMode"], serde_json::Value::Bool(true));
+        assert_eq!(paper["deploymentMode"], serde_json::Value::String("SIMULATION".to_string()));
+        assert!(paper.get("mode").is_none(), "legacy 'mode' field must not be present");
+    }
+
+    #[test]
+    fn test_trading_mode_converts_to_start_strategy_params() {
+        // #145: TradingMode::into() must produce correct StartStrategyParams
+        let params: StartStrategyParams = TradingMode::Live.into();
+        assert!(!params.paper_mode);
+        assert_eq!(params.deployment_mode.as_deref(), Some("LIVE"));
+
+        let params: StartStrategyParams = TradingMode::Paper.into();
+        assert!(params.paper_mode);
+        assert_eq!(params.deployment_mode.as_deref(), Some("SIMULATION"));
+    }
+
+    #[test]
+    fn test_start_strategy_params_no_deployment_mode_omitted() {
+        // deployment_mode is optional — omit when None
+        let params = StartStrategyParams { paper_mode: false, deployment_mode: None };
+        let v = serde_json::to_value(&params).unwrap();
+        assert_eq!(v["paperMode"], serde_json::Value::Bool(false));
+        assert!(v.get("deploymentMode").is_none());
     }
 
     #[test]
