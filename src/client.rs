@@ -4144,22 +4144,24 @@ mod tests {
     #[test]
     fn test_batch_request_item_serializes() {
         let item = BatchRequestItem {
+            id: "req-1".to_string(),
             method: "GET".to_string(),
             path: "/api/v1/portfolio".to_string(),
             body: None,
         };
         let val = serde_json::to_value(&item).unwrap();
+        assert_eq!(val["id"], "req-1");
         assert_eq!(val["method"], "GET");
         assert_eq!(val["path"], "/api/v1/portfolio");
-        // body is None — skip_serializing_if should omit it
         assert!(val.get("body").is_none());
     }
 
     #[test]
     fn test_batch_response_deserializes() {
-        let json = r#"{"results":[{"status":200,"body":{"ok":true}}]}"#;
+        let json = r#"{"results":[{"id":"req-1","status":200,"body":{"ok":true}}]}"#;
         let resp: BatchResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.results.len(), 1);
+        assert_eq!(resp.results[0].id, "req-1");
         assert_eq!(resp.results[0].status, 200);
     }
 

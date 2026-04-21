@@ -1513,6 +1513,7 @@ pub struct PaperSummary {
 /// A single request item in a batch call.
 #[derive(Debug, Serialize)]
 pub struct BatchRequestItem {
+    pub id: String,
     pub method: String,
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1528,6 +1529,7 @@ pub struct BatchResponse {
 /// Individual result within a batch response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResultItem {
+    pub id: String,
     pub status: u16,
     pub body: serde_json::Value,
 }
