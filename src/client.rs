@@ -4291,4 +4291,30 @@ mod tests {
             "title must be in the typed field, not extra"
         );
     }
+
+    #[test]
+    fn test_market_deserializes_tokens_array() {
+        // #141: platform returns "tokens: Token[]" not "baseToken"/"quoteToken"
+        let json = r#"{
+            "id": "mkt-2",
+            "title": "Will ETH flip BTC?",
+            "tokens": [
+                {"id": "tok-yes", "outcome": "Yes", "price": 0.6},
+                {"id": "tok-no",  "outcome": "No",  "price": 0.4}
+            ]
+        }"#;
+        let market: Market = serde_json::from_str(json).unwrap();
+        assert_eq!(market.tokens.len(), 2);
+        assert_eq!(market.tokens[0].id, "tok-yes");
+        assert_eq!(market.tokens[0].outcome.as_deref(), Some("Yes"));
+        assert_eq!(market.tokens[1].id, "tok-no");
+        // tokens must NOT fall through to extra
+        assert!(
+            market.extra.get("tokens").is_none(),
+            "tokens must be in the typed field, not extra"
+        );
+        // legacy fields must not exist
+        assert!(market.extra.get("baseToken").is_none());
+        assert!(market.extra.get("quoteToken").is_none());
+    }
 }

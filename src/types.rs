@@ -41,10 +41,8 @@ pub struct Market {
     pub change_24h: Option<String>,
     #[serde(default)]
     pub liquidity: Option<String>,
-    #[serde(rename = "baseToken", default)]
-    pub base_token: Option<serde_json::Value>,
-    #[serde(rename = "quoteToken", default)]
-    pub quote_token: Option<serde_json::Value>,
+    #[serde(default)]
+    pub tokens: Vec<Token>,
     #[serde(rename = "createdAt", default)]
     pub created_at: Option<String>,
     #[serde(default)]
