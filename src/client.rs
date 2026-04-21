@@ -4272,4 +4272,23 @@ mod tests {
         let body = serde_json::to_value(&params).unwrap();
         assert!(body.as_object().unwrap().is_empty());
     }
+
+    // ── Market title field (#141) ────────────────────────────────────────────
+
+    #[test]
+    fn test_market_deserializes_title_field() {
+        // #141: platform returns "title", not "name"; field was renamed accordingly
+        let json = r#"{
+            "id": "mkt-1",
+            "title": "Will BTC hit $100k by end of 2025?"
+        }"#;
+        let market: Market = serde_json::from_str(json).unwrap();
+        assert_eq!(market.id, "mkt-1");
+        assert_eq!(market.title, "Will BTC hit $100k by end of 2025?");
+        // title must NOT fall through to the extra catch-all
+        assert!(
+            market.extra.get("title").is_none(),
+            "title must be in the typed field, not extra"
+        );
+    }
 }

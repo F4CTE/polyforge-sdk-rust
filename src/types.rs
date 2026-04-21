@@ -30,7 +30,7 @@ pub struct PaginatedResponse<T> {
 #[serde(rename_all = "camelCase")]
 pub struct Market {
     pub id: String,
-    pub name: String,
+    pub title: String,
     #[serde(default)]
     pub category: Option<String>,
     #[serde(default)]
