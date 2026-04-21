@@ -541,6 +541,19 @@ pub struct PlaceOrderResponse {
     pub status: String,
 }
 
+/// Response from redeeming a resolved position.
+///
+/// The platform `/api/v1/orders/redeem` returns `{ positionId, intentId, status }`,
+/// which is distinct from `PlaceOrderResponse` (which carries `orderId`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedeemPositionResponse {
+    #[serde(rename = "positionId")]
+    pub position_id: String,
+    #[serde(rename = "intentId")]
+    pub intent_id: String,
+    pub status: String,
+}
+
 /// Response from cancelling an order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CancelOrderResponse {

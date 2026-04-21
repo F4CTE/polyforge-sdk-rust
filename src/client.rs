@@ -1057,7 +1057,7 @@ impl PolyforgeClient {
     pub async fn redeem_position(
         &self,
         params: &RedeemPositionParams,
-    ) -> Result<PlaceOrderResponse> {
+    ) -> Result<RedeemPositionResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/orders/redeem", &body).await
     }
@@ -3256,6 +3256,16 @@ mod tests {
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["positionId"], "pos-123");
         assert!(json.get("marketId").is_none());
+    }
+
+    #[test]
+    fn test_redeem_position_response_deserializes_position_id() {
+        // #150: platform returns positionId, not orderId — PlaceOrderResponse would fail here
+        let json = r#"{"positionId":"pos-abc","intentId":"int-xyz","status":"REDEEMED"}"#;
+        let resp: RedeemPositionResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.position_id, "pos-abc");
+        assert_eq!(resp.intent_id, "int-xyz");
+        assert_eq!(resp.status, "REDEEMED");
     }
 
     #[test]
