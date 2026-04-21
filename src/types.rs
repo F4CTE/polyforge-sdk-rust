@@ -174,13 +174,48 @@ pub struct CalcBlock {
     pub extra: serde_json::Value,
 }
 
-/// Trading mode used when starting a strategy.
+/// Trading mode read from a strategy response.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TradingMode {
     #[serde(rename = "live")]
     Live,
     #[serde(rename = "paper")]
     Paper,
+}
+
+/// Deployment mode sent when starting a strategy.
+///
+/// Platform contract: `"LIVE"` or `"SIMULATION"`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum DeploymentMode {
+    #[serde(rename = "LIVE")]
+    Live,
+    #[serde(rename = "SIMULATION")]
+    Simulation,
+}
+
+/// Parameters for [`PolyforgeClient::start_strategy`].
+///
+/// Platform contract (POST `/api/v1/strategies/{id}/start`):
+/// `{ "paperMode": bool, "deploymentMode"?: "LIVE"|"SIMULATION" }`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartStrategyParams {
+    pub paper_mode: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deployment_mode: Option<DeploymentMode>,
+}
+
+impl StartStrategyParams {
+    /// Convenience constructor: paper trading with no explicit deployment mode.
+    pub fn paper() -> Self {
+        Self { paper_mode: true, deployment_mode: None }
+    }
+
+    /// Convenience constructor: live trading with no explicit deployment mode.
+    pub fn live() -> Self {
+        Self { paper_mode: false, deployment_mode: None }
+    }
 }
 
 /// A trading strategy.
