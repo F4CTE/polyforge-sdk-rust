@@ -1571,23 +1571,13 @@ pub struct RateListingParams {
 #[serde(rename_all = "camelCase")]
 pub struct RiskSettings {
     #[serde(default)]
-    pub drawdown_enabled: bool,
-    #[serde(default = "default_lookback")]
-    pub drawdown_lookback_hours: u32,
-    /// Drawdown threshold as a decimal, e.g. 0.10 = 10%.
-    #[serde(default = "default_threshold")]
-    pub drawdown_threshold_pct: f64,
+    pub daily_loss_limit: String,
     #[serde(default)]
-    pub circuit_breaker_tripped: bool,
+    pub max_position_size: String,
     #[serde(default)]
-    pub circuit_breaker_tripped_at: Option<String>,
-}
-
-fn default_lookback() -> u32 {
-    24
-}
-fn default_threshold() -> f64 {
-    0.1
+    pub max_bets_per_day: u32,
+    #[serde(default)]
+    pub circuit_breaker_triggered: bool,
 }
 
 /// Parameters for updating risk settings. Only supplied fields are changed.
@@ -1595,13 +1585,11 @@ fn default_threshold() -> f64 {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRiskSettingsParams {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub drawdown_enabled: Option<bool>,
-    /// Lookback window in hours (1–168).
+    pub daily_loss_limit: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub drawdown_lookback_hours: Option<u32>,
-    /// Drawdown threshold as a decimal, e.g. 0.10 = 10% (0.01–0.99).
+    pub max_position_size: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub drawdown_threshold_pct: Option<f64>,
+    pub max_bets_per_day: Option<u32>,
 }
 
 // ---------------------------------------------------------------------------
