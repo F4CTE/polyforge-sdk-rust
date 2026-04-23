@@ -2081,6 +2081,49 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
+    // Rewards
+    // -----------------------------------------------------------------------
+
+    /// List all markets that have active liquidity rewards.
+    pub async fn list_rewards_markets(&self) -> Result<Vec<RewardMarket>> {
+        self.get("/api/v1/rewards/markets").await
+    }
+
+    /// Get reward details for a specific market by condition ID.
+    pub async fn get_rewards_for_market(&self, condition_id: &str) -> Result<RewardMarketDetail> {
+        self.get(&format!(
+            "/api/v1/rewards/markets/{}",
+            encode(condition_id)
+        ))
+        .await
+    }
+
+    /// Get the authenticated user's rewards.
+    pub async fn get_user_rewards(&self) -> Result<UserRewards> {
+        self.get("/api/v1/rewards/user").await
+    }
+
+    /// Get the authenticated user's total accumulated rewards.
+    pub async fn get_user_rewards_total(&self) -> Result<UserRewardsTotal> {
+        self.get("/api/v1/rewards/user/total").await
+    }
+
+    /// Get the authenticated user's reward percentages.
+    pub async fn get_user_rewards_percentages(&self) -> Result<UserRewardsPercentages> {
+        self.get("/api/v1/rewards/user/percentages").await
+    }
+
+    /// Get the authenticated user's rewards broken down by market.
+    pub async fn get_user_rewards_per_market(&self) -> Result<UserRewardsPerMarket> {
+        self.get("/api/v1/rewards/user/markets").await
+    }
+
+    /// Get the authenticated user's trading fee rebates.
+    pub async fn get_rebates(&self) -> Result<Rebates> {
+        self.get("/api/v1/rewards/rebates").await
+    }
+
+    // -----------------------------------------------------------------------
     // Strategy Execution Watching (SSE)
     // -----------------------------------------------------------------------
 
@@ -4723,5 +4766,74 @@ mod tests {
     fn test_get_polymarket_activity_params_default() {
         let params = GetPolymarketActivityParams::default();
         assert!(params.activity_type.is_none());
+    }
+
+    // ── Rewards types (#152) ────────────────────────────────────────────
+
+    #[test]
+    fn test_user_rewards_deserializes() {
+        let json = r#"{"rewards": [{"id": "r1", "amount": "42.5"}]}"#;
+        let ur: UserRewards = serde_json::from_str(json).unwrap();
+        assert_eq!(ur.rewards.len(), 1);
+        assert_eq!(ur.rewards[0]["id"], "r1");
+    }
+
+    #[test]
+    fn test_user_rewards_deserializes_empty() {
+        let json = r#"{"rewards": []}"#;
+        let ur: UserRewards = serde_json::from_str(json).unwrap();
+        assert!(ur.rewards.is_empty());
+    }
+
+    #[test]
+    fn test_user_rewards_total_deserializes() {
+        let json = r#"{"total": "123.45", "byDate": [{"date": "2026-04-01", "amount": "10"}]}"#;
+        let t: UserRewardsTotal = serde_json::from_str(json).unwrap();
+        assert_eq!(t.total.as_deref(), Some("123.45"));
+        assert_eq!(t.by_date.len(), 1);
+    }
+
+    #[test]
+    fn test_user_rewards_total_defaults() {
+        let json = r#"{}"#;
+        let t: UserRewardsTotal = serde_json::from_str(json).unwrap();
+        assert_eq!(t.total, None);
+        assert!(t.by_date.is_empty());
+    }
+
+    #[test]
+    fn test_user_rewards_per_market_deserializes() {
+        let json = r#"{"markets": [{"conditionId": "c1", "amount": "5"}]}"#;
+        let m: UserRewardsPerMarket = serde_json::from_str(json).unwrap();
+        assert_eq!(m.markets.len(), 1);
+    }
+
+    #[test]
+    fn test_rebates_deserializes() {
+        let json = r#"{"rebates": [{"id": "rb1", "amount": "0.5"}]}"#;
+        let r: Rebates = serde_json::from_str(json).unwrap();
+        assert_eq!(r.rebates.len(), 1);
+    }
+
+    #[test]
+    fn test_rebates_empty() {
+        let json = r#"{"rebates": []}"#;
+        let r: Rebates = serde_json::from_str(json).unwrap();
+        assert!(r.rebates.is_empty());
+    }
+
+    #[test]
+    fn test_reward_market_captures_extra_fields() {
+        let json = r#"{"conditionId": "cond-1", "dailyRate": "0.05", "unknown": true}"#;
+        let rm: RewardMarket = serde_json::from_str(json).unwrap();
+        assert_eq!(rm.extra["conditionId"], "cond-1");
+        assert_eq!(rm.extra["unknown"], true);
+    }
+
+    #[test]
+    fn test_user_rewards_percentages_captures_dynamic_keys() {
+        let json = r#"{"marketA": 0.5, "marketB": 0.3}"#;
+        let p: UserRewardsPercentages = serde_json::from_str(json).unwrap();
+        assert_eq!(p.extra["marketA"], 0.5);
     }
 }

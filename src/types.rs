@@ -1883,6 +1883,69 @@ pub struct GetPolymarketActivityParams {
 }
 
 // ---------------------------------------------------------------------------
+// Rewards
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RewardMarket {
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RewardMarketDetail {
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserRewards {
+    #[serde(default)]
+    pub rewards: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserRewardsTotal {
+    #[serde(default)]
+    pub total: Option<String>,
+    #[serde(rename = "byDate", default)]
+    pub by_date: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserRewardsPercentages {
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserRewardsPerMarket {
+    #[serde(default)]
+    pub markets: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Rebates {
+    #[serde(default)]
+    pub rebates: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
 // Strategy Execution Events (SSE)
 // ---------------------------------------------------------------------------
 
