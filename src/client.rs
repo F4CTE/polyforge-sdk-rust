@@ -416,6 +416,22 @@ impl PolyforgeClient {
         self.handle_response(resp).await
     }
 
+    async fn delete_with_body<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<T> {
+        let resp = self
+            .http
+            .delete(self.url(path))
+            .header(AUTHORIZATION, self.auth_header()?)
+            .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+            .json(body)
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
     async fn handle_response<T: serde::de::DeserializeOwned>(
         &self,
         resp: reqwest::Response,
@@ -566,6 +582,78 @@ impl PolyforgeClient {
     pub async fn get_order_book(&self, token_id: &str) -> Result<OrderBook> {
         self.get(&format!("/api/v1/markets/{}/book", encode(token_id)))
             .await
+    }
+
+    /// Full-text search across all markets.
+    pub async fn search_markets(
+        &self,
+        params: &SearchMarketsParams,
+    ) -> Result<PaginatedResponse<Market>> {
+        let mut qp: Vec<(&str, String)> = vec![("q", params.q.clone())];
+        if let Some(l) = params.limit {
+            qp.push(("limit", l.to_string()));
+        }
+        let pairs: Vec<String> = qp
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, encode(v)))
+            .collect();
+        let qs = format!("?{}", pairs.join("&"));
+        self.get(&format!("/api/v1/markets/search{qs}")).await
+    }
+
+    /// Get the minimum price tick size for a market token.
+    pub async fn get_tick_size(&self, token_id: &str) -> Result<TickSizeResponse> {
+        self.get(&format!("/api/v1/markets/{}/tick-size", encode(token_id)))
+            .await
+    }
+
+    /// Get the current bid-ask spread for a market token.
+    pub async fn get_spread(&self, token_id: &str) -> Result<SpreadResponse> {
+        self.get(&format!("/api/v1/markets/{}/spread", encode(token_id)))
+            .await
+    }
+
+    /// Get the current midpoint price for a market token.
+    pub async fn get_midpoint(&self, token_id: &str) -> Result<MidpointResponse> {
+        self.get(&format!("/api/v1/markets/{}/midpoint", encode(token_id)))
+            .await
+    }
+
+    /// Get the full CLOB order book for a market token.
+    pub async fn get_clob_book(&self, token_id: &str) -> Result<ClobBook> {
+        self.get(&format!("/api/v1/markets/{}/clob-book", encode(token_id)))
+            .await
+    }
+
+    /// Get CLOB price history for a market token.
+    pub async fn get_clob_prices_history(
+        &self,
+        token_id: &str,
+        params: Option<ClobPricesHistoryParams>,
+    ) -> Result<Vec<ClobPricePoint>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(ref p) = params {
+            if let Some(ref interval) = p.interval {
+                qp.push(("interval", interval.clone()));
+            }
+            if let Some(fidelity) = p.fidelity {
+                qp.push(("fidelity", fidelity.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!(
+            "/api/v1/markets/{}/clob-prices-history{qs}",
+            encode(token_id)
+        ))
+        .await
     }
 
     // -----------------------------------------------------------------------
@@ -1023,9 +1111,30 @@ impl PolyforgeClient {
         self.get(&format!("/api/v1/orders{qs}")).await
     }
 
-    /// Get the trader score / reputation.
+    /// Get the trader score / reputation for the authenticated user.
     pub async fn get_score(&self) -> Result<TraderScore> {
         self.get("/api/v1/scores/me").await
+    }
+
+    /// Get the global scores leaderboard.
+    pub async fn get_scores_top(&self) -> Result<PaginatedResponse<ScoreEntry>> {
+        self.get("/api/v1/scores/top").await
+    }
+
+    /// Get the badges awarded to the authenticated user.
+    pub async fn get_my_badges(&self) -> Result<Vec<Badge>> {
+        self.get("/api/v1/scores/me/badges").await
+    }
+
+    /// Get the score for a specific user.
+    pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
+        self.get(&format!("/api/v1/scores/{}", encode(user_id))).await
+    }
+
+    /// Get the badges awarded to a specific user.
+    pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
+        self.get(&format!("/api/v1/scores/{}/badges", encode(user_id)))
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -1048,6 +1157,21 @@ impl PolyforgeClient {
     pub async fn cancel_order(&self, order_id: &str) -> Result<CancelOrderResponse> {
         self.delete(&format!("/api/v1/orders/{}", encode(order_id)))
             .await
+    }
+
+    /// Place up to 15 orders in a single batch request.
+    pub async fn batch_orders(&self, params: &BatchOrdersParams) -> Result<BatchOrdersResponse> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/orders/batch", &body).await
+    }
+
+    /// Cancel up to 3 000 orders in a single bulk request.
+    pub async fn bulk_cancel_orders(
+        &self,
+        params: &BulkCancelParams,
+    ) -> Result<BulkCancelResponse> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.delete_with_body("/api/v1/orders/bulk", &body).await
     }
 
     /// Close an open position (sell all shares at market price).
@@ -1398,6 +1522,43 @@ impl PolyforgeClient {
             format!("?{}", pairs.join("&"))
         };
         self.get(&format!("/api/v1/news/signals{qs}")).await
+    }
+
+    /// List raw news articles with optional source, sentiment, and pagination filters.
+    pub async fn list_news(
+        &self,
+        params: Option<&ListNewsParams>,
+    ) -> Result<PaginatedResponse<NewsArticle>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(ref source) = p.source {
+                qp.push(("source", source.clone()));
+            }
+            if let Some(ref sentiment) = p.sentiment {
+                qp.push(("sentiment", sentiment.clone()));
+            }
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/news{qs}")).await
+    }
+
+    /// Get a single news article by ID.
+    pub async fn get_news_article(&self, id: &str) -> Result<NewsArticle> {
+        self.get(&format!("/api/v1/news/{}", encode(id))).await
     }
 
     // -----------------------------------------------------------------------
@@ -1755,6 +1916,33 @@ impl PolyforgeClient {
         };
 
         self.get(&format!("/api/v1/portfolio/pnl{qs}")).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Portfolio — Polymarket-native
+    // -----------------------------------------------------------------------
+
+    /// Get the native Polymarket portfolio snapshot for the authenticated user.
+    pub async fn get_polymarket_portfolio(&self) -> Result<PolymarketPortfolio> {
+        self.get("/api/v1/portfolio/polymarket/portfolio").await
+    }
+
+    /// Get native Polymarket earnings summary for the authenticated user.
+    pub async fn get_polymarket_earnings(&self) -> Result<PolymarketEarnings> {
+        self.get("/api/v1/portfolio/polymarket/earnings").await
+    }
+
+    /// Get native Polymarket activity for the authenticated user.
+    pub async fn get_polymarket_activity(
+        &self,
+        params: Option<&GetPolymarketActivityParams>,
+    ) -> Result<PaginatedResponse<PolymarketActivityItem>> {
+        let qs = match params.and_then(|p| p.activity_type.as_deref()) {
+            Some(t) => format!("?type={}", encode(t)),
+            None => String::new(),
+        };
+        self.get(&format!("/api/v1/portfolio/polymarket/activity{qs}"))
+            .await
     }
 
     /// Returns `true` if the given IP is in a blocked range (loopback, private,
@@ -4346,5 +4534,194 @@ mod tests {
         // legacy fields must not exist
         assert!(market.extra.get("baseToken").is_none());
         assert!(market.extra.get("quoteToken").is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // POLA-355: 17 new endpoint type-deserialization tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_tick_size_response_deserializes() {
+        let json = r#"{"tokenId":"tok-1","tickSize":0.01}"#;
+        let r: TickSizeResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(r.token_id.as_deref(), Some("tok-1"));
+        assert_eq!(r.tick_size, Some(0.01));
+    }
+
+    #[test]
+    fn test_spread_response_deserializes() {
+        let json = r#"{"tokenId":"tok-2","spread":0.03}"#;
+        let r: SpreadResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(r.token_id.as_deref(), Some("tok-2"));
+        assert_eq!(r.spread, Some(0.03));
+    }
+
+    #[test]
+    fn test_midpoint_response_deserializes() {
+        let json = r#"{"tokenId":"tok-3","mid":0.55}"#;
+        let r: MidpointResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(r.token_id.as_deref(), Some("tok-3"));
+        assert_eq!(r.mid, Some(0.55));
+    }
+
+    #[test]
+    fn test_clob_book_deserializes() {
+        let json = r#"{
+            "bids": [{"price": "0.54", "size": "100"}],
+            "asks": [{"price": "0.56", "size": "200"}]
+        }"#;
+        let book: ClobBook = serde_json::from_str(json).unwrap();
+        assert_eq!(book.bids.len(), 1);
+        assert_eq!(book.asks.len(), 1);
+        assert_eq!(book.bids[0].price.as_deref(), Some("0.54"));
+        assert_eq!(book.asks[0].size.as_deref(), Some("200"));
+    }
+
+    #[test]
+    fn test_clob_book_empty_deserializes() {
+        let json = r#"{}"#;
+        let book: ClobBook = serde_json::from_str(json).unwrap();
+        assert!(book.bids.is_empty());
+        assert!(book.asks.is_empty());
+    }
+
+    #[test]
+    fn test_clob_price_point_deserializes() {
+        let json = r#"[{"t": 1700000000000, "p": 0.55}]"#;
+        let points: Vec<ClobPricePoint> = serde_json::from_str(json).unwrap();
+        assert_eq!(points.len(), 1);
+        assert_eq!(points[0].t, Some(1700000000000));
+        assert_eq!(points[0].p, Some(0.55));
+    }
+
+    #[test]
+    fn test_batch_orders_response_deserializes() {
+        let json = r#"{
+            "results": [
+                {"status": "filled", "orderId": "o-1", "intentId": "i-1"},
+                {"status": "failed", "error": "insufficient balance"}
+            ]
+        }"#;
+        let r: BatchOrdersResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(r.results.len(), 2);
+        assert_eq!(r.results[0].status, "filled");
+        assert_eq!(r.results[0].order_id.as_deref(), Some("o-1"));
+        assert_eq!(r.results[1].status, "failed");
+        assert_eq!(r.results[1].error.as_deref(), Some("insufficient balance"));
+    }
+
+    #[test]
+    fn test_bulk_cancel_params_serializes() {
+        let params = BulkCancelParams {
+            order_ids: vec!["o-1".to_string(), "o-2".to_string()],
+        };
+        let v = serde_json::to_value(&params).unwrap();
+        assert_eq!(v["orderIds"][0], "o-1");
+        assert_eq!(v["orderIds"][1], "o-2");
+    }
+
+    #[test]
+    fn test_bulk_cancel_response_deserializes() {
+        let json = r#"{"cancelled": ["o-1"], "failed": ["o-2"]}"#;
+        let r: BulkCancelResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(r.cancelled, vec!["o-1"]);
+        assert_eq!(r.failed, vec!["o-2"]);
+    }
+
+    #[test]
+    fn test_news_article_deserializes() {
+        let json = r#"{
+            "id": "news-1",
+            "title": "Market moves",
+            "source": "reuters",
+            "sentiment": "positive",
+            "publishedAt": "2025-01-01T00:00:00Z"
+        }"#;
+        let article: NewsArticle = serde_json::from_str(json).unwrap();
+        assert_eq!(article.id, "news-1");
+        assert_eq!(article.title.as_deref(), Some("Market moves"));
+        assert_eq!(article.source.as_deref(), Some("reuters"));
+        assert_eq!(article.sentiment.as_deref(), Some("positive"));
+    }
+
+    #[test]
+    fn test_score_entry_deserializes() {
+        let json = r#"{
+            "userId": "u-1",
+            "username": "trader1",
+            "rank": 5,
+            "score": 88.5
+        }"#;
+        let entry: ScoreEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.user_id.as_deref(), Some("u-1"));
+        assert_eq!(entry.rank, Some(5));
+        assert_eq!(entry.score, Some(88.5));
+    }
+
+    #[test]
+    fn test_badge_deserializes() {
+        let json = r#"{
+            "id": "badge-gold",
+            "name": "Gold Trader",
+            "description": "Achieved top 1% profitability",
+            "awardedAt": "2025-06-01T00:00:00Z"
+        }"#;
+        let badge: Badge = serde_json::from_str(json).unwrap();
+        assert_eq!(badge.id, "badge-gold");
+        assert_eq!(badge.name.as_deref(), Some("Gold Trader"));
+        assert_eq!(badge.awarded_at.as_deref(), Some("2025-06-01T00:00:00Z"));
+    }
+
+    #[test]
+    fn test_polymarket_portfolio_deserializes() {
+        let json = r#"{"positions": [], "totalValue": "1500.00"}"#;
+        let p: PolymarketPortfolio = serde_json::from_str(json).unwrap();
+        assert_eq!(p.total_value.as_deref(), Some("1500.00"));
+        assert!(p.positions.is_empty());
+    }
+
+    #[test]
+    fn test_polymarket_earnings_deserializes() {
+        let json = r#"{"total": "200.00", "realized": "150.00", "unrealized": "50.00"}"#;
+        let e: PolymarketEarnings = serde_json::from_str(json).unwrap();
+        assert_eq!(e.total.as_deref(), Some("200.00"));
+        assert_eq!(e.realized.as_deref(), Some("150.00"));
+    }
+
+    #[test]
+    fn test_polymarket_activity_item_deserializes() {
+        let json = r#"{
+            "id": "act-1",
+            "type": "trade",
+            "amount": "50.00",
+            "createdAt": "2025-01-15T12:00:00Z"
+        }"#;
+        let item: PolymarketActivityItem = serde_json::from_str(json).unwrap();
+        assert_eq!(item.id.as_deref(), Some("act-1"));
+        assert_eq!(item.activity_type.as_deref(), Some("trade"));
+        assert_eq!(item.amount.as_deref(), Some("50.00"));
+    }
+
+    #[test]
+    fn test_search_markets_params_requires_q() {
+        let params = SearchMarketsParams {
+            q: "election".to_string(),
+            limit: Some(10),
+        };
+        assert_eq!(params.q, "election");
+        assert_eq!(params.limit, Some(10));
+    }
+
+    #[test]
+    fn test_clob_prices_history_params_defaults() {
+        let params = ClobPricesHistoryParams::default();
+        assert!(params.interval.is_none());
+        assert!(params.fidelity.is_none());
+    }
+
+    #[test]
+    fn test_get_polymarket_activity_params_default() {
+        let params = GetPolymarketActivityParams::default();
+        assert!(params.activity_type.is_none());
     }
 }

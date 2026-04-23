@@ -1613,6 +1613,276 @@ pub struct UpdateRiskSettingsParams {
 }
 
 // ---------------------------------------------------------------------------
+// Markets — extended data (search, CLOB, tick-size, spread, midpoint)
+// ---------------------------------------------------------------------------
+
+/// Parameters for the full-text market search endpoint.
+#[derive(Debug, Default)]
+pub struct SearchMarketsParams {
+    /// Full-text search query.
+    pub q: String,
+    pub limit: Option<u32>,
+}
+
+/// Tick-size for a market token (minimum price increment).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TickSizeResponse {
+    #[serde(rename = "tokenId", default)]
+    pub token_id: Option<String>,
+    #[serde(default)]
+    pub tick_size: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Bid-ask spread for a market token.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadResponse {
+    #[serde(rename = "tokenId", default)]
+    pub token_id: Option<String>,
+    #[serde(default)]
+    pub spread: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Midpoint price for a market token.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MidpointResponse {
+    #[serde(rename = "tokenId", default)]
+    pub token_id: Option<String>,
+    #[serde(default)]
+    pub mid: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A single price level in a CLOB order book.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClobLevel {
+    /// Price as a decimal string (platform canonical format).
+    #[serde(default)]
+    pub price: Option<String>,
+    /// Size at this level as a decimal string.
+    #[serde(default)]
+    pub size: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Full CLOB order book for a market token.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ClobBook {
+    #[serde(default)]
+    pub bids: Vec<ClobLevel>,
+    #[serde(default)]
+    pub asks: Vec<ClobLevel>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A single CLOB price-history data point.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClobPricePoint {
+    /// Unix millisecond timestamp.
+    #[serde(default)]
+    pub t: Option<u64>,
+    /// Price at this point.
+    #[serde(default)]
+    pub p: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for the CLOB prices-history endpoint.
+#[derive(Debug, Default)]
+pub struct ClobPricesHistoryParams {
+    /// Candle interval, e.g. `"1m"`, `"5m"`, `"1h"`.
+    pub interval: Option<String>,
+    /// Number of data points.
+    pub fidelity: Option<u32>,
+}
+
+// ---------------------------------------------------------------------------
+// Orders — bulk operations
+// ---------------------------------------------------------------------------
+
+/// Request body for the batch-order endpoint (up to 15 orders).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BatchOrdersParams {
+    pub orders: Vec<PlaceOrderParams>,
+}
+
+/// Result for a single order within a batch response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchOrderResult {
+    pub status: String,
+    #[serde(rename = "orderId", default)]
+    pub order_id: Option<String>,
+    #[serde(rename = "intentId", default)]
+    pub intent_id: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Response from the batch-order endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BatchOrdersResponse {
+    #[serde(default)]
+    pub results: Vec<BatchOrderResult>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Request body for the bulk-cancel endpoint (up to 3 000 order IDs).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkCancelParams {
+    pub order_ids: Vec<String>,
+}
+
+/// Response from the bulk-cancel endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BulkCancelResponse {
+    #[serde(default)]
+    pub cancelled: Vec<String>,
+    #[serde(default)]
+    pub failed: Vec<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
+// News — articles
+// ---------------------------------------------------------------------------
+
+/// A raw news article.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewsArticle {
+    pub id: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub body: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub sentiment: Option<String>,
+    #[serde(rename = "publishedAt", default)]
+    pub published_at: Option<String>,
+    #[serde(rename = "relatedMarkets", default)]
+    pub related_markets: Vec<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for listing news articles.
+#[derive(Debug, Default)]
+pub struct ListNewsParams {
+    pub source: Option<String>,
+    pub sentiment: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+// ---------------------------------------------------------------------------
+// Scores — badges and extended
+// ---------------------------------------------------------------------------
+
+/// A single entry on the global scores leaderboard.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoreEntry {
+    #[serde(rename = "userId", default)]
+    pub user_id: Option<String>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub rank: Option<u64>,
+    #[serde(default)]
+    pub score: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// An achievement badge awarded to a user.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Badge {
+    pub id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(rename = "awardedAt", default)]
+    pub awarded_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio — Polymarket-native
+// ---------------------------------------------------------------------------
+
+/// Native Polymarket portfolio snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PolymarketPortfolio {
+    #[serde(default)]
+    pub positions: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub total_value: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Native Polymarket earnings summary.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PolymarketEarnings {
+    #[serde(default)]
+    pub total: Option<String>,
+    #[serde(default)]
+    pub realized: Option<String>,
+    #[serde(default)]
+    pub unrealized: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A single Polymarket portfolio activity event.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PolymarketActivityItem {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(rename = "type", default)]
+    pub activity_type: Option<String>,
+    #[serde(default)]
+    pub amount: Option<String>,
+    #[serde(rename = "createdAt", default)]
+    pub created_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Query parameters for the Polymarket activity endpoint.
+#[derive(Debug, Default)]
+pub struct GetPolymarketActivityParams {
+    /// Activity type filter, e.g. `"trade"`, `"deposit"`, `"withdrawal"`.
+    pub activity_type: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Strategy Execution Events (SSE)
 // ---------------------------------------------------------------------------
 
