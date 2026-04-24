@@ -1971,3 +1971,354 @@ pub struct StrategyEvent {
     #[serde(default)]
     pub timestamp: u64,
 }
+
+// ---------------------------------------------------------------------------
+// Cross-Venue Arbitrage (POLA-782)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrossVenueArbitrageOpportunity {
+    pub id: String,
+    #[serde(default)]
+    pub market_title: Option<String>,
+    #[serde(default)]
+    pub venue_a: Option<String>,
+    #[serde(default)]
+    pub venue_b: Option<String>,
+    #[serde(default)]
+    pub price_a: Option<String>,
+    #[serde(default)]
+    pub price_b: Option<String>,
+    #[serde(default)]
+    pub spread: Option<String>,
+    #[serde(default)]
+    pub direction: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrossVenueComparison {
+    pub match_id: String,
+    #[serde(default)]
+    pub polymarket_price: Option<String>,
+    #[serde(default)]
+    pub kalshi_price: Option<String>,
+    #[serde(default)]
+    pub spread: Option<String>,
+    #[serde(default)]
+    pub arbitrage_pct: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbitrageMatch {
+    pub id: String,
+    #[serde(default)]
+    pub polymarket_market_id: Option<String>,
+    #[serde(default)]
+    pub kalshi_market_id: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub verified: Option<bool>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateArbitrageMatchParams {
+    pub polymarket_market_id: String,
+    pub kalshi_market_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Whale Leaderboard & Alert Filter (POLA-782)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WhaleLeaderboardEntry {
+    #[serde(default)]
+    pub rank: Option<u64>,
+    #[serde(default)]
+    pub wallet_address: Option<String>,
+    #[serde(default)]
+    pub total_volume: Option<String>,
+    #[serde(default)]
+    pub total_pnl: Option<String>,
+    #[serde(default)]
+    pub win_rate: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WhaleAlertFilter {
+    #[serde(default)]
+    pub min_size_usd: Option<u64>,
+    #[serde(default)]
+    pub market_ids: Vec<String>,
+    #[serde(default)]
+    pub wallet_addresses: Vec<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateWhaleAlertFilterParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_size_usd: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wallet_addresses: Option<Vec<String>>,
+}
+
+// ---------------------------------------------------------------------------
+// Profile (POLA-782)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProfileParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bio: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangePasswordParams {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfile {
+    #[serde(default)]
+    pub user_id: Option<String>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub bio: Option<String>,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+    #[serde(default)]
+    pub follower_count: Option<u64>,
+    #[serde(default)]
+    pub following_count: Option<u64>,
+    #[serde(default)]
+    pub is_following: Option<bool>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
+// Settings (POLA-782)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSettingsProfileParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bio: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationSettings {
+    #[serde(default)]
+    pub email_enabled: Option<bool>,
+    #[serde(default)]
+    pub push_enabled: Option<bool>,
+    #[serde(default)]
+    pub order_fills: Option<bool>,
+    #[serde(default)]
+    pub strategy_errors: Option<bool>,
+    #[serde(default)]
+    pub whale_alerts: Option<bool>,
+    #[serde(default)]
+    pub market_resolutions: Option<bool>,
+    #[serde(default)]
+    pub daily_summary: Option<bool>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateNotificationSettingsParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_fills: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy_errors: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub whale_alerts: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_resolutions: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daily_summary: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdatePasswordParams {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+// ---------------------------------------------------------------------------
+// Support Tickets (POLA-782)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TicketCategory {
+    #[serde(rename = "GENERAL")]
+    General,
+    #[serde(rename = "BILLING")]
+    Billing,
+    #[serde(rename = "TECHNICAL")]
+    Technical,
+    #[serde(rename = "ACCOUNT")]
+    Account,
+    #[serde(rename = "BUG")]
+    Bug,
+    #[serde(rename = "FEATURE_REQUEST")]
+    FeatureRequest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TicketPriority {
+    #[serde(rename = "LOW")]
+    Low,
+    #[serde(rename = "MEDIUM")]
+    Medium,
+    #[serde(rename = "HIGH")]
+    High,
+    #[serde(rename = "URGENT")]
+    Urgent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateTicketParams {
+    pub subject: String,
+    pub body: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<TicketCategory>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<TicketPriority>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Ticket {
+    pub id: String,
+    #[serde(default)]
+    pub subject: Option<String>,
+    #[serde(default)]
+    pub body: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub priority: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    #[serde(default)]
+    pub messages: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TicketMessage {
+    pub id: String,
+    #[serde(default)]
+    pub ticket_id: Option<String>,
+    #[serde(default)]
+    pub body: Option<String>,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default)]
+    pub is_staff: Option<bool>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
+// Notification Preferences (POLA-782)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationPreferences {
+    #[serde(default)]
+    pub order_filled: Option<bool>,
+    #[serde(default)]
+    pub strategy_error: Option<bool>,
+    #[serde(default)]
+    pub whale_alert: Option<bool>,
+    #[serde(default)]
+    pub market_resolved: Option<bool>,
+    #[serde(default)]
+    pub price_alert: Option<bool>,
+    #[serde(default)]
+    pub daily_summary: Option<bool>,
+    #[serde(default)]
+    pub marketing: Option<bool>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateNotificationPreferencesParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_filled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy_error: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub whale_alert: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_resolved: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_alert: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daily_summary: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub marketing: Option<bool>,
+}
