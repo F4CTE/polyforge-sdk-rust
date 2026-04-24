@@ -2174,6 +2174,231 @@ impl PolyforgeClient {
             buffer: String::new(),
         })
     }
+
+    async fn put<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<T> {
+        let resp = self
+            .http
+            .put(self.url(path))
+            .header(AUTHORIZATION, self.auth_header()?)
+            .json(body)
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-Venue Arbitrage
+    // -----------------------------------------------------------------------
+
+    /// List live cross-venue arbitrage opportunities.
+    pub async fn list_arbitrage_opportunities(
+        &self,
+    ) -> Result<Vec<CrossVenueArbitrageOpportunity>> {
+        self.get("/api/v1/arbitrage/cross-venue").await
+    }
+
+    /// Get the price comparison for a specific arbitrage match.
+    pub async fn get_arbitrage_comparison(
+        &self,
+        match_id: &str,
+    ) -> Result<CrossVenueComparison> {
+        let path = format!(
+            "/api/v1/arbitrage/cross-venue/{}/comparison",
+            encode(match_id)
+        );
+        self.get(&path).await
+    }
+
+    /// List all arbitrage market matches.
+    pub async fn list_arbitrage_matches(&self) -> Result<Vec<ArbitrageMatch>> {
+        self.get("/api/v1/arbitrage/matches").await
+    }
+
+    /// List arbitrage matches for a specific market.
+    pub async fn list_arbitrage_matches_for_market(
+        &self,
+        market_id: &str,
+    ) -> Result<Vec<ArbitrageMatch>> {
+        let path = format!("/api/v1/arbitrage/matches/market/{}", encode(market_id));
+        self.get(&path).await
+    }
+
+    /// Create a new arbitrage match between a Polymarket and Kalshi market.
+    pub async fn create_arbitrage_match(
+        &self,
+        params: &CreateArbitrageMatchParams,
+    ) -> Result<ArbitrageMatch> {
+        self.post("/api/v1/arbitrage/matches", &serde_json::to_value(params)?).await
+    }
+
+    /// Verify an arbitrage match (admin action).
+    pub async fn verify_arbitrage_match(&self, match_id: &str) -> Result<ArbitrageMatch> {
+        let path = format!("/api/v1/arbitrage/matches/{}/verify", encode(match_id));
+        self.post(&path, &json!({})).await
+    }
+
+    /// Delete an arbitrage match.
+    pub async fn delete_arbitrage_match(&self, match_id: &str) -> Result<()> {
+        let path = format!("/api/v1/arbitrage/matches/{}", encode(match_id));
+        self.delete(&path).await
+    }
+
+    /// Trigger a sync of arbitrage matches from external sources.
+    pub async fn sync_arbitrage_matches(&self) -> Result<serde_json::Value> {
+        self.post("/api/v1/arbitrage/matches/sync", &json!({})).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Whale Leaderboard & Alert Filter
+    // -----------------------------------------------------------------------
+
+    /// Get the whale trader leaderboard.
+    pub async fn get_whale_leaderboard(&self) -> Result<Vec<WhaleLeaderboardEntry>> {
+        self.get("/api/v1/whales/leaderboard").await
+    }
+
+    /// Get the authenticated user's whale alert filter settings.
+    pub async fn get_whale_alert_filter(&self) -> Result<WhaleAlertFilter> {
+        self.get("/api/v1/whales/alerts/filter").await
+    }
+
+    /// Replace the authenticated user's whale alert filter settings.
+    pub async fn update_whale_alert_filter(
+        &self,
+        params: &UpdateWhaleAlertFilterParams,
+    ) -> Result<WhaleAlertFilter> {
+        self.put("/api/v1/whales/alerts/filter", &serde_json::to_value(params)?).await
+    }
+
+    /// Delete the authenticated user's whale alert filter settings.
+    pub async fn delete_whale_alert_filter(&self) -> Result<()> {
+        self.delete("/api/v1/whales/alerts/filter").await
+    }
+
+    // -----------------------------------------------------------------------
+    // Profile
+    // -----------------------------------------------------------------------
+
+    /// Update the authenticated user's profile.
+    pub async fn update_my_profile(&self, params: &UpdateProfileParams) -> Result<UserProfile> {
+        self.patch("/api/v1/profile/me", &serde_json::to_value(params)?).await
+    }
+
+    /// Change the authenticated user's password (profile route).
+    pub async fn change_profile_password(&self, params: &ChangePasswordParams) -> Result<()> {
+        self.post("/api/v1/profile/password", &serde_json::to_value(params)?).await
+    }
+
+    /// Update the authenticated user's notification preferences (profile route).
+    pub async fn update_profile_notifications(
+        &self,
+        params: &UpdateNotificationSettingsParams,
+    ) -> Result<NotificationSettings> {
+        self.patch("/api/v1/profile/notifications", &serde_json::to_value(params)?).await
+    }
+
+    /// Get a public user profile by username.
+    pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
+        let path = format!("/api/v1/profile/{}", encode(username));
+        self.get(&path).await
+    }
+
+    /// Follow a user by username.
+    pub async fn follow_user(&self, username: &str) -> Result<()> {
+        let path = format!("/api/v1/profile/{}/follow", encode(username));
+        self.post(&path, &json!({})).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Settings
+    // -----------------------------------------------------------------------
+
+    /// Update the authenticated user's settings profile.
+    pub async fn update_settings_profile(
+        &self,
+        params: &UpdateSettingsProfileParams,
+    ) -> Result<serde_json::Value> {
+        self.patch("/api/v1/settings/profile", &serde_json::to_value(params)?).await
+    }
+
+    /// Get the authenticated user's notification settings.
+    pub async fn get_notification_settings(&self) -> Result<NotificationSettings> {
+        self.get("/api/v1/settings/notifications").await
+    }
+
+    /// Update the authenticated user's notification settings.
+    pub async fn update_notification_settings(
+        &self,
+        params: &UpdateNotificationSettingsParams,
+    ) -> Result<NotificationSettings> {
+        self.patch("/api/v1/settings/notifications", &serde_json::to_value(params)?).await
+    }
+
+    /// Update the authenticated user's password (settings route).
+    pub async fn update_settings_password(&self, params: &UpdatePasswordParams) -> Result<()> {
+        self.patch("/api/v1/settings/password", &serde_json::to_value(params)?).await
+    }
+
+    /// Get the authenticated user's beta feature usage.
+    pub async fn get_beta_usage(&self) -> Result<serde_json::Value> {
+        self.get("/api/v1/settings/beta-usage").await
+    }
+
+    /// Get the authenticated user's gas/fee settings.
+    pub async fn get_gas_settings(&self) -> Result<serde_json::Value> {
+        self.get("/api/v1/settings/gas").await
+    }
+
+    // -----------------------------------------------------------------------
+    // Support Tickets
+    // -----------------------------------------------------------------------
+
+    /// Create a new support ticket.
+    pub async fn create_ticket(&self, params: &CreateTicketParams) -> Result<Ticket> {
+        self.post("/api/v1/tickets", &serde_json::to_value(params)?).await
+    }
+
+    /// List the authenticated user's support tickets.
+    pub async fn list_tickets(&self) -> Result<Vec<Ticket>> {
+        self.get("/api/v1/tickets").await
+    }
+
+    /// Get a specific support ticket by ID.
+    pub async fn get_ticket(&self, ticket_id: &str) -> Result<Ticket> {
+        let path = format!("/api/v1/tickets/{}", encode(ticket_id));
+        self.get(&path).await
+    }
+
+    /// Add a message to a support ticket.
+    pub async fn add_ticket_message(
+        &self,
+        ticket_id: &str,
+        body: &str,
+    ) -> Result<TicketMessage> {
+        let path = format!("/api/v1/tickets/{}/messages", encode(ticket_id));
+        self.post(&path, &json!({ "body": body })).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Notification Preferences
+    // -----------------------------------------------------------------------
+
+    /// Get the authenticated user's notification preferences.
+    pub async fn get_notification_preferences(&self) -> Result<NotificationPreferences> {
+        self.get("/api/v1/users/me/notification-preferences").await
+    }
+
+    /// Replace the authenticated user's notification preferences.
+    pub async fn update_notification_preferences(
+        &self,
+        params: &UpdateNotificationPreferencesParams,
+    ) -> Result<NotificationPreferences> {
+        self.put("/api/v1/users/me/notification-preferences", &serde_json::to_value(params)?).await
+    }
 }
 
 #[cfg(test)]
@@ -4835,5 +5060,275 @@ mod tests {
         let json = r#"{"marketA": 0.5, "marketB": 0.3}"#;
         let p: UserRewardsPercentages = serde_json::from_str(json).unwrap();
         assert_eq!(p.extra["marketA"], 0.5);
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-Venue Arbitrage — type tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_cross_venue_arbitrage_opportunity_deserializes() {
+        let json = r#"{"id":"arb-1","marketTitle":"Will X?","venueA":"polymarket","venueB":"kalshi","priceA":"0.55","priceB":"0.48","spread":"0.07","direction":"buy_poly_sell_kalshi"}"#;
+        let opp: CrossVenueArbitrageOpportunity = serde_json::from_str(json).unwrap();
+        assert_eq!(opp.id, "arb-1");
+        assert_eq!(opp.venue_a.as_deref(), Some("polymarket"));
+        assert_eq!(opp.spread.as_deref(), Some("0.07"));
+    }
+
+    #[test]
+    fn test_cross_venue_comparison_deserializes() {
+        let json = r#"{"matchId":"match-1","polymarketPrice":"0.6","kalshiPrice":"0.55","spread":"0.05","arbitragePct":"8.3"}"#;
+        let cmp: CrossVenueComparison = serde_json::from_str(json).unwrap();
+        assert_eq!(cmp.match_id, "match-1");
+        assert_eq!(cmp.arbitrage_pct.as_deref(), Some("8.3"));
+    }
+
+    #[test]
+    fn test_arbitrage_match_deserializes() {
+        let json = r#"{"id":"m-1","polymarketMarketId":"poly-abc","kalshiMarketId":"kalshi-xyz","verified":true,"status":"active","createdAt":"2026-01-01"}"#;
+        let m: ArbitrageMatch = serde_json::from_str(json).unwrap();
+        assert_eq!(m.id, "m-1");
+        assert_eq!(m.verified, Some(true));
+    }
+
+    #[test]
+    fn test_create_arbitrage_match_params_serializes() {
+        let p = CreateArbitrageMatchParams {
+            polymarket_market_id: "poly-1".into(),
+            kalshi_market_id: "kalshi-1".into(),
+            notes: Some("test".into()),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["polymarketMarketId"], "poly-1");
+        assert_eq!(v["notes"], "test");
+    }
+
+    #[test]
+    fn test_create_arbitrage_match_params_omits_none_notes() {
+        let p = CreateArbitrageMatchParams {
+            polymarket_market_id: "poly-1".into(),
+            kalshi_market_id: "kalshi-1".into(),
+            notes: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert!(v.get("notes").is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Whale — type tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_whale_leaderboard_entry_deserializes() {
+        let json = r#"{"rank":1,"walletAddress":"0xabc","totalVolume":"1000000","totalPnl":"50000","winRate":"0.65"}"#;
+        let e: WhaleLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(e.rank, Some(1));
+        assert_eq!(e.wallet_address.as_deref(), Some("0xabc"));
+    }
+
+    #[test]
+    fn test_whale_alert_filter_deserializes() {
+        let json = r#"{"minSizeUsd":5000,"marketIds":["m1","m2"],"walletAddresses":["0x1"]}"#;
+        let f: WhaleAlertFilter = serde_json::from_str(json).unwrap();
+        assert_eq!(f.min_size_usd, Some(5000));
+        assert_eq!(f.market_ids.len(), 2);
+    }
+
+    #[test]
+    fn test_update_whale_alert_filter_omits_none() {
+        let p = UpdateWhaleAlertFilterParams {
+            min_size_usd: None,
+            market_ids: None,
+            wallet_addresses: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert!(v.get("minSizeUsd").is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Profile — type tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_update_profile_params_omits_none_fields() {
+        let p = UpdateProfileParams {
+            display_name: Some("Alice".into()),
+            bio: None,
+            avatar_url: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["displayName"], "Alice");
+        assert!(v.get("bio").is_none());
+    }
+
+    #[test]
+    fn test_user_profile_deserializes() {
+        let json = r#"{"userId":"u-1","username":"alice","displayName":"Alice","followerCount":42,"isFollowing":false}"#;
+        let up: UserProfile = serde_json::from_str(json).unwrap();
+        assert_eq!(up.username.as_deref(), Some("alice"));
+        assert_eq!(up.follower_count, Some(42));
+        assert_eq!(up.is_following, Some(false));
+    }
+
+    #[test]
+    fn test_change_password_params_serializes() {
+        let p = ChangePasswordParams {
+            current_password: "old".into(),
+            new_password: "new".into(),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["currentPassword"], "old");
+        assert_eq!(v["newPassword"], "new");
+    }
+
+    // -----------------------------------------------------------------------
+    // Settings — type tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_notification_settings_deserializes() {
+        let json = r#"{"emailEnabled":true,"pushEnabled":false,"orderFills":true,"strategyErrors":true,"whaleAlerts":false,"marketResolutions":true,"dailySummary":false}"#;
+        let ns: NotificationSettings = serde_json::from_str(json).unwrap();
+        assert_eq!(ns.email_enabled, Some(true));
+        assert_eq!(ns.push_enabled, Some(false));
+        assert_eq!(ns.order_fills, Some(true));
+    }
+
+    #[test]
+    fn test_update_notification_settings_omits_none() {
+        let p = UpdateNotificationSettingsParams {
+            email_enabled: Some(true),
+            push_enabled: None,
+            order_fills: None,
+            strategy_errors: None,
+            whale_alerts: None,
+            market_resolutions: None,
+            daily_summary: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["emailEnabled"], true);
+        assert!(v.get("pushEnabled").is_none());
+    }
+
+    #[test]
+    fn test_update_password_params_serializes() {
+        let p = UpdatePasswordParams {
+            current_password: "current".into(),
+            new_password: "new_secure".into(),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["currentPassword"], "current");
+    }
+
+    #[test]
+    fn test_update_settings_profile_omits_none() {
+        let p = UpdateSettingsProfileParams {
+            display_name: None,
+            bio: Some("Hello".into()),
+            avatar_url: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert!(v.get("displayName").is_none());
+        assert_eq!(v["bio"], "Hello");
+    }
+
+    // -----------------------------------------------------------------------
+    // Support Tickets — type tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_create_ticket_params_serializes() {
+        let p = CreateTicketParams {
+            subject: "Help".into(),
+            body: "I need help".into(),
+            category: Some(TicketCategory::Technical),
+            priority: Some(TicketPriority::High),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["subject"], "Help");
+        assert_eq!(v["category"], "TECHNICAL");
+        assert_eq!(v["priority"], "HIGH");
+    }
+
+    #[test]
+    fn test_create_ticket_params_omits_optional() {
+        let p = CreateTicketParams {
+            subject: "Sub".into(),
+            body: "Body".into(),
+            category: None,
+            priority: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert!(v.get("category").is_none());
+        assert!(v.get("priority").is_none());
+    }
+
+    #[test]
+    fn test_ticket_deserializes() {
+        let json = r#"{"id":"t-1","subject":"Login issue","status":"open","createdAt":"2026-04-01","messages":[]}"#;
+        let t: Ticket = serde_json::from_str(json).unwrap();
+        assert_eq!(t.id, "t-1");
+        assert_eq!(t.status.as_deref(), Some("open"));
+        assert!(t.messages.is_empty());
+    }
+
+    #[test]
+    fn test_ticket_message_deserializes() {
+        let json = r#"{"id":"msg-1","ticketId":"t-1","body":"We are looking into it.","author":"support","isStaff":true,"createdAt":"2026-04-02"}"#;
+        let m: TicketMessage = serde_json::from_str(json).unwrap();
+        assert_eq!(m.id, "msg-1");
+        assert_eq!(m.is_staff, Some(true));
+        assert_eq!(m.author.as_deref(), Some("support"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Notification Preferences — type tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_notification_preferences_deserializes() {
+        let json = r#"{"orderFilled":true,"strategyError":false,"whaleAlert":true,"marketResolved":false,"priceAlert":true,"dailySummary":false,"marketing":false}"#;
+        let np: NotificationPreferences = serde_json::from_str(json).unwrap();
+        assert_eq!(np.order_filled, Some(true));
+        assert_eq!(np.strategy_error, Some(false));
+        assert_eq!(np.whale_alert, Some(true));
+    }
+
+    #[test]
+    fn test_notification_preferences_defaults_to_none() {
+        let json = r#"{}"#;
+        let np: NotificationPreferences = serde_json::from_str(json).unwrap();
+        assert_eq!(np.order_filled, None);
+        assert_eq!(np.marketing, None);
+    }
+
+    #[test]
+    fn test_update_notification_preferences_omits_none() {
+        let p = UpdateNotificationPreferencesParams {
+            order_filled: Some(true),
+            strategy_error: None,
+            whale_alert: None,
+            market_resolved: None,
+            price_alert: None,
+            daily_summary: None,
+            marketing: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["orderFilled"], true);
+        assert!(v.get("strategyError").is_none());
+    }
+
+    #[test]
+    fn test_ticket_category_serializes() {
+        let c = TicketCategory::Billing;
+        let v = serde_json::to_value(c).unwrap();
+        assert_eq!(v, "BILLING");
+    }
+
+    #[test]
+    fn test_ticket_priority_serializes() {
+        let p = TicketPriority::Urgent;
+        let v = serde_json::to_value(p).unwrap();
+        assert_eq!(v, "URGENT");
     }
 }
