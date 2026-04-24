@@ -3307,30 +3307,39 @@ mod tests {
 
     #[test]
     fn test_copy_config_deserializes_platform_fields() {
-        // #146: CopyConfig must use strategy-based model (sourceStrategyId, allocationPercent)
+        // #168: CopyConfig must use wallet-based model (targetWallet, mode, sizeValue, etc.)
         let json = r#"{
             "id": "cc1",
-            "sourceStrategyId": "strat-uuid-abc",
-            "name": "My Copy",
-            "allocationPercent": 50,
-            "initialBalance": "1000",
-            "enabled": true
+            "targetWallet": "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            "mode": "PERCENTAGE",
+            "sizeValue": "100.5",
+            "maxExposure": "500",
+            "maxDailyLoss": "50",
+            "priceOffset": "0.01",
+            "status": "ACTIVE",
+            "createdAt": "2026-01-01T00:00:00Z"
         }"#;
         let config: CopyConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(config.source_strategy_id, Some("strat-uuid-abc".to_string()));
-        assert_eq!(config.name, Some("My Copy".to_string()));
-        assert_eq!(config.allocation_percent, Some(50));
-        assert_eq!(config.initial_balance, Some("1000".to_string()));
-        assert_eq!(config.enabled, Some(true));
+        assert_eq!(
+            config.target_wallet.as_deref(),
+            Some("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+        );
+        assert_eq!(config.mode, Some(CopyMode::Percentage));
+        assert_eq!(config.size_value.as_deref(), Some("100.5"));
+        assert_eq!(config.max_exposure.as_deref(), Some("500"));
+        assert_eq!(config.max_daily_loss.as_deref(), Some("50"));
+        assert_eq!(config.price_offset.as_deref(), Some("0.01"));
+        assert_eq!(config.status.as_deref(), Some("ACTIVE"));
+        assert_eq!(config.created_at.as_deref(), Some("2026-01-01T00:00:00Z"));
     }
 
     #[test]
-    fn test_copy_config_wallet_fields_go_to_extra() {
-        // #146: Old wallet-based fields must NOT map to named fields
-        let json = r#"{"id":"cc1","targetWallet":"0xabc","mode":"PERCENTAGE"}"#;
+    fn test_copy_config_strategy_fields_go_to_extra() {
+        // #168: Old strategy-based fields must NOT map to named fields
+        let json = r#"{"id":"cc1","sourceStrategyId":"strat-uuid","allocationPercent":50}"#;
         let config: CopyConfig = serde_json::from_str(json).unwrap();
-        assert!(config.source_strategy_id.is_none());
-        assert!(config.allocation_percent.is_none());
+        assert!(config.target_wallet.is_none());
+        assert!(config.mode.is_none());
     }
 
     #[test]
@@ -4318,31 +4327,38 @@ mod tests {
     // ── Copy trading CRUD (#51) ───────────────────────────────────────────────
 
     #[test]
-    fn test_create_copy_config_params_serializes_strategy_fields() {
-        // #146: CreateCopyConfigParams must send sourceStrategyId, not targetWallet
+    fn test_create_copy_config_params_serializes_wallet_fields() {
+        // #168: CreateCopyConfigParams must send targetWallet, not sourceStrategyId
         let params = CreateCopyConfigParams {
-            source_strategy_id: "strat-uuid-123".to_string(),
-            name: Some("My Copy".to_string()),
-            allocation_percent: Some(50),
+            target_wallet: "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef".to_string(),
+            mode: Some(CopyMode::Percentage),
+            size_value: Some("100".to_string()),
             ..Default::default()
         };
         let body = serde_json::to_value(&params).unwrap();
-        assert_eq!(body["sourceStrategyId"], "strat-uuid-123");
-        assert_eq!(body["name"], "My Copy");
-        assert_eq!(body["allocationPercent"], 50);
-        assert!(body.get("targetWallet").is_none());
+        assert_eq!(
+            body["targetWallet"],
+            "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+        );
+        assert_eq!(body["mode"], "PERCENTAGE");
+        assert_eq!(body["sizeValue"], "100");
+        assert!(body.get("sourceStrategyId").is_none());
+        assert!(body.get("allocationPercent").is_none());
     }
 
     #[test]
     fn test_update_copy_config_params_skips_none_fields() {
         let params = UpdateCopyConfigParams {
-            allocation_percent: Some(75),
+            mode: Some(CopyMode::Fixed),
+            size_value: Some("200".to_string()),
             ..Default::default()
         };
         let body = serde_json::to_value(&params).unwrap();
-        assert_eq!(body["allocationPercent"], 75);
+        assert_eq!(body["mode"], "FIXED");
+        assert_eq!(body["sizeValue"], "200");
         // None fields should be absent due to skip_serializing_if
-        assert!(body.get("name").is_none());
+        assert!(body.get("maxExposure").is_none());
+        assert!(body.get("maxDailyLoss").is_none());
     }
 
     #[test]

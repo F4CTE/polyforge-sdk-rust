@@ -703,23 +703,41 @@ pub struct Alert {
     pub extra: serde_json::Value,
 }
 
-/// A copy-trading configuration (strategy-based).
+/// Copy mode matching the platform's `CopyModeDto`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CopyMode {
+    Percentage,
+    Fixed,
+    Mirror,
+}
+
+/// A copy-trading configuration (wallet-based platform model).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyConfig {
     pub id: String,
-    /// The strategy being copied.
     #[serde(default)]
-    pub source_strategy_id: Option<String>,
+    pub target_wallet: Option<String>,
     #[serde(default)]
-    pub name: Option<String>,
-    /// Allocation as a percentage (0–100).
+    pub mode: Option<CopyMode>,
     #[serde(default)]
-    pub allocation_percent: Option<u8>,
+    pub size_value: Option<String>,
     #[serde(default)]
-    pub initial_balance: Option<String>,
+    pub max_exposure: Option<String>,
     #[serde(default)]
-    pub enabled: Option<bool>,
+    pub max_daily_loss: Option<String>,
+    #[serde(default)]
+    pub price_offset: Option<String>,
+    /// Platform status: ACTIVE | PAUSED | STOPPED | ERROR
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    #[serde(default)]
+    pub stopped_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -1376,27 +1394,37 @@ pub struct GetPortfolioPnlParams {
 // Copy trading CRUD params
 // ---------------------------------------------------------------------------
 
-/// Parameters for creating a copy trading configuration (platform contract).
+/// Parameters for creating a copy trading configuration (wallet-based platform contract).
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateCopyConfigParams {
-    pub source_strategy_id: String,
+    pub target_wallet: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub mode: Option<CopyMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub initial_balance: Option<String>,
+    pub size_value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub allocation_percent: Option<u8>,
+    pub max_exposure: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_daily_loss: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_offset: Option<String>,
 }
 
-/// Parameters for updating a copy trading configuration.
+/// Parameters for updating a copy trading configuration (wallet-based platform contract).
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCopyConfigParams {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub mode: Option<CopyMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub allocation_percent: Option<u8>,
+    pub size_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_exposure: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_daily_loss: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_offset: Option<String>,
 }
 
 /// Parameters for fetching trades of a copy config.
