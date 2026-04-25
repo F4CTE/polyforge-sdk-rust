@@ -1877,7 +1877,13 @@ impl PolyforgeClient {
 
     /// Create a new price alert.
     pub async fn create_alert(&self, params: &CreateAlertParams) -> Result<Alert> {
-        validate_financial_param("price", params.price)?;
+        let price: f64 = params
+            .price
+            .parse()
+            .map_err(|_| PolyforgeError::Validation(format!("price must be a numeric string, got {:?}", params.price)))?;
+        if !price.is_finite() || price <= 0.0 {
+            return Err(PolyforgeError::Validation(format!("price must be a positive finite number, got {}", params.price)));
+        }
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/alerts", &body).await
     }
@@ -4296,13 +4302,13 @@ mod tests {
         let params = CreateAlertParams {
             token_id: "tok-1".into(),
             direction: AlertDirection::Above,
-            price: 0.75,
+            price: "0.75".into(),
             persistent: Some(true),
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["tokenId"], "tok-1");
         assert_eq!(json["direction"], "above");
-        assert_eq!(json["price"], 0.75);
+        assert_eq!(json["price"], "0.75");
         assert_eq!(json["persistent"], true);
     }
 
@@ -4311,7 +4317,7 @@ mod tests {
         let params = CreateAlertParams {
             token_id: "tok-1".into(),
             direction: AlertDirection::Below,
-            price: 0.25,
+            price: "0.25".into(),
             persistent: None,
         };
         let json = serde_json::to_value(&params).unwrap();
@@ -4323,7 +4329,7 @@ mod tests {
         let params = CreateAlertParams {
             token_id: "tok-1".into(),
             direction: AlertDirection::Above,
-            price: 0.0,
+            price: "0.0".into(),
             persistent: None,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -4331,6 +4337,21 @@ mod tests {
         let err = rt.block_on(client.create_alert(&params)).unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
         assert!(err.to_string().contains("price"));
+    }
+
+    #[test]
+    fn test_create_alert_validation_rejects_non_numeric_price() {
+        let params = CreateAlertParams {
+            token_id: "tok-1".into(),
+            direction: AlertDirection::Above,
+            price: "not-a-number".into(),
+            persistent: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::new("test-key").unwrap();
+        let err = rt.block_on(client.create_alert(&params)).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("numeric string"));
     }
 
     #[test]

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.6] — 2026-04-25
+
+### Fixed
+- **CreateAlertParams.price** — change type from `f64` to `String` to match platform's `@IsNumberString` validation. Alert creation was failing with a 400 error because the platform expects a numeric string, not a float. (closes #174)
+
 ## [1.7.5] — 2026-04-15
 
 ### Added
