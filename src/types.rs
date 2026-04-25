@@ -1323,7 +1323,7 @@ pub enum AlertDirection {
 pub struct CreateAlertParams {
     pub token_id: String,
     pub direction: AlertDirection,
-    pub price: f64,
+    pub price: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persistent: Option<bool>,
 }
