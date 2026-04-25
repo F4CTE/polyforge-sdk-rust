@@ -2053,6 +2053,86 @@ pub struct CreateArbitrageMatchParams {
     pub notes: Option<String>,
 }
 
+/// Bid/ask info for a single venue in a spread comparison.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VenuePriceInfo {
+    #[serde(default)]
+    pub market_id: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub yes_bid: Option<f64>,
+    #[serde(default)]
+    pub no_ask: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Bid/ask spread comparison between Polymarket and Kalshi for a matched pair.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadSummary {
+    #[serde(default)]
+    pub match_id: Option<String>,
+    #[serde(default)]
+    pub polymarket: Option<VenuePriceInfo>,
+    #[serde(default)]
+    pub kalshi: Option<VenuePriceInfo>,
+    #[serde(default)]
+    pub yes_spread_pct: Option<f64>,
+    #[serde(default)]
+    pub no_spread_pct: Option<f64>,
+    #[serde(default)]
+    pub confidence: Option<f64>,
+    #[serde(default)]
+    pub verified: Option<bool>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Result of a manual matching sync pass.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchSyncResult {
+    #[serde(default)]
+    pub matched: Option<u64>,
+    #[serde(default)]
+    pub created: Option<u64>,
+    #[serde(default)]
+    pub updated: Option<u64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A user subscription for cross-venue arbitrage notifications.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbitrageAlertSubscription {
+    pub id: String,
+    #[serde(default)]
+    pub min_spread_pct: Option<f64>,
+    #[serde(default)]
+    pub market_id: Option<String>,
+    #[serde(default)]
+    pub active: Option<bool>,
+    #[serde(default)]
+    pub triggered_at: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for creating an arbitrage alert subscription.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateArbitrageAlertParams {
+    pub min_spread_pct: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_id: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Whale Leaderboard & Alert Filter (POLA-782)
 // ---------------------------------------------------------------------------

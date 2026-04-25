@@ -2203,8 +2203,39 @@ impl PolyforgeClient {
     /// List live cross-venue arbitrage opportunities.
     pub async fn list_arbitrage_opportunities(
         &self,
+        min_spread: Option<f64>,
     ) -> Result<Vec<CrossVenueArbitrageOpportunity>> {
-        self.get("/api/v1/arbitrage/cross-venue").await
+        let mut url = self.url("/api/v1/arbitrage/cross-venue");
+        if let Some(ms) = min_spread {
+            url = format!("{}?minSpread={}", url, ms);
+        }
+        let resp = self
+            .http
+            .get(&url)
+            .header(AUTHORIZATION, self.auth_header()?)
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
+    /// Cross-venue arbitrage opportunities involving a specific market.
+    pub async fn get_cross_venue_opportunities_for_market(
+        &self,
+        market_id: &str,
+        min_spread: Option<f64>,
+    ) -> Result<Vec<CrossVenueArbitrageOpportunity>> {
+        let base = format!("/api/v1/arbitrage/cross-venue/{}", encode(market_id));
+        let mut url = self.url(&base);
+        if let Some(ms) = min_spread {
+            url = format!("{}?minSpread={}", url, ms);
+        }
+        let resp = self
+            .http
+            .get(&url)
+            .header(AUTHORIZATION, self.auth_header()?)
+            .send()
+            .await?;
+        self.handle_response(resp).await
     }
 
     /// Get the price comparison for a specific arbitrage match.
@@ -2222,6 +2253,12 @@ impl PolyforgeClient {
     /// List all arbitrage market matches.
     pub async fn list_arbitrage_matches(&self) -> Result<Vec<ArbitrageMatch>> {
         self.get("/api/v1/arbitrage/matches").await
+    }
+
+    /// Get a single arbitrage match by ID.
+    pub async fn get_market_match(&self, match_id: &str) -> Result<ArbitrageMatch> {
+        let path = format!("/api/v1/arbitrage/matches/{}", encode(match_id));
+        self.get(&path).await
     }
 
     /// List arbitrage matches for a specific market.
@@ -2254,8 +2291,62 @@ impl PolyforgeClient {
     }
 
     /// Trigger a sync of arbitrage matches from external sources.
-    pub async fn sync_arbitrage_matches(&self) -> Result<serde_json::Value> {
+    pub async fn sync_arbitrage_matches(&self) -> Result<MatchSyncResult> {
         self.post("/api/v1/arbitrage/matches/sync", &json!({})).await
+    }
+
+    /// Get bid/ask spread comparison across all matched venues.
+    pub async fn get_spread_comparison(&self) -> Result<Vec<SpreadSummary>> {
+        self.get("/api/v1/arbitrage/spread").await
+    }
+
+    /// Get historical arbitrage opportunity snapshots.
+    pub async fn get_arbitrage_history(
+        &self,
+        match_id: Option<&str>,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> Result<serde_json::Value> {
+        let mut params = Vec::new();
+        if let Some(m) = match_id {
+            params.push(format!("matchId={}", encode(m)));
+        }
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(o) = offset {
+            params.push(format!("offset={}", o));
+        }
+        let mut url = self.url("/api/v1/arbitrage/history");
+        if !params.is_empty() {
+            url = format!("{}?{}", url, params.join("&"));
+        }
+        let resp = self
+            .http
+            .get(&url)
+            .header(AUTHORIZATION, self.auth_header()?)
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
+    /// List user's active arbitrage alert subscriptions.
+    pub async fn get_arbitrage_alerts(&self) -> Result<Vec<ArbitrageAlertSubscription>> {
+        self.get("/api/v1/arbitrage/alerts").await
+    }
+
+    /// Create an arbitrage alert subscription.
+    pub async fn create_arbitrage_alert(
+        &self,
+        params: &CreateArbitrageAlertParams,
+    ) -> Result<ArbitrageAlertSubscription> {
+        self.post("/api/v1/arbitrage/alerts", &serde_json::to_value(params)?).await
+    }
+
+    /// Deactivate an arbitrage alert subscription.
+    pub async fn delete_arbitrage_alert(&self, alert_id: &str) -> Result<()> {
+        let path = format!("/api/v1/arbitrage/alerts/{}", encode(alert_id));
+        self.delete(&path).await
     }
 
     // -----------------------------------------------------------------------
@@ -5120,6 +5211,160 @@ mod tests {
         };
         let v = serde_json::to_value(&p).unwrap();
         assert!(v.get("notes").is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-Venue Arbitrage — new types (POLA-908)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_venue_price_info_deserializes() {
+        let json = r#"{"marketId":"mkt-1","title":"Will X?","yesBid":0.55,"noAsk":0.45}"#;
+        let v: VenuePriceInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(v.market_id.as_deref(), Some("mkt-1"));
+        assert_eq!(v.yes_bid, Some(0.55));
+        assert_eq!(v.no_ask, Some(0.45));
+    }
+
+    #[test]
+    fn test_venue_price_info_handles_missing_fields() {
+        let json = r#"{}"#;
+        let v: VenuePriceInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(v.market_id, None);
+        assert_eq!(v.yes_bid, None);
+    }
+
+    #[test]
+    fn test_spread_summary_deserializes() {
+        let json = r#"{"matchId":"m-1","polymarket":{"marketId":"p1","yesBid":0.6},"kalshi":{"marketId":"k1","noAsk":0.4},"yesSpreadPct":5.0,"noSpreadPct":3.2,"confidence":0.9,"verified":true}"#;
+        let s: SpreadSummary = serde_json::from_str(json).unwrap();
+        assert_eq!(s.match_id.as_deref(), Some("m-1"));
+        assert_eq!(s.yes_spread_pct, Some(5.0));
+        assert_eq!(s.no_spread_pct, Some(3.2));
+        assert_eq!(s.verified, Some(true));
+        assert!(s.polymarket.is_some());
+        assert!(s.kalshi.is_some());
+    }
+
+    #[test]
+    fn test_spread_summary_handles_null_venues() {
+        let json = r#"{"matchId":"m-2","yesSpreadPct":1.0,"confidence":0.5}"#;
+        let s: SpreadSummary = serde_json::from_str(json).unwrap();
+        assert!(s.polymarket.is_none());
+        assert!(s.kalshi.is_none());
+    }
+
+    #[test]
+    fn test_match_sync_result_deserializes() {
+        let json = r#"{"matched":10,"created":3,"updated":7}"#;
+        let r: MatchSyncResult = serde_json::from_str(json).unwrap();
+        assert_eq!(r.matched, Some(10));
+        assert_eq!(r.created, Some(3));
+        assert_eq!(r.updated, Some(7));
+    }
+
+    #[test]
+    fn test_match_sync_result_handles_minimal() {
+        let json = r#"{"matched":5}"#;
+        let r: MatchSyncResult = serde_json::from_str(json).unwrap();
+        assert_eq!(r.matched, Some(5));
+        assert_eq!(r.created, None);
+    }
+
+    #[test]
+    fn test_arbitrage_alert_subscription_deserializes() {
+        let json = r#"{"id":"alert-1","minSpreadPct":5.0,"marketId":"mkt-1","active":true,"triggeredAt":null,"createdAt":"2026-01-01"}"#;
+        let a: ArbitrageAlertSubscription = serde_json::from_str(json).unwrap();
+        assert_eq!(a.id, "alert-1");
+        assert_eq!(a.min_spread_pct, Some(5.0));
+        assert_eq!(a.active, Some(true));
+        assert_eq!(a.market_id.as_deref(), Some("mkt-1"));
+    }
+
+    #[test]
+    fn test_arbitrage_alert_subscription_no_market() {
+        let json = r#"{"id":"alert-2","minSpreadPct":3.0,"active":true,"createdAt":"2026-01-01"}"#;
+        let a: ArbitrageAlertSubscription = serde_json::from_str(json).unwrap();
+        assert_eq!(a.id, "alert-2");
+        assert_eq!(a.market_id, None);
+    }
+
+    #[test]
+    fn test_create_arbitrage_alert_params_serializes() {
+        let p = CreateArbitrageAlertParams {
+            min_spread_pct: "5.0".into(),
+            market_id: Some("mkt-1".into()),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["minSpreadPct"], "5.0");
+        assert_eq!(v["marketId"], "mkt-1");
+    }
+
+    #[test]
+    fn test_create_arbitrage_alert_params_omits_none_market() {
+        let p = CreateArbitrageAlertParams {
+            min_spread_pct: "3.0".into(),
+            market_id: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["minSpreadPct"], "3.0");
+        assert!(v.get("marketId").is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-Venue Arbitrage — path tests (POLA-908)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_list_arbitrage_opportunities_path_no_spread() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/arbitrage/cross-venue");
+        assert!(url.ends_with("/api/v1/arbitrage/cross-venue"));
+    }
+
+    #[test]
+    fn test_cross_venue_market_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let path = format!("/api/v1/arbitrage/cross-venue/{}", encode("mkt-123"));
+        let url = client.url(&path);
+        assert!(url.contains("/api/v1/arbitrage/cross-venue/mkt-123"));
+    }
+
+    #[test]
+    fn test_get_market_match_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let path = format!("/api/v1/arbitrage/matches/{}", encode("match-1"));
+        let url = client.url(&path);
+        assert!(url.contains("/api/v1/arbitrage/matches/match-1"));
+    }
+
+    #[test]
+    fn test_spread_comparison_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/arbitrage/spread");
+        assert!(url.ends_with("/api/v1/arbitrage/spread"));
+    }
+
+    #[test]
+    fn test_arbitrage_history_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/arbitrage/history");
+        assert!(url.ends_with("/api/v1/arbitrage/history"));
+    }
+
+    #[test]
+    fn test_arbitrage_alerts_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/arbitrage/alerts");
+        assert!(url.ends_with("/api/v1/arbitrage/alerts"));
+    }
+
+    #[test]
+    fn test_delete_arbitrage_alert_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let path = format!("/api/v1/arbitrage/alerts/{}", encode("alert-99"));
+        let url = client.url(&path);
+        assert!(url.contains("/api/v1/arbitrage/alerts/alert-99"));
     }
 
     // -----------------------------------------------------------------------
