@@ -3021,47 +3021,18 @@ mod tests {
 
     #[test]
     fn test_start_strategy_paper_payload() {
-        // #145: start_strategy must send { paperMode: true } not { mode: "paper" }
+        // #173: start_strategy must send { mode: "paper" } to match platform contract
         let body = serde_json::to_value(StartStrategyParams::paper()).unwrap();
-        assert_eq!(body["paperMode"], serde_json::Value::Bool(true));
-        assert!(body.get("mode").is_none(), "must not send legacy `mode` field");
-        assert!(
-            body.get("deploymentMode").is_none(),
-            "deploymentMode must be absent when None"
-        );
+        assert_eq!(body["mode"], serde_json::Value::String("paper".to_string()));
+        assert!(body.get("paperMode").is_none(), "must not send obsolete `paperMode` field");
     }
 
     #[test]
     fn test_start_strategy_live_payload() {
-        // #145: start_strategy must send { paperMode: false } not { mode: "live" }
+        // #173: start_strategy must send { mode: "live" } to match platform contract
         let body = serde_json::to_value(StartStrategyParams::live()).unwrap();
-        assert_eq!(body["paperMode"], serde_json::Value::Bool(false));
-        assert!(body.get("mode").is_none(), "must not send legacy `mode` field");
-    }
-
-    #[test]
-    fn test_start_strategy_with_deployment_mode() {
-        // #145: DeploymentMode serializes as uppercase "LIVE" / "SIMULATION"
-        let params = StartStrategyParams {
-            paper_mode: false,
-            deployment_mode: Some(DeploymentMode::Live),
-        };
-        let body = serde_json::to_value(&params).unwrap();
-        assert_eq!(body["paperMode"], serde_json::Value::Bool(false));
-        assert_eq!(
-            body["deploymentMode"],
-            serde_json::Value::String("LIVE".to_string())
-        );
-
-        let sim = StartStrategyParams {
-            paper_mode: true,
-            deployment_mode: Some(DeploymentMode::Simulation),
-        };
-        let body2 = serde_json::to_value(&sim).unwrap();
-        assert_eq!(
-            body2["deploymentMode"],
-            serde_json::Value::String("SIMULATION".to_string())
-        );
+        assert_eq!(body["mode"], serde_json::Value::String("live".to_string()));
+        assert!(body.get("paperMode").is_none(), "must not send obsolete `paperMode` field");
     }
 
     #[test]

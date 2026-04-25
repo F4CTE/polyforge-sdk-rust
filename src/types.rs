@@ -183,38 +183,22 @@ pub enum TradingMode {
     Paper,
 }
 
-/// Deployment mode sent when starting a strategy.
-///
-/// Platform contract: `"LIVE"` or `"SIMULATION"`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum DeploymentMode {
-    #[serde(rename = "LIVE")]
-    Live,
-    #[serde(rename = "SIMULATION")]
-    Simulation,
-}
-
 /// Parameters for [`PolyforgeClient::start_strategy`].
 ///
 /// Platform contract (POST `/api/v1/strategies/{id}/start`):
-/// `{ "paperMode": bool, "deploymentMode"?: "LIVE"|"SIMULATION" }`.
+/// `{ "mode": "live"|"paper" }`.
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct StartStrategyParams {
-    pub paper_mode: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub deployment_mode: Option<DeploymentMode>,
+    pub mode: TradingMode,
 }
 
 impl StartStrategyParams {
-    /// Convenience constructor: paper trading with no explicit deployment mode.
     pub fn paper() -> Self {
-        Self { paper_mode: true, deployment_mode: None }
+        Self { mode: TradingMode::Paper }
     }
 
-    /// Convenience constructor: live trading with no explicit deployment mode.
     pub fn live() -> Self {
-        Self { paper_mode: false, deployment_mode: None }
+        Self { mode: TradingMode::Live }
     }
 }
 
