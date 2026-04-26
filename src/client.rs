@@ -3443,15 +3443,15 @@ mod tests {
 
     #[test]
     fn test_paginated_response_deserializes_strategies() {
-        // #76 / #142: PaginatedResponse uses nested pagination object matching platform contract
         let json = r#"{
             "data": [{"id":"s1","name":"Alpha"},{"id":"s2","name":"Beta"}],
-            "pagination": {"page": 1, "limit": 10, "total": 2, "totalPages": 1}
+            "total": 2, "page": 1, "limit": 10, "totalPages": 1, "hasNext": true
         }"#;
         let resp: PaginatedResponse<Strategy> = serde_json::from_str(json).unwrap();
         assert_eq!(resp.data.len(), 2);
-        assert_eq!(resp.pagination.total, 2);
-        assert_eq!(resp.pagination.page, 1);
+        assert_eq!(resp.total, 2);
+        assert_eq!(resp.page, 1);
+        assert_eq!(resp.has_next, true);
         assert_eq!(resp.data[0].id, "s1");
     }
 
@@ -4503,12 +4503,12 @@ mod tests {
     fn test_paginated_conditional_orders_deserializes() {
         let json = r#"{
             "data": [{"id": "co-1"}, {"id": "co-2"}],
-            "pagination": {"page": 1, "limit": 10, "total": 2, "totalPages": 1}
+            "total": 2, "page": 1, "limit": 10, "totalPages": 1, "hasNext": false
         }"#;
         let resp: PaginatedResponse<ConditionalOrder> = serde_json::from_str(json).unwrap();
         assert_eq!(resp.data.len(), 2);
         assert_eq!(resp.data[0].id, "co-1");
-        assert_eq!(resp.pagination.total, 2);
+        assert_eq!(resp.total, 2);
     }
 
     #[test]

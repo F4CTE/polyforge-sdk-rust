@@ -4,21 +4,16 @@ use serde::{Deserialize, Serialize};
 // Paginated wrapper
 // ---------------------------------------------------------------------------
 
-/// Pagination metadata nested under the `pagination` key.
+/// A paginated API response with flat pagination fields matching the platform.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Pagination {
-    pub page: u64,
-    pub limit: u64,
-    pub total: u64,
-    pub total_pages: u64,
-}
-
-/// A paginated API response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaginatedResponse<T> {
     pub data: Vec<T>,
-    pub pagination: Pagination,
+    pub total: u64,
+    pub page: u64,
+    pub limit: u64,
+    pub total_pages: u64,
+    pub has_next: bool,
 }
 
 // ---------------------------------------------------------------------------

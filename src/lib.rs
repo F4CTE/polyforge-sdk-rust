@@ -11,7 +11,7 @@
 //! async fn main() -> polyforge::Result<()> {
 //!     let client = PolyforgeClient::new("your-api-key")?;
 //!     let markets = client.list_markets(&Default::default()).await?;
-//!     println!("Found {} markets", markets.pagination.total);
+//!     println!("Found {} markets", markets.total);
 //!     Ok(())
 //! }
 //! ```
