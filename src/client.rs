@@ -350,28 +350,8 @@ impl PolyforgeClient {
             .await?;
         let status = resp.status().as_u16();
         if !resp.status().is_success() {
-            let body: serde_json::Value = resp.json().await.unwrap_or_default();
-            return Err(PolyforgeError::Api {
-                status,
-                code: body
-                    .get("code")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("UNKNOWN")
-                    .to_string(),
-                message: body
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Unknown error")
-                    .to_string(),
-                request_id: body
-                    .get("requestId")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                suggestion: body
-                    .get("suggestion")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-            });
+            let body = Self::read_error_body(resp, status).await?;
+            return Err(Self::api_error_from_body(status, body));
         }
         Ok(resp.text().await?)
     }
@@ -438,56 +418,77 @@ impl PolyforgeClient {
     ) -> Result<T> {
         let status = resp.status().as_u16();
         if !resp.status().is_success() {
-            // Guard: reject error responses whose Content-Length exceeds
-            // MAX_RESPONSE_BODY_SIZE to prevent memory amplification attacks
-            // where a malicious server returns a multi-gigabyte error body.
-            let content_length = resp
-                .headers()
-                .get(reqwest::header::CONTENT_LENGTH)
-                .and_then(|v| v.to_str().ok())
-                .and_then(|v| v.parse::<u64>().ok());
-            if let Some(cl) = content_length {
-                if cl > MAX_RESPONSE_BODY_SIZE as u64 {
-                    return Err(PolyforgeError::Api {
-                        status,
-                        code: "RESPONSE_BODY_TOO_LARGE".to_string(),
-                        message: format!(
-                            "Error response body too large ({cl} bytes, limit {MAX_RESPONSE_BODY_SIZE})"
-                        ),
-                        request_id: None,
-                        suggestion: None,
-                    });
-                }
-            }
-
-            let body: serde_json::Value = resp.json().await.unwrap_or_default();
-            return Err(PolyforgeError::Api {
-                status,
-                code: body
-                    .get("code")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("UNKNOWN")
-                    .to_string(),
-                message: body
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Unknown error")
-                    .to_string(),
-                request_id: body
-                    .get("requestId")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                suggestion: body
-                    .get("suggestion")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-            });
+            let body = Self::read_error_body(resp, status).await?;
+            return Err(Self::api_error_from_body(status, body));
         }
         if status == 204 {
             return serde_json::from_value(serde_json::Value::Null).map_err(PolyforgeError::from);
         }
         let body = resp.text().await?;
         serde_json::from_str(&body).map_err(PolyforgeError::from)
+    }
+
+    async fn read_error_body(
+        mut resp: reqwest::Response,
+        status: u16,
+    ) -> Result<serde_json::Value> {
+        let content_length = resp
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<u64>().ok());
+        if let Some(cl) = content_length {
+            if cl > MAX_RESPONSE_BODY_SIZE as u64 {
+                return Err(Self::response_body_too_large_error(status, cl));
+            }
+        }
+
+        let mut body = Vec::new();
+        while let Some(chunk) = resp.chunk().await? {
+            let next_len = body.len().saturating_add(chunk.len());
+            if next_len > MAX_RESPONSE_BODY_SIZE {
+                return Err(Self::response_body_too_large_error(status, next_len as u64));
+            }
+            body.extend_from_slice(&chunk);
+        }
+
+        Ok(serde_json::from_slice(&body).unwrap_or_default())
+    }
+
+    fn response_body_too_large_error(status: u16, size: u64) -> PolyforgeError {
+        PolyforgeError::Api {
+            status,
+            code: "RESPONSE_BODY_TOO_LARGE".to_string(),
+            message: format!(
+                "Error response body too large ({size} bytes, limit {MAX_RESPONSE_BODY_SIZE})"
+            ),
+            request_id: None,
+            suggestion: None,
+        }
+    }
+
+    fn api_error_from_body(status: u16, body: serde_json::Value) -> PolyforgeError {
+        PolyforgeError::Api {
+            status,
+            code: body
+                .get("code")
+                .and_then(|v| v.as_str())
+                .unwrap_or("UNKNOWN")
+                .to_string(),
+            message: body
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown error")
+                .to_string(),
+            request_id: body
+                .get("requestId")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+            suggestion: body
+                .get("suggestion")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -2373,7 +2374,7 @@ impl PolyforgeClient {
 
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
-            let body: serde_json::Value = resp.json().await.unwrap_or_default();
+            let body = Self::read_error_body(resp, status).await?;
             return Err(PolyforgeError::Api {
                 status,
                 code: body
@@ -3260,6 +3261,48 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_watch_strategy_rejects_oversized_error_body_without_content_length() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
+        let oversized = "x".repeat(MAX_RESPONSE_BODY_SIZE + 1);
+
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0_u8; 1024];
+            let _ = socket.read(&mut request).await;
+            socket
+                .write_all(
+                    b"HTTP/1.1 500 Internal Server Error\r\n\
+                      content-type: application/json\r\n\
+                      connection: close\r\n\
+                      \r\n",
+                )
+                .await
+                .unwrap();
+            socket.write_all(oversized.as_bytes()).await.unwrap();
+        });
+
+        let client = PolyforgeClient::with_url("test-key", format!("http://{addr}")).unwrap();
+        let result = client.watch_strategy("strategy-1").await;
+
+        match result {
+            Err(PolyforgeError::Api { code, status, .. }) => {
+                assert_eq!(code, "RESPONSE_BODY_TOO_LARGE");
+                assert_eq!(status, 500);
+            }
+            Ok(_) => panic!("Expected Api error with RESPONSE_BODY_TOO_LARGE, got stream"),
+            Err(other) => panic!(
+                "Expected Api error with RESPONSE_BODY_TOO_LARGE, got: {:?}",
+                other
+            ),
+        }
+    }
+
     // --- Response body size cap tests (closes #48) ---
 
     #[test]
@@ -3274,6 +3317,31 @@ mod tests {
             .status(500)
             .header("content-length", (MAX_RESPONSE_BODY_SIZE + 1).to_string())
             .body("")
+            .unwrap();
+        let resp = reqwest::Response::from(body);
+
+        let client = PolyforgeClient::with_url("test-key", "http://localhost:3002").unwrap();
+        let result: std::result::Result<serde_json::Value, _> = client.handle_response(resp).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            PolyforgeError::Api { code, status, .. } => {
+                assert_eq!(code, "RESPONSE_BODY_TOO_LARGE");
+                assert_eq!(status, 500);
+            }
+            other => panic!(
+                "Expected Api error with RESPONSE_BODY_TOO_LARGE, got: {:?}",
+                other
+            ),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_response_rejects_oversized_error_body_without_content_length() {
+        let body = http::Response::builder()
+            .status(500)
+            .header("content-type", "application/json")
+            .body("x".repeat(MAX_RESPONSE_BODY_SIZE + 1))
             .unwrap();
         let resp = reqwest::Response::from(body);
 
