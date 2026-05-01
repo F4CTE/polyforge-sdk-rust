@@ -5766,10 +5766,43 @@ mod tests {
             display_name: None,
             bio: Some("Hello".into()),
             avatar_url: None,
+            twitter_handle: None,
         };
         let v = serde_json::to_value(&p).unwrap();
         assert!(v.get("displayName").is_none());
         assert_eq!(v["bio"], "Hello");
+        assert!(v.get("twitterHandle").is_none());
+    }
+
+    #[test]
+    fn test_update_settings_profile_serializes_twitter_handle_camel_case() {
+        let p = UpdateSettingsProfileParams {
+            display_name: None,
+            bio: None,
+            avatar_url: None,
+            twitter_handle: Some("polyforge".into()),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["twitterHandle"], "polyforge");
+        assert!(v.get("twitter_handle").is_none());
+    }
+
+    #[test]
+    fn test_update_settings_profile_twitter_handle_max_length_50() {
+        // Mirrors the platform's @MaxLength(50) on UpdateProfileDto.twitterHandle:
+        // services/api-service/src/settings/dto/update-profile.dto.ts. The SDK
+        // transmits the value as-is (server enforces the cap); this regression
+        // test guards against accidental client-side truncation.
+        let handle = "a".repeat(50);
+        let p = UpdateSettingsProfileParams {
+            display_name: None,
+            bio: None,
+            avatar_url: None,
+            twitter_handle: Some(handle.clone()),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["twitterHandle"], handle);
+        assert_eq!(v["twitterHandle"].as_str().unwrap().len(), 50);
     }
 
     // -----------------------------------------------------------------------

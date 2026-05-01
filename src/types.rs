@@ -2233,6 +2233,8 @@ pub struct UpdateSettingsProfileParams {
     pub bio: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub twitter_handle: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
