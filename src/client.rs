@@ -1139,6 +1139,122 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
+    // Public User Profile Lookups (POLA-1844)
+    // -----------------------------------------------------------------------
+
+    /// Fetch a public user's PnL curve over `period` (e.g. `"30d"`, `"7d"`).
+    ///
+    /// Each entry has a `YYYY-MM-DD` date, that day's `pnl`, and the running
+    /// `cum_pnl`. Returns [`PolyforgeError::Api`] with `status = 404` if the
+    /// username is unknown.
+    pub async fn get_user_performance(
+        &self,
+        username: &str,
+        period: &str,
+    ) -> Result<Vec<UserPerformancePoint>> {
+        let res: UserDataEnvelope<UserPerformancePoint> = self
+            .get(&format!(
+                "/api/v1/users/{}/performance?period={}",
+                encode(username),
+                encode(period)
+            ))
+            .await?;
+        Ok(res.data)
+    }
+
+    /// List a public user's strategies. `visibility` defaults to `"PUBLIC"` on
+    /// the server; the server caps `limit` at 50 (default 6). Pass `None` to
+    /// take server defaults.
+    pub async fn get_user_strategies(
+        &self,
+        username: &str,
+        visibility: Option<&str>,
+        limit: Option<u32>,
+    ) -> Result<Vec<UserStrategySummary>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(v) = visibility {
+            qp.push(("visibility", v.to_string()));
+        }
+        if let Some(l) = limit {
+            qp.push(("limit", l.to_string()));
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        let res: UserDataEnvelope<UserStrategySummary> = self
+            .get(&format!(
+                "/api/v1/users/{}/strategies{}",
+                encode(username),
+                qs
+            ))
+            .await?;
+        Ok(res.data)
+    }
+
+    /// Recent resolved-position activity for a public user. Server caps `limit`
+    /// at 50 (default 5). Pass `None` to take the server default.
+    pub async fn get_user_activity(
+        &self,
+        username: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<UserActivityEntry>> {
+        let qs = match limit {
+            Some(l) => format!("?limit={}", l),
+            None => String::new(),
+        };
+        let res: UserDataEnvelope<UserActivityEntry> = self
+            .get(&format!(
+                "/api/v1/users/{}/activity{}",
+                encode(username),
+                qs
+            ))
+            .await?;
+        Ok(res.data)
+    }
+
+    /// Badges earned by a public user (id is the badge type).
+    pub async fn get_user_profile_badges(
+        &self,
+        username: &str,
+    ) -> Result<Vec<UserProfileBadge>> {
+        let res: UserDataEnvelope<UserProfileBadge> = self
+            .get(&format!("/api/v1/users/{}/badges", encode(username)))
+            .await?;
+        Ok(res.data)
+    }
+
+    /// Paginated list of users the authenticated user follows.
+    pub async fn get_my_following(
+        &self,
+        page: Option<u64>,
+        limit: Option<u64>,
+    ) -> Result<PaginatedResponse<FollowedUser>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = page {
+            qp.push(("page", p.to_string()));
+        }
+        if let Some(l) = limit {
+            qp.push(("limit", l.to_string()));
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/users/me/following{}", qs)).await
+    }
+
+    // -----------------------------------------------------------------------
     // Sports markets (POLA-1841)
     // -----------------------------------------------------------------------
     //
@@ -6099,5 +6215,98 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(json).unwrap();
         assert_eq!(v["eventTicker"], "KXNBAGAME-25");
         assert_eq!(v["marketTicker"], "KXNBAGAME-25-LAL");
+    }
+
+    // ── POLA-1844: Public user profile lookups ────────────────────────────
+
+    #[test]
+    fn test_user_performance_point_deserializes() {
+        let json = r#"{"date":"2026-04-01","pnl":12.5,"cumPnl":12.5}"#;
+        let p: UserPerformancePoint = serde_json::from_str(json).unwrap();
+        assert_eq!(p.date, "2026-04-01");
+        assert_eq!(p.pnl, 12.5);
+        assert_eq!(p.cum_pnl, 12.5);
+    }
+
+    #[test]
+    fn test_user_data_envelope_deserializes() {
+        let json = r#"{"data":[{"date":"2026-04-01","pnl":1.0,"cumPnl":1.0}]}"#;
+        let env: UserDataEnvelope<UserPerformancePoint> = serde_json::from_str(json).unwrap();
+        assert_eq!(env.data.len(), 1);
+        assert_eq!(env.data[0].date, "2026-04-01");
+    }
+
+    #[test]
+    fn test_user_strategy_summary_deserializes() {
+        let json = r#"{
+            "id":"s1","name":"Strat","description":"d",
+            "winRate":0.5,"tradeCount":3,"priceUsdc":0.0,
+            "forkCount":1,"likeCount":2,"isLiked":false
+        }"#;
+        let s: UserStrategySummary = serde_json::from_str(json).unwrap();
+        assert_eq!(s.id, "s1");
+        assert_eq!(s.win_rate, 0.5);
+        assert_eq!(s.trade_count, 3);
+        assert!(!s.is_liked);
+    }
+
+    #[test]
+    fn test_user_activity_entry_deserializes() {
+        let json = r#"{
+            "id":"p1","marketQuestion":"Will it rain?","outcome":"YES",
+            "side":"YES","size":100.0,"pnl":5.0,"resolvedAt":"2026-04-01T00:00:00.000Z"
+        }"#;
+        let a: UserActivityEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(a.id, "p1");
+        assert_eq!(a.market_question, "Will it rain?");
+        assert_eq!(a.size, 100.0);
+        assert_eq!(a.resolved_at, "2026-04-01T00:00:00.000Z");
+    }
+
+    #[test]
+    fn test_user_profile_badge_deserializes() {
+        let json = r#"{"id":"EARLY_ADOPTER","unlockedAt":"2026-01-01T00:00:00.000Z"}"#;
+        let b: UserProfileBadge = serde_json::from_str(json).unwrap();
+        assert_eq!(b.id, "EARLY_ADOPTER");
+        assert_eq!(b.unlocked_at, "2026-01-01T00:00:00.000Z");
+    }
+
+    #[test]
+    fn test_followed_user_deserializes_with_nulls() {
+        let json = r#"{
+            "id":"u1","username":"alice","displayName":null,"avatarUrl":null
+        }"#;
+        let u: FollowedUser = serde_json::from_str(json).unwrap();
+        assert_eq!(u.id, "u1");
+        assert_eq!(u.username, "alice");
+        assert!(u.display_name.is_none());
+        assert!(u.avatar_url.is_none());
+    }
+
+    #[test]
+    fn test_followed_user_deserializes_with_values() {
+        let json = r#"{
+            "id":"u1","username":"alice",
+            "displayName":"Alice","avatarUrl":"https://x/a.png"
+        }"#;
+        let u: FollowedUser = serde_json::from_str(json).unwrap();
+        assert_eq!(u.display_name.as_deref(), Some("Alice"));
+        assert_eq!(u.avatar_url.as_deref(), Some("https://x/a.png"));
+    }
+
+    #[test]
+    fn test_following_paginated_response_deserializes() {
+        let json = r#"{
+            "data":[{"id":"u1","username":"alice","displayName":"Alice","avatarUrl":null}],
+            "total":1,"page":1,"limit":20,"totalPages":1,"hasNext":false
+        }"#;
+        let resp: PaginatedResponse<FollowedUser> = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.total, 1);
+        assert_eq!(resp.page, 1);
+        assert_eq!(resp.limit, 20);
+        assert_eq!(resp.total_pages, 1);
+        assert!(!resp.has_next);
+        assert_eq!(resp.data.len(), 1);
+        assert_eq!(resp.data[0].username, "alice");
     }
 }

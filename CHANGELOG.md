@@ -24,6 +24,16 @@
 - `GET /sports/combos/:collectionTicker` currently ignores its path param
   server-side (forwards to `listComboCollections({page:1, limit:1})`). The SDK
   wraps the route as-is for fidelity; a server-side fix is tracked separately.
+- **Public user profile lookups (POLA-1844)** — five endpoints sourced from the weekly SDK audit:
+  - `get_user_performance(username, period)` → `Vec<UserPerformancePoint>` (PnL curve).
+  - `get_user_strategies(username, visibility, limit)` → `Vec<UserStrategySummary>` (server caps `limit` at 50).
+  - `get_user_activity(username, limit)` → `Vec<UserActivityEntry>` (resolved positions, server caps `limit` at 50).
+  - `get_user_profile_badges(username)` → `Vec<UserProfileBadge>`.
+  - `get_my_following(page, limit)` → `PaginatedResponse<FollowedUser>` (authenticated users only).
+
+  All four public-profile endpoints surface `PolyforgeError::Api { status: 404, code: "NOT_FOUND", .. }` when the username is unknown. The `username` path segment is URL-encoded via the existing `urlencoding::encode` helper.
+
+  New types: `UserPerformancePoint`, `UserStrategySummary`, `UserActivityEntry`, `UserProfileBadge`, `FollowedUser`, plus an internal `UserDataEnvelope<T>` to unwrap the `{ "data": [...] }` envelope.
 
 ## [1.7.6] — 2026-04-25
 
