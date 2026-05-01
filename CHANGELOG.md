@@ -35,6 +35,9 @@
 
   New types: `UserPerformancePoint`, `UserStrategySummary`, `UserActivityEntry`, `UserProfileBadge`, `FollowedUser`, plus an internal `UserDataEnvelope<T>` to unwrap the `{ "data": [...] }` envelope.
 
+### Fixed
+- **NotificationSettings / UpdateNotificationSettingsParams** — rewrite both structs to mirror the platform's `UpdateNotificationsDto`. Removes fictional fields (`pushEnabled`, `orderFills`, `strategyErrors`, `whaleAlerts`, `marketResolutions`, `dailySummary`) that the platform rejected with 400 under `forbidNonWhitelisted: true`, and adds the real DTO fields (`telegramEnabled`, `discordEnabled`, `onOrderFilled`, `onStrategyError`, `onBacktestComplete`, `onDailyLossLimit`, `onMarketResolved`, `onSomeoneForked`, `onSomeoneFollowed`, `onSomeoneLiked`, `onSomeoneCommented`). The `extra` flatten bucket is preserved on the read struct so server-only fields (`userId`, `updatedAt`, `eventPrefs`, `emailDigest`, `notificationFreq`, `minFillNotifyUsdc`, `onTicketReply`) round-trip. Added a wire-format key-set test. (closes #184)
+
 ## [1.7.6] — 2026-04-25
 
 ### Fixed

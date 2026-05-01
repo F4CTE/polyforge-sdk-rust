@@ -2237,44 +2237,83 @@ pub struct UpdateSettingsProfileParams {
     pub twitter_handle: Option<String>,
 }
 
+/// Notification settings as returned by `GET /api/v1/settings/notifications`.
+///
+/// Field names mirror the platform's `UpdateNotificationsDto` plus the
+/// underlying `NotificationPreference` Prisma row (camelCase on the wire).
+/// Unknown fields returned by the server (`userId`, `updatedAt`,
+/// `eventPrefs`, `emailDigest`, `notificationFreq`, `minFillNotifyUsdc`,
+/// `onTicketReply`, ...) are preserved in `extra` so that callers using a
+/// newer platform release do not lose data on round-trip.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct NotificationSettings {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email_enabled: Option<bool>,
-    #[serde(default)]
-    pub push_enabled: Option<bool>,
-    #[serde(default)]
-    pub order_fills: Option<bool>,
-    #[serde(default)]
-    pub strategy_errors: Option<bool>,
-    #[serde(default)]
-    pub whale_alerts: Option<bool>,
-    #[serde(default)]
-    pub market_resolutions: Option<bool>,
-    #[serde(default)]
-    pub daily_summary: Option<bool>,
-    #[serde(flatten)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub telegram_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discord_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_order_filled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_strategy_error: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_backtest_complete: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_daily_loss_limit: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_market_resolved: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_someone_forked: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_someone_followed: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_someone_liked: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_someone_commented: Option<bool>,
+    /// Forward-compat bucket for any additional fields the platform
+    /// returns (e.g. `userId`, `updatedAt`, `eventPrefs`, `emailDigest`,
+    /// `notificationFreq`, `minFillNotifyUsdc`, `onTicketReply`).
+    #[serde(default, flatten)]
     pub extra: serde_json::Value,
 }
 
+/// Parameters for `PATCH /api/v1/settings/notifications`.
+///
+/// Mirrors the platform's `UpdateNotificationsDto` exactly. The platform
+/// runs `ValidationPipe` with `whitelist: true, forbidNonWhitelisted: true`,
+/// so this struct intentionally only contains fields that the DTO accepts
+/// — sending anything else returns 400. Use `None` for any field you do
+/// not want to touch; `serde(skip_serializing_if = "Option::is_none")`
+/// keeps the request body to a true partial update.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateNotificationSettingsParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub push_enabled: Option<bool>,
+    pub telegram_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub order_fills: Option<bool>,
+    pub discord_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub strategy_errors: Option<bool>,
+    pub on_order_filled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub whale_alerts: Option<bool>,
+    pub on_strategy_error: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub market_resolutions: Option<bool>,
+    pub on_backtest_complete: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub daily_summary: Option<bool>,
+    pub on_daily_loss_limit: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on_market_resolved: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on_someone_forked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on_someone_followed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on_someone_liked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on_someone_commented: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

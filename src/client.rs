@@ -5843,27 +5843,128 @@ mod tests {
 
     #[test]
     fn test_notification_settings_deserializes() {
-        let json = r#"{"emailEnabled":true,"pushEnabled":false,"orderFills":true,"strategyErrors":true,"whaleAlerts":false,"marketResolutions":true,"dailySummary":false}"#;
+        // Real shape returned by GET /api/v1/settings/notifications, mirroring
+        // the Prisma `NotificationPreference` row + `UpdateNotificationsDto`
+        // contract. Includes server-only / forward-compat fields that must
+        // round-trip through the `extra` flatten bucket.
+        let json = r#"{
+            "userId": "user_abc123",
+            "emailEnabled": true,
+            "telegramEnabled": false,
+            "discordEnabled": false,
+            "onOrderFilled": true,
+            "onStrategyError": true,
+            "onBacktestComplete": true,
+            "onDailyLossLimit": true,
+            "onMarketResolved": true,
+            "onSomeoneForked": false,
+            "onSomeoneFollowed": false,
+            "onSomeoneLiked": false,
+            "onSomeoneCommented": false,
+            "onTicketReply": true,
+            "minFillNotifyUsdc": "0.00",
+            "notificationFreq": "IMMEDIATE",
+            "emailDigest": "DAILY",
+            "updatedAt": "2026-04-01T12:00:00.000Z"
+        }"#;
         let ns: NotificationSettings = serde_json::from_str(json).unwrap();
         assert_eq!(ns.email_enabled, Some(true));
-        assert_eq!(ns.push_enabled, Some(false));
-        assert_eq!(ns.order_fills, Some(true));
+        assert_eq!(ns.telegram_enabled, Some(false));
+        assert_eq!(ns.discord_enabled, Some(false));
+        assert_eq!(ns.on_order_filled, Some(true));
+        assert_eq!(ns.on_strategy_error, Some(true));
+        assert_eq!(ns.on_backtest_complete, Some(true));
+        assert_eq!(ns.on_daily_loss_limit, Some(true));
+        assert_eq!(ns.on_market_resolved, Some(true));
+        assert_eq!(ns.on_someone_forked, Some(false));
+        assert_eq!(ns.on_someone_followed, Some(false));
+        assert_eq!(ns.on_someone_liked, Some(false));
+        assert_eq!(ns.on_someone_commented, Some(false));
+        // Server-only / forward-compat fields must be preserved in `extra`.
+        assert_eq!(ns.extra["userId"], "user_abc123");
+        assert_eq!(ns.extra["onTicketReply"], true);
+        assert_eq!(ns.extra["emailDigest"], "DAILY");
+        assert_eq!(ns.extra["notificationFreq"], "IMMEDIATE");
     }
 
     #[test]
     fn test_update_notification_settings_omits_none() {
         let p = UpdateNotificationSettingsParams {
             email_enabled: Some(true),
-            push_enabled: None,
-            order_fills: None,
-            strategy_errors: None,
-            whale_alerts: None,
-            market_resolutions: None,
-            daily_summary: None,
+            telegram_enabled: None,
+            discord_enabled: None,
+            on_order_filled: None,
+            on_strategy_error: None,
+            on_backtest_complete: None,
+            on_daily_loss_limit: None,
+            on_market_resolved: None,
+            on_someone_forked: None,
+            on_someone_followed: None,
+            on_someone_liked: None,
+            on_someone_commented: None,
         };
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["emailEnabled"], true);
-        assert!(v.get("pushEnabled").is_none());
+        assert!(v.get("telegramEnabled").is_none());
+        assert!(v.get("discordEnabled").is_none());
+        assert!(v.get("onOrderFilled").is_none());
+    }
+
+    /// Wire-format keys must exactly match the platform `UpdateNotificationsDto`.
+    /// `forbidNonWhitelisted: true` on the platform rejects any field the DTO
+    /// does not declare, so this guards against future drift.
+    #[test]
+    fn test_update_notification_settings_camel_case_keys() {
+        let p = UpdateNotificationSettingsParams {
+            email_enabled: Some(true),
+            telegram_enabled: Some(false),
+            discord_enabled: Some(false),
+            on_order_filled: Some(true),
+            on_strategy_error: Some(true),
+            on_backtest_complete: Some(true),
+            on_daily_loss_limit: Some(true),
+            on_market_resolved: Some(true),
+            on_someone_forked: Some(false),
+            on_someone_followed: Some(false),
+            on_someone_liked: Some(false),
+            on_someone_commented: Some(false),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        let obj = v.as_object().expect("serialized as object");
+
+        let mut keys: Vec<&str> = obj.keys().map(String::as_str).collect();
+        keys.sort();
+        let mut expected = vec![
+            "emailEnabled",
+            "telegramEnabled",
+            "discordEnabled",
+            "onOrderFilled",
+            "onStrategyError",
+            "onBacktestComplete",
+            "onDailyLossLimit",
+            "onMarketResolved",
+            "onSomeoneForked",
+            "onSomeoneFollowed",
+            "onSomeoneLiked",
+            "onSomeoneCommented",
+        ];
+        expected.sort();
+        assert_eq!(keys, expected);
+
+        // Stale / fictional fields from the previous schema must not leak.
+        for stale in &[
+            "pushEnabled",
+            "orderFills",
+            "strategyErrors",
+            "whaleAlerts",
+            "marketResolutions",
+            "dailySummary",
+        ] {
+            assert!(
+                obj.get(*stale).is_none(),
+                "stale field `{stale}` must not appear in serialized output",
+            );
+        }
     }
 
     #[test]
