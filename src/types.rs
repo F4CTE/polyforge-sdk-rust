@@ -2409,3 +2409,86 @@ pub struct UpdateNotificationPreferencesParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub marketing: Option<bool>,
 }
+
+// ---------------------------------------------------------------------------
+// Sports markets (POLA-1841)
+// ---------------------------------------------------------------------------
+//
+// Many sports endpoints return weakly-typed payloads at the controller
+// (`Record<string, unknown>` / `unknown[]`). The SDK mirrors that fidelity
+// by surfacing those payloads as `serde_json::Value` rather than inventing
+// strict types that could drift from the server.
+
+/// A sports category aggregate returned by `GET /api/v1/sports/categories`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SportsCategory {
+    pub category: String,
+    pub label: String,
+    #[serde(default)]
+    pub series_tickers: Vec<String>,
+    #[serde(default)]
+    pub market_count: u64,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for `GET /api/v1/sports/markets`.
+#[derive(Debug, Default, Clone)]
+pub struct ListSportsMarketsParams {
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+    pub category: Option<String>,
+    pub search: Option<String>,
+    pub series_ticker: Option<String>,
+    pub event_ticker: Option<String>,
+    pub live_only: Option<bool>,
+    /// Sort order: `"volume"`, `"closing_soon"`, `"newest"`. Defaults to `"volume"` server-side.
+    pub sort: Option<String>,
+}
+
+/// Parameters for `GET /api/v1/sports/events`.
+#[derive(Debug, Default, Clone)]
+pub struct ListSportsEventsParams {
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+    pub category: Option<String>,
+    pub series_ticker: Option<String>,
+    /// Status filter: `"SCHEDULED"`, `"PREGAME"`, `"LIVE"`, `"HALFTIME"`, `"FINAL"`.
+    pub status: Option<String>,
+}
+
+/// Parameters for `GET /api/v1/sports/milestones`.
+#[derive(Debug, Default, Clone)]
+pub struct ListSportsMilestonesParams {
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+    pub event_ticker: Option<String>,
+    pub status: Option<String>,
+}
+
+/// Parameters for `GET /api/v1/sports/combos`.
+#[derive(Debug, Default, Clone)]
+pub struct ListSportsCombosParams {
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+    pub series_ticker: Option<String>,
+}
+
+/// One leg of a `POST /api/v1/sports/combos/lookup` request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SportsComboSelection {
+    pub market_ticker: String,
+    pub event_ticker: String,
+    /// Either `"yes"` or `"no"`.
+    pub side: String,
+}
+
+/// Body for `POST /api/v1/sports/combos/lookup`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SportsComboLookupParams {
+    pub collection_ticker: String,
+    pub selected_markets: Vec<SportsComboSelection>,
+}

@@ -169,6 +169,53 @@ client.get_market_sentiment("market-id").await?
 client.provide_liquidity(&ProvideLiquidityParams { token_id, spread, size }).await?
 ```
 
+### Sports
+
+| Method | Description |
+|--------|-------------|
+| `list_sports_categories()` | `Vec<SportsCategory>` — labelled categories with series tickers and market counts |
+| `list_sports_markets(params)` | `PaginatedResponse<serde_json::Value>` — sports markets with optional category / search / live-only filters |
+| `list_sports_events(params)` | `PaginatedResponse<serde_json::Value>` — sports events filtered by category / series / status |
+| `get_sports_event(event_ticker)` | `serde_json::Value` — `{ event, markets }` for one event |
+| `list_sports_milestones(params)` | `serde_json::Value` — `{ milestones, cursor }` |
+| `get_sports_live_data(milestone_id)` | `serde_json::Value` — `{ liveData }` snapshot |
+| `list_sports_combos(params)` | `serde_json::Value` — `{ collections, cursor }` |
+| `get_sports_combo_collection(collection_ticker)` | `serde_json::Value` — single combo collection |
+| `lookup_sports_combo(params)` | `serde_json::Value` — `{ eventTicker, marketTicker }` or `null` for the combo matching the supplied legs |
+
+```rust
+use polyforge::{
+    ListSportsMarketsParams, SportsComboLookupParams, SportsComboSelection,
+};
+
+let cats = client.list_sports_categories().await?;
+
+let markets = client
+    .list_sports_markets(&ListSportsMarketsParams {
+        category: Some("NBA".into()),
+        live_only: Some(true),
+        sort: Some("closing_soon".into()),
+        ..Default::default()
+    })
+    .await?;
+
+let combo = client
+    .lookup_sports_combo(&SportsComboLookupParams {
+        collection_ticker: "KXNBACOMBO".into(),
+        selected_markets: vec![SportsComboSelection {
+            market_ticker: "KXNBAGAME-25-LAL".into(),
+            event_ticker: "KXNBAGAME-25".into(),
+            side: "yes".into(),
+        }],
+    })
+    .await?;
+```
+
+Sports payloads are intentionally permissive (`serde_json::Value`) where the
+upstream controller types them as `Record<string, unknown>` / `unknown[]` —
+the SDK mirrors that fidelity instead of inventing strict shapes that could
+drift from the server.
+
 ## Error Handling
 
 All methods return `polyforge::Result<T>`. Errors are represented by `PolyforgeError`:
