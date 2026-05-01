@@ -18,6 +18,7 @@
   `SportsComboLookupParams`. Weakly-typed payloads use `serde_json::Value` to
   mirror the controller's `Record<string, unknown>` / `unknown[]` fidelity instead
   of inventing strict shapes.
+- **UpdateSettingsProfileParams.twitter_handle** — add optional `twitter_handle: Option<String>` field. Serializes as `twitterHandle` (camelCase) to match the platform's `UpdateProfileDto` and reach feature parity with `polyforge-sdk-python` and `polyforge-mcp`. (closes #185)
 
 ### Notes
 - `GET /sports/combos/:collectionTicker` currently ignores its path param
