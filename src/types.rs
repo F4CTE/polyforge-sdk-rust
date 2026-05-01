@@ -2131,6 +2131,238 @@ pub struct CreateArbitrageAlertParams {
 }
 
 // ---------------------------------------------------------------------------
+// Cross-Venue Arb Execution / Positions / Risk (POLA-1852)
+// ---------------------------------------------------------------------------
+//
+// These types describe the trading-impact-bearing arbitrage execution surface:
+//   - `POST /api/v1/arbitrage/execute`            — place real offsetting orders
+//   - `GET  /api/v1/arbitrage/positions[/:id]`    — position lifecycle
+//   - `POST /api/v1/arbitrage/positions/:id/close`
+//   - `GET  /api/v1/arbitrage/risk/dashboard`     — net exposure + P&L
+//   - `GET  /api/v1/arbitrage/risk/settlement`    — resolution-criteria mismatches
+//   - `POST /api/v1/arbitrage/risk/refresh-pnl`   — recompute unrealized P&L
+//
+// Decimal columns (sizes, prices, P&L) arrive as JSON strings from Prisma; we
+// keep them as `Option<String>` so callers can convert with full precision
+// rather than relying on f64 coercion. Mirrors the Python SDK shapes.
+
+/// Parameters for `POST /api/v1/arbitrage/execute`.
+///
+/// `size` must be in the `1..=10000` USDC range and `max_slippage_pct`, if set,
+/// in `0..=5` — these mirror the server-side `class-validator` bounds in
+/// `ExecuteArbDto`. Use [`PolyforgeClient::execute_arbitrage`] which validates
+/// before any real-money order hits the wire.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecuteArbitrageParams {
+    pub match_id: String,
+    pub size: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_slippage_pct: Option<f64>,
+}
+
+/// A single leg of an arbitrage execution result.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbExecutionLeg {
+    #[serde(default)]
+    pub venue: Option<String>,
+    #[serde(default)]
+    pub intent_id: Option<String>,
+    #[serde(default)]
+    pub token_id: Option<String>,
+    #[serde(default)]
+    pub price: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Server response for `POST /api/v1/arbitrage/execute`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbExecutionResult {
+    #[serde(default)]
+    pub arb_position_id: Option<String>,
+    #[serde(default)]
+    pub buy_leg: Option<ArbExecutionLeg>,
+    #[serde(default)]
+    pub sell_leg: Option<ArbExecutionLeg>,
+    #[serde(default)]
+    pub entry_spread_pct: Option<f64>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A cross-venue arbitrage position (mirrors the Prisma `ArbPosition` row).
+///
+/// Decimal columns (`buyPrice`, `buySize`, P&L fields, etc.) arrive as JSON
+/// strings — kept as `Option<String>` for lossless precision.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbPosition {
+    pub id: String,
+    #[serde(default)]
+    pub user_id: Option<String>,
+    #[serde(default)]
+    pub match_id: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+
+    #[serde(default)]
+    pub buy_venue: Option<String>,
+    #[serde(default)]
+    pub buy_order_id: Option<String>,
+    #[serde(default)]
+    pub buy_token_id: Option<String>,
+    #[serde(default)]
+    pub buy_price: Option<String>,
+    #[serde(default)]
+    pub buy_size: Option<String>,
+    #[serde(default)]
+    pub buy_fill_price: Option<String>,
+    #[serde(default)]
+    pub buy_fill_size: Option<String>,
+
+    #[serde(default)]
+    pub sell_venue: Option<String>,
+    #[serde(default)]
+    pub sell_order_id: Option<String>,
+    #[serde(default)]
+    pub sell_token_id: Option<String>,
+    #[serde(default)]
+    pub sell_price: Option<String>,
+    #[serde(default)]
+    pub sell_size: Option<String>,
+    #[serde(default)]
+    pub sell_fill_price: Option<String>,
+    #[serde(default)]
+    pub sell_fill_size: Option<String>,
+
+    #[serde(default)]
+    pub entry_spread_pct: Option<String>,
+    #[serde(default)]
+    pub current_spread_pct: Option<String>,
+    #[serde(default)]
+    pub realized_pnl: Option<String>,
+    #[serde(default)]
+    pub unrealized_pnl: Option<String>,
+
+    #[serde(default)]
+    pub opened_at: Option<String>,
+    #[serde(default)]
+    pub closed_at: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Paginated response for `GET /api/v1/arbitrage/positions`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbPositionsResponse {
+    #[serde(default)]
+    pub positions: Vec<ArbPosition>,
+    #[serde(default)]
+    pub total: u64,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Server response for `POST /api/v1/arbitrage/positions/:id/close`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbCloseResponse {
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub position_id: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Net deployed capital broken out by venue (component of [`ArbRiskDashboard`]).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbNetExposure {
+    #[serde(default)]
+    pub polymarket: f64,
+    #[serde(default)]
+    pub kalshi: f64,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Server response for `GET /api/v1/arbitrage/risk/dashboard`.
+///
+/// The backend pre-aggregates these to numeric summaries, hence `f64` rather
+/// than the lossless string form used on `ArbPosition`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbRiskDashboard {
+    #[serde(default)]
+    pub open_positions: u64,
+    #[serde(default)]
+    pub pending_positions: u64,
+    #[serde(default)]
+    pub total_deployed: f64,
+    #[serde(default)]
+    pub net_exposure: ArbNetExposure,
+    #[serde(default)]
+    pub total_realized_pnl: f64,
+    #[serde(default)]
+    pub total_unrealized_pnl: f64,
+    #[serde(default)]
+    pub avg_spread_pct: f64,
+    #[serde(default)]
+    pub positions_by_status: std::collections::HashMap<String, u64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// An entry from `GET /api/v1/arbitrage/risk/settlement`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbSettlementRisk {
+    #[serde(default)]
+    pub match_id: Option<String>,
+    #[serde(default)]
+    pub polymarket_title: Option<String>,
+    #[serde(default)]
+    pub kalshi_title: Option<String>,
+    #[serde(default)]
+    pub polymarket_end_date: Option<String>,
+    #[serde(default)]
+    pub kalshi_end_date: Option<String>,
+    #[serde(default)]
+    pub end_date_diff_days: Option<f64>,
+    #[serde(default)]
+    pub confidence: Option<f64>,
+    /// `"LOW"` | `"MEDIUM"` | `"HIGH"`
+    #[serde(default)]
+    pub risk_level: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Server response for `POST /api/v1/arbitrage/risk/refresh-pnl`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbPnlRefreshResult {
+    #[serde(default)]
+    pub updated: u64,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
 // Whale Leaderboard & Alert Filter (POLA-782)
 // ---------------------------------------------------------------------------
 

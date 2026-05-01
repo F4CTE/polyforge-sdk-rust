@@ -146,6 +146,39 @@ fn validate_optional_financial_param(name: &str, value: Option<f64>) -> Result<(
     Ok(())
 }
 
+/// Reject arb sizes outside the server-enforced `1..=10000` USDC range.
+///
+/// Mirrors `class-validator` bounds in `ExecuteArbDto` so the SDK rejects bad
+/// input before any real-money order ever hits the wire.
+fn validate_arb_size(value: f64) -> Result<()> {
+    if value.is_nan() || value.is_infinite() {
+        return Err(PolyforgeError::Validation(format!(
+            "size must be a finite number, got {value}"
+        )));
+    }
+    if !(1.0..=10000.0).contains(&value) {
+        return Err(PolyforgeError::Validation(format!(
+            "size must be between 1 and 10000, got {value}"
+        )));
+    }
+    Ok(())
+}
+
+/// Reject slippage outside the server-enforced `0..=5` percent range.
+fn validate_arb_slippage(value: f64) -> Result<()> {
+    if value.is_nan() || value.is_infinite() {
+        return Err(PolyforgeError::Validation(format!(
+            "max_slippage_pct must be a finite number, got {value}"
+        )));
+    }
+    if !(0.0..=5.0).contains(&value) {
+        return Err(PolyforgeError::Validation(format!(
+            "max_slippage_pct must be between 0 and 5, got {value}"
+        )));
+    }
+    Ok(())
+}
+
 /// Async client for the Polyforge trading platform REST API.
 pub struct PolyforgeClient {
     http: reqwest::Client,
@@ -2680,6 +2713,102 @@ impl PolyforgeClient {
     pub async fn delete_arbitrage_alert(&self, alert_id: &str) -> Result<()> {
         let path = format!("/api/v1/arbitrage/alerts/{}", encode(alert_id));
         self.delete(&path).await
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-Venue Arb Execution / Positions / Risk (POLA-1852)
+    // -----------------------------------------------------------------------
+
+    /// Execute a cross-venue arbitrage trade — places **real** offsetting
+    /// orders on Polymarket and Kalshi for a matched market pair.
+    ///
+    /// `size` must be in `1..=10000` USDC; `max_slippage_pct`, if set, must be
+    /// in `0..=5`. Both are validated client-side before any order is sent.
+    /// Server defaults `max_slippage_pct` to 0.5 when omitted.
+    ///
+    /// Surfaces backend error codes verbatim (`VENUES_NOT_CONNECTED`,
+    /// `MATCH_NOT_FOUND`, `COMPARISON_UNAVAILABLE`, `SPREAD_TOO_LOW`,
+    /// `TOKEN_RESOLUTION_FAILED`).
+    pub async fn execute_arbitrage(
+        &self,
+        params: &ExecuteArbitrageParams,
+    ) -> Result<ArbExecutionResult> {
+        validate_arb_size(params.size)?;
+        if let Some(slip) = params.max_slippage_pct {
+            validate_arb_slippage(slip)?;
+        }
+        self.post("/api/v1/arbitrage/execute", &serde_json::to_value(params)?).await
+    }
+
+    /// List the authenticated user's cross-venue arbitrage positions.
+    ///
+    /// `status` filters by `ArbPositionStatus`
+    /// (`PENDING` | `PARTIAL` | `OPEN` | `CLOSING` | `CLOSED` | `FAILED`);
+    /// `limit` defaults to 50 server-side and `offset` to 0.
+    pub async fn list_arbitrage_positions(
+        &self,
+        status: Option<&str>,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> Result<ArbPositionsResponse> {
+        let mut params = Vec::new();
+        if let Some(s) = status {
+            params.push(format!("status={}", encode(s)));
+        }
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(o) = offset {
+            params.push(format!("offset={}", o));
+        }
+        let mut url = self.url("/api/v1/arbitrage/positions");
+        if !params.is_empty() {
+            url = format!("{}?{}", url, params.join("&"));
+        }
+        let resp = self
+            .http
+            .get(&url)
+            .header(AUTHORIZATION, self.auth_header()?)
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
+    /// Fetch a single arbitrage position by UUID.
+    pub async fn get_arbitrage_position(&self, position_id: &str) -> Result<ArbPosition> {
+        let path = format!("/api/v1/arbitrage/positions/{}", encode(position_id));
+        self.get(&path).await
+    }
+
+    /// Close an open arbitrage position — places **real** reverse orders on
+    /// both venues.
+    ///
+    /// Surfaces backend error codes verbatim (`ARB_POSITION_NOT_FOUND`,
+    /// `INVALID_STATUS`).
+    pub async fn close_arbitrage_position(
+        &self,
+        position_id: &str,
+    ) -> Result<ArbCloseResponse> {
+        let path = format!(
+            "/api/v1/arbitrage/positions/{}/close",
+            encode(position_id)
+        );
+        self.post(&path, &json!({})).await
+    }
+
+    /// Get net exposure, P&L, and position breakdown across venues.
+    pub async fn get_arbitrage_risk_dashboard(&self) -> Result<ArbRiskDashboard> {
+        self.get("/api/v1/arbitrage/risk/dashboard").await
+    }
+
+    /// List resolution-criteria mismatches between venues for open arb positions.
+    pub async fn get_arbitrage_settlement_risks(&self) -> Result<Vec<ArbSettlementRisk>> {
+        self.get("/api/v1/arbitrage/risk/settlement").await
+    }
+
+    /// Recompute unrealized P&L for all open arb positions.
+    pub async fn refresh_arbitrage_pnl(&self) -> Result<ArbPnlRefreshResult> {
+        self.post("/api/v1/arbitrage/risk/refresh-pnl", &json!({})).await
     }
 
     // -----------------------------------------------------------------------
@@ -6102,6 +6231,218 @@ mod tests {
         let path = format!("/api/v1/arbitrage/alerts/{}", encode("alert-99"));
         let url = client.url(&path);
         assert!(url.contains("/api/v1/arbitrage/alerts/alert-99"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-Venue Arb Execution / Positions / Risk — tests (POLA-1852)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_execute_arbitrage_path_and_body() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/arbitrage/execute");
+        assert!(url.ends_with("/api/v1/arbitrage/execute"));
+
+        let p = ExecuteArbitrageParams {
+            match_id: "m-1".into(),
+            size: 100.0,
+            max_slippage_pct: Some(0.5),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["matchId"], "m-1");
+        assert_eq!(v["size"], 100.0);
+        assert_eq!(v["maxSlippagePct"], 0.5);
+    }
+
+    #[test]
+    fn test_execute_arbitrage_params_omits_none_slippage() {
+        let p = ExecuteArbitrageParams {
+            match_id: "m-1".into(),
+            size: 50.0,
+            max_slippage_pct: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert!(v.get("maxSlippagePct").is_none());
+    }
+
+    #[test]
+    fn test_validate_arb_size_bounds() {
+        assert!(validate_arb_size(1.0).is_ok());
+        assert!(validate_arb_size(10000.0).is_ok());
+        assert!(validate_arb_size(0.99).is_err());
+        assert!(validate_arb_size(10000.01).is_err());
+        assert!(validate_arb_size(f64::NAN).is_err());
+        assert!(validate_arb_size(f64::INFINITY).is_err());
+        assert!(validate_arb_size(f64::NEG_INFINITY).is_err());
+    }
+
+    #[test]
+    fn test_validate_arb_slippage_bounds() {
+        assert!(validate_arb_slippage(0.0).is_ok());
+        assert!(validate_arb_slippage(5.0).is_ok());
+        assert!(validate_arb_slippage(-0.01).is_err());
+        assert!(validate_arb_slippage(5.01).is_err());
+        assert!(validate_arb_slippage(f64::NAN).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_execute_arbitrage_rejects_bad_size() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let p = ExecuteArbitrageParams {
+            match_id: "m-1".into(),
+            size: 0.5,
+            max_slippage_pct: None,
+        };
+        let err = client.execute_arbitrage(&p).await.unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+    }
+
+    #[tokio::test]
+    async fn test_execute_arbitrage_rejects_bad_slippage() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let p = ExecuteArbitrageParams {
+            match_id: "m-1".into(),
+            size: 100.0,
+            max_slippage_pct: Some(7.5),
+        };
+        let err = client.execute_arbitrage(&p).await.unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+    }
+
+    #[test]
+    fn test_arb_positions_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/arbitrage/positions");
+        assert!(url.ends_with("/api/v1/arbitrage/positions"));
+    }
+
+    #[test]
+    fn test_arb_position_by_id_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let path = format!("/api/v1/arbitrage/positions/{}", encode("pos-42"));
+        let url = client.url(&path);
+        assert!(url.contains("/api/v1/arbitrage/positions/pos-42"));
+    }
+
+    #[test]
+    fn test_arb_position_close_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let path = format!(
+            "/api/v1/arbitrage/positions/{}/close",
+            encode("pos-42")
+        );
+        let url = client.url(&path);
+        assert!(url.contains("/api/v1/arbitrage/positions/pos-42/close"));
+    }
+
+    #[test]
+    fn test_arb_risk_dashboard_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/arbitrage/risk/dashboard");
+        assert!(url.ends_with("/api/v1/arbitrage/risk/dashboard"));
+    }
+
+    #[test]
+    fn test_arb_settlement_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/arbitrage/risk/settlement");
+        assert!(url.ends_with("/api/v1/arbitrage/risk/settlement"));
+    }
+
+    #[test]
+    fn test_arb_refresh_pnl_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/arbitrage/risk/refresh-pnl");
+        assert!(url.ends_with("/api/v1/arbitrage/risk/refresh-pnl"));
+    }
+
+    #[test]
+    fn test_arb_execution_result_deserializes() {
+        let json = r#"{
+            "arbPositionId":"ap-1",
+            "buyLeg":{"venue":"POLYMARKET","intentId":"b-1","tokenId":"tok-y","price":0.55},
+            "sellLeg":{"venue":"KALSHI","intentId":"s-1","tokenId":"tok-n","price":0.48},
+            "entrySpreadPct":0.07,
+            "status":"PENDING"
+        }"#;
+        let r: ArbExecutionResult = serde_json::from_str(json).unwrap();
+        assert_eq!(r.arb_position_id.as_deref(), Some("ap-1"));
+        assert_eq!(r.entry_spread_pct, Some(0.07));
+        assert_eq!(r.status.as_deref(), Some("PENDING"));
+        let buy = r.buy_leg.as_ref().unwrap();
+        assert_eq!(buy.venue.as_deref(), Some("POLYMARKET"));
+        assert_eq!(buy.token_id.as_deref(), Some("tok-y"));
+    }
+
+    #[test]
+    fn test_arb_position_deserializes_with_decimal_strings() {
+        let json = r#"{
+            "id":"ap-1","userId":"u-1","matchId":"m-1","status":"OPEN",
+            "buyVenue":"POLYMARKET","buyTokenId":"tok-y","buyPrice":"0.55","buySize":"100",
+            "sellVenue":"KALSHI","sellTokenId":"tok-n","sellPrice":"0.48","sellSize":"100",
+            "entrySpreadPct":"0.07","unrealizedPnl":"2.50",
+            "createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"
+        }"#;
+        let p: ArbPosition = serde_json::from_str(json).unwrap();
+        assert_eq!(p.id, "ap-1");
+        assert_eq!(p.status.as_deref(), Some("OPEN"));
+        assert_eq!(p.buy_price.as_deref(), Some("0.55"));
+        assert_eq!(p.entry_spread_pct.as_deref(), Some("0.07"));
+        assert_eq!(p.unrealized_pnl.as_deref(), Some("2.50"));
+    }
+
+    #[test]
+    fn test_arb_positions_response_deserializes() {
+        let json = r#"{"positions":[{"id":"ap-1"}],"total":1}"#;
+        let r: ArbPositionsResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(r.total, 1);
+        assert_eq!(r.positions.len(), 1);
+        assert_eq!(r.positions[0].id, "ap-1");
+    }
+
+    #[test]
+    fn test_arb_close_response_deserializes() {
+        let json = r#"{"status":"CLOSING","positionId":"ap-1"}"#;
+        let r: ArbCloseResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(r.status.as_deref(), Some("CLOSING"));
+        assert_eq!(r.position_id.as_deref(), Some("ap-1"));
+    }
+
+    #[test]
+    fn test_arb_risk_dashboard_deserializes() {
+        let json = r#"{
+            "openPositions":3,"pendingPositions":1,"totalDeployed":1500.0,
+            "netExposure":{"polymarket":750.0,"kalshi":-750.0},
+            "totalRealizedPnl":12.5,"totalUnrealizedPnl":-3.25,"avgSpreadPct":0.05,
+            "positionsByStatus":{"OPEN":3,"PENDING":1}
+        }"#;
+        let d: ArbRiskDashboard = serde_json::from_str(json).unwrap();
+        assert_eq!(d.open_positions, 3);
+        assert_eq!(d.pending_positions, 1);
+        assert_eq!(d.net_exposure.polymarket, 750.0);
+        assert_eq!(d.net_exposure.kalshi, -750.0);
+        assert_eq!(d.positions_by_status.get("OPEN"), Some(&3));
+    }
+
+    #[test]
+    fn test_arb_settlement_risk_deserializes() {
+        let json = r#"{
+            "matchId":"m-1","polymarketTitle":"Will X?","kalshiTitle":"X happens",
+            "polymarketEndDate":"2026-12-31","kalshiEndDate":"2026-12-30",
+            "endDateDiffDays":1.0,"confidence":0.92,"riskLevel":"MEDIUM",
+            "reason":"end-date drift"
+        }"#;
+        let r: ArbSettlementRisk = serde_json::from_str(json).unwrap();
+        assert_eq!(r.match_id.as_deref(), Some("m-1"));
+        assert_eq!(r.risk_level.as_deref(), Some("MEDIUM"));
+        assert_eq!(r.end_date_diff_days, Some(1.0));
+    }
+
+    #[test]
+    fn test_arb_pnl_refresh_result_deserializes() {
+        let json = r#"{"updated":7}"#;
+        let r: ArbPnlRefreshResult = serde_json::from_str(json).unwrap();
+        assert_eq!(r.updated, 7);
     }
 
     // -----------------------------------------------------------------------
