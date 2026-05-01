@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
+  - `list_sports_categories()` → typed `Vec<SportsCategory>`
+  - `list_sports_markets(params)` → `PaginatedResponse<serde_json::Value>`
+  - `list_sports_events(params)` → `PaginatedResponse<serde_json::Value>`
+  - `get_sports_event(event_ticker)` → `serde_json::Value` (`{ event, markets }`)
+  - `list_sports_milestones(params)` → `serde_json::Value` (`{ milestones, cursor }`)
+  - `get_sports_live_data(milestone_id)` → `serde_json::Value` (`{ liveData }`)
+  - `list_sports_combos(params)` → `serde_json::Value` (`{ collections, cursor }`)
+  - `get_sports_combo_collection(collection_ticker)` → `serde_json::Value`
+  - `lookup_sports_combo(params)` → `serde_json::Value` (`{ eventTicker, marketTicker }` or `null`)
+- New types: `SportsCategory`, `ListSportsMarketsParams`, `ListSportsEventsParams`,
+  `ListSportsMilestonesParams`, `ListSportsCombosParams`, `SportsComboSelection`,
+  `SportsComboLookupParams`. Weakly-typed payloads use `serde_json::Value` to
+  mirror the controller's `Record<string, unknown>` / `unknown[]` fidelity instead
+  of inventing strict shapes.
+
+### Notes
+- `GET /sports/combos/:collectionTicker` currently ignores its path param
+  server-side (forwards to `listComboCollections({page:1, limit:1})`). The SDK
+  wraps the route as-is for fidelity; a server-side fix is tracked separately.
+
 ## [1.7.6] — 2026-04-25
 
 ### Fixed

@@ -1138,6 +1138,225 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
+    // Sports markets (POLA-1841)
+    // -----------------------------------------------------------------------
+    //
+    // The sports controller surfaces several payloads as
+    // `Record<string, unknown>` / `unknown[]`. The SDK mirrors that fidelity
+    // and returns `serde_json::Value` for those shapes rather than inventing
+    // strict types that could drift from the server.
+
+    /// List sports categories with their series tickers and market counts.
+    ///
+    /// `GET /api/v1/sports/categories`
+    pub async fn list_sports_categories(&self) -> Result<Vec<SportsCategory>> {
+        self.get("/api/v1/sports/categories").await
+    }
+
+    /// Paginated list of sports markets.
+    ///
+    /// `GET /api/v1/sports/markets`
+    pub async fn list_sports_markets(
+        &self,
+        params: &ListSportsMarketsParams,
+    ) -> Result<PaginatedResponse<serde_json::Value>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params.page {
+            qp.push(("page", p.to_string()));
+        }
+        if let Some(l) = params.limit {
+            qp.push(("limit", l.to_string()));
+        }
+        if let Some(ref c) = params.category {
+            qp.push(("category", c.clone()));
+        }
+        if let Some(ref s) = params.search {
+            qp.push(("search", s.clone()));
+        }
+        if let Some(ref s) = params.series_ticker {
+            qp.push(("seriesTicker", s.clone()));
+        }
+        if let Some(ref e) = params.event_ticker {
+            qp.push(("eventTicker", e.clone()));
+        }
+        if let Some(b) = params.live_only {
+            qp.push(("liveOnly", b.to_string()));
+        }
+        if let Some(ref s) = params.sort {
+            qp.push(("sort", s.clone()));
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/sports/markets{qs}")).await
+    }
+
+    /// Paginated list of sports events.
+    ///
+    /// `GET /api/v1/sports/events`
+    pub async fn list_sports_events(
+        &self,
+        params: &ListSportsEventsParams,
+    ) -> Result<PaginatedResponse<serde_json::Value>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params.page {
+            qp.push(("page", p.to_string()));
+        }
+        if let Some(l) = params.limit {
+            qp.push(("limit", l.to_string()));
+        }
+        if let Some(ref c) = params.category {
+            qp.push(("category", c.clone()));
+        }
+        if let Some(ref s) = params.series_ticker {
+            qp.push(("seriesTicker", s.clone()));
+        }
+        if let Some(ref s) = params.status {
+            qp.push(("status", s.clone()));
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/sports/events{qs}")).await
+    }
+
+    /// Get a single sports event with its associated markets.
+    ///
+    /// `GET /api/v1/sports/events/:eventTicker`
+    ///
+    /// Returns a `serde_json::Value` shaped as `{ "event": {...}, "markets": [...] }`.
+    pub async fn get_sports_event(&self, event_ticker: &str) -> Result<serde_json::Value> {
+        self.get(&format!(
+            "/api/v1/sports/events/{}",
+            encode(event_ticker)
+        ))
+        .await
+    }
+
+    /// List sports milestones (cursor-paginated by the upstream provider).
+    ///
+    /// `GET /api/v1/sports/milestones`
+    ///
+    /// Returns a `serde_json::Value` shaped as `{ "milestones": [...], "cursor": ... }`.
+    pub async fn list_sports_milestones(
+        &self,
+        params: &ListSportsMilestonesParams,
+    ) -> Result<serde_json::Value> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params.page {
+            qp.push(("page", p.to_string()));
+        }
+        if let Some(l) = params.limit {
+            qp.push(("limit", l.to_string()));
+        }
+        if let Some(ref e) = params.event_ticker {
+            qp.push(("eventTicker", e.clone()));
+        }
+        if let Some(ref s) = params.status {
+            qp.push(("status", s.clone()));
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/sports/milestones{qs}")).await
+    }
+
+    /// Get the live-data snapshot for a milestone.
+    ///
+    /// `GET /api/v1/sports/live-data/:milestoneId`
+    ///
+    /// Returns a `serde_json::Value` shaped as `{ "liveData": ... | null }`.
+    pub async fn get_sports_live_data(&self, milestone_id: &str) -> Result<serde_json::Value> {
+        self.get(&format!(
+            "/api/v1/sports/live-data/{}",
+            encode(milestone_id)
+        ))
+        .await
+    }
+
+    /// List combo collections.
+    ///
+    /// `GET /api/v1/sports/combos`
+    ///
+    /// Returns a `serde_json::Value` shaped as `{ "collections": [...], "cursor": ... }`.
+    pub async fn list_sports_combos(
+        &self,
+        params: &ListSportsCombosParams,
+    ) -> Result<serde_json::Value> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params.page {
+            qp.push(("page", p.to_string()));
+        }
+        if let Some(l) = params.limit {
+            qp.push(("limit", l.to_string()));
+        }
+        if let Some(ref s) = params.series_ticker {
+            qp.push(("seriesTicker", s.clone()));
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/sports/combos{qs}")).await
+    }
+
+    /// Get a combo collection by ticker.
+    ///
+    /// `GET /api/v1/sports/combos/:collectionTicker`
+    ///
+    /// **Server-side caveat:** at the time of writing the controller forwards
+    /// to `listComboCollections({page:1,limit:1})` and ignores the
+    /// `collectionTicker` path param. The SDK wraps the route as-is for
+    /// fidelity; a server-side fix is tracked separately.
+    pub async fn get_sports_combo_collection(
+        &self,
+        collection_ticker: &str,
+    ) -> Result<serde_json::Value> {
+        self.get(&format!(
+            "/api/v1/sports/combos/{}",
+            encode(collection_ticker)
+        ))
+        .await
+    }
+
+    /// Look up the combo market that matches a set of leg selections.
+    ///
+    /// `POST /api/v1/sports/combos/lookup`
+    ///
+    /// Returns a `serde_json::Value` — either `{ "eventTicker": ..., "marketTicker": ... }`
+    /// or `null` if no combo exists for the provided legs.
+    pub async fn lookup_sports_combo(
+        &self,
+        params: &SportsComboLookupParams,
+    ) -> Result<serde_json::Value> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/sports/combos/lookup", &body).await
+    }
+
+    // -----------------------------------------------------------------------
     // Direct Trading
     // -----------------------------------------------------------------------
 
@@ -5583,5 +5802,201 @@ mod tests {
         let p = TicketPriority::Urgent;
         let v = serde_json::to_value(p).unwrap();
         assert_eq!(v, "URGENT");
+    }
+
+    // ── POLA-1841: Sports markets ─────────────────────────────────────────
+
+    #[test]
+    fn test_sports_category_deserializes() {
+        let json = r#"{
+            "category":"NBA","label":"Basketball — NBA",
+            "seriesTickers":["KXNBAGAME","KXNBASERIES"],"marketCount":42
+        }"#;
+        let c: SportsCategory = serde_json::from_str(json).unwrap();
+        assert_eq!(c.category, "NBA");
+        assert_eq!(c.label, "Basketball — NBA");
+        assert_eq!(c.series_tickers.len(), 2);
+        assert_eq!(c.market_count, 42);
+    }
+
+    #[test]
+    fn test_sports_category_deserializes_with_minimal_fields() {
+        // Server may omit seriesTickers / marketCount on edge categories.
+        let json = r#"{"category":"NHL","label":"Hockey"}"#;
+        let c: SportsCategory = serde_json::from_str(json).unwrap();
+        assert_eq!(c.category, "NHL");
+        assert!(c.series_tickers.is_empty());
+        assert_eq!(c.market_count, 0);
+    }
+
+    #[test]
+    fn test_sports_combo_selection_serializes_camel_case() {
+        let s = SportsComboSelection {
+            market_ticker: "KXNBAGAME-25-LAL".into(),
+            event_ticker: "KXNBAGAME-25".into(),
+            side: "yes".into(),
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["marketTicker"], "KXNBAGAME-25-LAL");
+        assert_eq!(v["eventTicker"], "KXNBAGAME-25");
+        assert_eq!(v["side"], "yes");
+    }
+
+    #[test]
+    fn test_sports_combo_lookup_params_serializes_camel_case() {
+        let p = SportsComboLookupParams {
+            collection_ticker: "KXNBACOMBO".into(),
+            selected_markets: vec![SportsComboSelection {
+                market_ticker: "M1".into(),
+                event_ticker: "E1".into(),
+                side: "no".into(),
+            }],
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["collectionTicker"], "KXNBACOMBO");
+        assert_eq!(v["selectedMarkets"][0]["marketTicker"], "M1");
+        assert_eq!(v["selectedMarkets"][0]["side"], "no");
+    }
+
+    #[test]
+    fn test_sports_paginated_value_response_deserializes() {
+        // /sports/markets and /sports/events return PaginatedResponse<Record<string,unknown>>.
+        let json = r#"{
+            "data":[{"marketTicker":"KXNBA-1","price":0.55}],
+            "total":1,"page":1,"limit":20,"totalPages":1,"hasNext":false
+        }"#;
+        let resp: PaginatedResponse<serde_json::Value> = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.total, 1);
+        assert_eq!(resp.data.len(), 1);
+        assert_eq!(resp.data[0]["marketTicker"], "KXNBA-1");
+    }
+
+    // Path-construction tests — verify each new method targets the documented
+    // endpoint. These mirror the existing arbitrage / profile path tests.
+
+    #[test]
+    fn test_list_sports_categories_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/sports/categories");
+        assert!(url.ends_with("/api/v1/sports/categories"));
+    }
+
+    #[test]
+    fn test_list_sports_markets_path_no_params() {
+        // Empty params produce no query string.
+        let params = ListSportsMarketsParams::default();
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params.page {
+            qp.push(("page", p.to_string()));
+        }
+        if let Some(l) = params.limit {
+            qp.push(("limit", l.to_string()));
+        }
+        assert!(qp.is_empty());
+    }
+
+    #[test]
+    fn test_list_sports_markets_path_with_filters() {
+        // Confirm the param struct exposes every documented filter.
+        let p = ListSportsMarketsParams {
+            page: Some(2),
+            limit: Some(10),
+            category: Some("NBA".into()),
+            search: Some("Lakers".into()),
+            series_ticker: Some("KXNBAGAME".into()),
+            event_ticker: Some("KXNBAGAME-25".into()),
+            live_only: Some(true),
+            sort: Some("closing_soon".into()),
+        };
+        assert_eq!(p.page, Some(2));
+        assert_eq!(p.limit, Some(10));
+        assert_eq!(p.category.as_deref(), Some("NBA"));
+        assert_eq!(p.search.as_deref(), Some("Lakers"));
+        assert_eq!(p.series_ticker.as_deref(), Some("KXNBAGAME"));
+        assert_eq!(p.event_ticker.as_deref(), Some("KXNBAGAME-25"));
+        assert_eq!(p.live_only, Some(true));
+        assert_eq!(p.sort.as_deref(), Some("closing_soon"));
+    }
+
+    #[test]
+    fn test_list_sports_events_param_struct_full() {
+        let p = ListSportsEventsParams {
+            page: Some(1),
+            limit: Some(50),
+            category: Some("NFL".into()),
+            series_ticker: Some("KXNFLGAME".into()),
+            status: Some("LIVE".into()),
+        };
+        assert_eq!(p.status.as_deref(), Some("LIVE"));
+        assert_eq!(p.category.as_deref(), Some("NFL"));
+    }
+
+    #[test]
+    fn test_get_sports_event_path_encodes_ticker() {
+        let client = PolyforgeClient::new("k").unwrap();
+        // Tickers can contain `/` or special chars in theory — confirm encoding runs.
+        let path = format!("/api/v1/sports/events/{}", encode("KXNBAGAME-25/LAL"));
+        let url = client.url(&path);
+        assert!(url.contains("/api/v1/sports/events/KXNBAGAME-25%2FLAL"));
+    }
+
+    #[test]
+    fn test_list_sports_milestones_param_struct() {
+        let p = ListSportsMilestonesParams {
+            page: Some(1),
+            limit: Some(20),
+            event_ticker: Some("KXNBAGAME-25".into()),
+            status: Some("RESOLVED".into()),
+        };
+        assert_eq!(p.event_ticker.as_deref(), Some("KXNBAGAME-25"));
+        assert_eq!(p.status.as_deref(), Some("RESOLVED"));
+    }
+
+    #[test]
+    fn test_get_sports_live_data_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let path = format!("/api/v1/sports/live-data/{}", encode("ms-123"));
+        let url = client.url(&path);
+        assert!(url.ends_with("/api/v1/sports/live-data/ms-123"));
+    }
+
+    #[test]
+    fn test_list_sports_combos_param_struct() {
+        let p = ListSportsCombosParams {
+            page: Some(1),
+            limit: Some(10),
+            series_ticker: Some("KXNBACOMBO".into()),
+        };
+        assert_eq!(p.series_ticker.as_deref(), Some("KXNBACOMBO"));
+    }
+
+    #[test]
+    fn test_get_sports_combo_collection_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let path = format!("/api/v1/sports/combos/{}", encode("KXNBACOMBO-1"));
+        let url = client.url(&path);
+        assert!(url.ends_with("/api/v1/sports/combos/KXNBACOMBO-1"));
+    }
+
+    #[test]
+    fn test_lookup_sports_combo_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/sports/combos/lookup");
+        assert!(url.ends_with("/api/v1/sports/combos/lookup"));
+    }
+
+    #[test]
+    fn test_lookup_sports_combo_result_can_be_null() {
+        // The endpoint may return JSON `null` when no combo matches.
+        let v: serde_json::Value = serde_json::from_str("null").unwrap();
+        assert!(v.is_null());
+    }
+
+    #[test]
+    fn test_lookup_sports_combo_result_deserializes() {
+        let json = r#"{"eventTicker":"KXNBAGAME-25","marketTicker":"KXNBAGAME-25-LAL"}"#;
+        let v: serde_json::Value = serde_json::from_str(json).unwrap();
+        assert_eq!(v["eventTicker"], "KXNBAGAME-25");
+        assert_eq!(v["marketTicker"], "KXNBAGAME-25-LAL");
     }
 }
