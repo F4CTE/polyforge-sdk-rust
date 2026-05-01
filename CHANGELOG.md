@@ -19,6 +19,29 @@
   mirror the controller's `Record<string, unknown>` / `unknown[]` fidelity instead
   of inventing strict shapes.
 - **UpdateSettingsProfileParams.twitter_handle** — add optional `twitter_handle: Option<String>` field. Serializes as `twitterHandle` (camelCase) to match the platform's `UpdateProfileDto` and reach feature parity with `polyforge-sdk-python` and `polyforge-mcp`. (closes #185)
+- **Misc public utility endpoints (POLA-1858)** — 18 read/write methods that close the SDK gap matrix from POLA-1845 and bring the Rust SDK to parity with the platform's miscellaneous user/markets/fees/analytics surface:
+  - `get_accuracy_overview()` → `GET /api/v1/accuracy` — companion to `get_accuracy()` (`/accuracy/me`); both return the same `AccuracyScore` shape.
+  - `get_feed(Option<&GetWhaleFeedParams>)` → `GET /api/v1/feed` — paged whale-trade feed (reuses existing `WhaleTrade` and `GetWhaleFeedParams` types since the controller delegates to `WhalesService.getFeed`).
+  - `list_journal(Option<&ListJournalParams>)` → `GET /api/v1/journal` — order-journal entries with optional `mood` filter (`CONFIDENT | UNCERTAIN | FOMO | DISCIPLINED | REVENGE`).
+  - `list_notifications(Option<&PaginationParams>)` → `GET /api/v1/notifications` — paginated notification records (distinct from existing `get_notification_settings()` / `get_notification_preferences()`, which return preference toggles).
+  - `get_my_referrals()` → `GET /api/v1/referrals/me` — referral code, link, stats, and referrals list.
+  - `preview_fees(&OrderPreviewParams)` → `POST /api/v1/fees/preview` — cross-venue fee comparison. Validates `size >= 1` and `0.001 <= price <= 0.999` client-side before the request hits the wire (mirrors `OrderPreviewDto` class-validator bounds).
+  - `list_fee_schedules()` → `GET /api/v1/fees/schedules` — active venue fee schedules grouped by venue.
+  - `list_market_alerts(market_id)` → `GET /api/v1/markets/{marketId}/alerts` — per-market alerts in the platform `{ data: [...] }` envelope (distinct from top-level `list_alerts()`).
+  - `create_market_alert(market_id, &CreateMarketAlertParams)` → `POST /api/v1/markets/{marketId}/alerts`.
+  - `delete_market_alert(market_id, alert_id)` → `DELETE /api/v1/markets/{marketId}/alerts/{alertId}` — server applies `ParseUUIDPipe` on `alert_id`.
+  - `get_market_history(market_id, Option<MarketHistoryPeriod>)` → `GET /api/v1/markets/{marketId}/history` — `period` ∈ `1d | 7d | 30d | 90d`, defaults to `7d` server-side.
+  - `get_market_sentiment_report(market_id)` → `GET /api/v1/markets/{marketId}/sentiment` — markets-controller sentiment report with `yesPercent`, `noPercent`, `totalVotes`, and nullable `userVote`. Method is named distinctly from the existing `get_market_sentiment(market_id)` (which still hits the news-controller `/news/sentiment/:marketId`) to avoid silently breaking callers.
+  - `vote_market_sentiment(market_id)` → `POST /api/v1/markets/{marketId}/sentiment`.
+  - `update_order_journal(order_id, &UpdateOrderJournalParams)` → `PATCH /api/v1/orders/{id}/journal`.
+  - `list_combo_collections(Option<&ListComboCollectionsParams>)` → `GET /api/v1/markets/combo/collections` — Kalshi combo collections with optional `seriesTicker`/`limit`/`cursor` filters.
+  - `get_combo_collection(ticker)` → `GET /api/v1/markets/combo/collections/{ticker}`.
+  - `lookup_combo_market(&ComboLookupParams)` → `POST /api/v1/markets/combo/lookup` — `legs[].outcome` must be `"yes"` or `"no"` (lowercase) to match the server enum.
+  - `get_correlation_categories()` → `GET /api/v1/analytics/correlation/categories` — top 20 market categories plus a square symmetric correlation matrix.
+
+  New types: `JournalEntry`, `ListJournalParams`, `Notification`, `PaginationParams`, `ReferralStats`, `ReferralsInfo`, `PreviewSide`, `OrderPreviewParams`, `VenueFeeEstimate`, `MarketMatchRef`, `OrderPreviewResponse`, `PolymarketFeeSchedule`, `KalshiFeeSchedule`, `FeeSchedules`, `MarketAlertOutcome`, `MarketAlertCondition`, `MarketAlert`, `MarketAlertsResponse`, `CreateMarketAlertParams`, `MarketHistoryPeriod`, `MarketSentimentVote`, `MarketSentimentReport`, `OrderJournalMood`, `UpdateOrderJournalParams`, `ComboCollection`, `ListComboCollectionsParams`, `ComboLeg`, `ComboLookupParams`, `CategoryCorrelation`. Response types use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility with backend shape evolution.
+
+  32 new unit tests cover URL paths, query/body camelCase serialization, validation bounds (size/price/non-finite inputs), enum casing, envelope handling, nullable sentiment votes, and JSON deserialization shapes. `cargo build`, `cargo clippy -- -D warnings`, and `cargo test` (321 unit tests plus 4 doc tests passing) are clean.
 
 ### Notes
 - `GET /sports/combos/:collectionTicker` currently ignores its path param

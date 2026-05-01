@@ -1129,7 +1129,8 @@ impl PolyforgeClient {
 
     /// Get the score for a specific user.
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
-        self.get(&format!("/api/v1/scores/{}", encode(user_id))).await
+        self.get(&format!("/api/v1/scores/{}", encode(user_id)))
+            .await
     }
 
     /// Get the badges awarded to a specific user.
@@ -1219,10 +1220,7 @@ impl PolyforgeClient {
     }
 
     /// Badges earned by a public user (id is the badge type).
-    pub async fn get_user_profile_badges(
-        &self,
-        username: &str,
-    ) -> Result<Vec<UserProfileBadge>> {
+    pub async fn get_user_profile_badges(&self, username: &str) -> Result<Vec<UserProfileBadge>> {
         let res: UserDataEnvelope<UserProfileBadge> = self
             .get(&format!("/api/v1/users/{}/badges", encode(username)))
             .await?;
@@ -1355,11 +1353,8 @@ impl PolyforgeClient {
     ///
     /// Returns a `serde_json::Value` shaped as `{ "event": {...}, "markets": [...] }`.
     pub async fn get_sports_event(&self, event_ticker: &str) -> Result<serde_json::Value> {
-        self.get(&format!(
-            "/api/v1/sports/events/{}",
-            encode(event_ticker)
-        ))
-        .await
+        self.get(&format!("/api/v1/sports/events/{}", encode(event_ticker)))
+            .await
     }
 
     /// List sports milestones (cursor-paginated by the upstream provider).
@@ -2213,12 +2208,17 @@ impl PolyforgeClient {
 
     /// Create a new price alert.
     pub async fn create_alert(&self, params: &CreateAlertParams) -> Result<Alert> {
-        let price: f64 = params
-            .price
-            .parse()
-            .map_err(|_| PolyforgeError::Validation(format!("price must be a numeric string, got {:?}", params.price)))?;
+        let price: f64 = params.price.parse().map_err(|_| {
+            PolyforgeError::Validation(format!(
+                "price must be a numeric string, got {:?}",
+                params.price
+            ))
+        })?;
         if !price.is_finite() || price <= 0.0 {
-            return Err(PolyforgeError::Validation(format!("price must be a positive finite number, got {}", params.price)));
+            return Err(PolyforgeError::Validation(format!(
+                "price must be a positive finite number, got {}",
+                params.price
+            )));
         }
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post("/api/v1/alerts", &body).await
@@ -2433,11 +2433,8 @@ impl PolyforgeClient {
 
     /// Get reward details for a specific market by condition ID.
     pub async fn get_rewards_for_market(&self, condition_id: &str) -> Result<RewardMarketDetail> {
-        self.get(&format!(
-            "/api/v1/rewards/markets/{}",
-            encode(condition_id)
-        ))
-        .await
+        self.get(&format!("/api/v1/rewards/markets/{}", encode(condition_id)))
+            .await
     }
 
     /// Get the authenticated user's rewards.
@@ -2575,10 +2572,7 @@ impl PolyforgeClient {
     }
 
     /// Get the price comparison for a specific arbitrage match.
-    pub async fn get_arbitrage_comparison(
-        &self,
-        match_id: &str,
-    ) -> Result<CrossVenueComparison> {
+    pub async fn get_arbitrage_comparison(&self, match_id: &str) -> Result<CrossVenueComparison> {
         let path = format!(
             "/api/v1/arbitrage/cross-venue/{}/comparison",
             encode(match_id)
@@ -2611,7 +2605,8 @@ impl PolyforgeClient {
         &self,
         params: &CreateArbitrageMatchParams,
     ) -> Result<ArbitrageMatch> {
-        self.post("/api/v1/arbitrage/matches", &serde_json::to_value(params)?).await
+        self.post("/api/v1/arbitrage/matches", &serde_json::to_value(params)?)
+            .await
     }
 
     /// Verify an arbitrage match (admin action).
@@ -2628,7 +2623,8 @@ impl PolyforgeClient {
 
     /// Trigger a sync of arbitrage matches from external sources.
     pub async fn sync_arbitrage_matches(&self) -> Result<MatchSyncResult> {
-        self.post("/api/v1/arbitrage/matches/sync", &json!({})).await
+        self.post("/api/v1/arbitrage/matches/sync", &json!({}))
+            .await
     }
 
     /// Get bid/ask spread comparison across all matched venues.
@@ -2676,7 +2672,8 @@ impl PolyforgeClient {
         &self,
         params: &CreateArbitrageAlertParams,
     ) -> Result<ArbitrageAlertSubscription> {
-        self.post("/api/v1/arbitrage/alerts", &serde_json::to_value(params)?).await
+        self.post("/api/v1/arbitrage/alerts", &serde_json::to_value(params)?)
+            .await
     }
 
     /// Deactivate an arbitrage alert subscription.
@@ -2704,7 +2701,11 @@ impl PolyforgeClient {
         &self,
         params: &UpdateWhaleAlertFilterParams,
     ) -> Result<WhaleAlertFilter> {
-        self.put("/api/v1/whales/alerts/filter", &serde_json::to_value(params)?).await
+        self.put(
+            "/api/v1/whales/alerts/filter",
+            &serde_json::to_value(params)?,
+        )
+        .await
     }
 
     /// Delete the authenticated user's whale alert filter settings.
@@ -2718,12 +2719,14 @@ impl PolyforgeClient {
 
     /// Update the authenticated user's profile.
     pub async fn update_my_profile(&self, params: &UpdateProfileParams) -> Result<UserProfile> {
-        self.patch("/api/v1/profile/me", &serde_json::to_value(params)?).await
+        self.patch("/api/v1/profile/me", &serde_json::to_value(params)?)
+            .await
     }
 
     /// Change the authenticated user's password (profile route).
     pub async fn change_profile_password(&self, params: &ChangePasswordParams) -> Result<()> {
-        self.post("/api/v1/profile/password", &serde_json::to_value(params)?).await
+        self.post("/api/v1/profile/password", &serde_json::to_value(params)?)
+            .await
     }
 
     /// Update the authenticated user's notification preferences (profile route).
@@ -2731,7 +2734,11 @@ impl PolyforgeClient {
         &self,
         params: &UpdateNotificationSettingsParams,
     ) -> Result<NotificationSettings> {
-        self.patch("/api/v1/profile/notifications", &serde_json::to_value(params)?).await
+        self.patch(
+            "/api/v1/profile/notifications",
+            &serde_json::to_value(params)?,
+        )
+        .await
     }
 
     /// Get a public user profile by username.
@@ -2755,7 +2762,8 @@ impl PolyforgeClient {
         &self,
         params: &UpdateSettingsProfileParams,
     ) -> Result<serde_json::Value> {
-        self.patch("/api/v1/settings/profile", &serde_json::to_value(params)?).await
+        self.patch("/api/v1/settings/profile", &serde_json::to_value(params)?)
+            .await
     }
 
     /// Get the authenticated user's notification settings.
@@ -2768,12 +2776,17 @@ impl PolyforgeClient {
         &self,
         params: &UpdateNotificationSettingsParams,
     ) -> Result<NotificationSettings> {
-        self.patch("/api/v1/settings/notifications", &serde_json::to_value(params)?).await
+        self.patch(
+            "/api/v1/settings/notifications",
+            &serde_json::to_value(params)?,
+        )
+        .await
     }
 
     /// Update the authenticated user's password (settings route).
     pub async fn update_settings_password(&self, params: &UpdatePasswordParams) -> Result<()> {
-        self.patch("/api/v1/settings/password", &serde_json::to_value(params)?).await
+        self.patch("/api/v1/settings/password", &serde_json::to_value(params)?)
+            .await
     }
 
     /// Get the authenticated user's beta feature usage.
@@ -2792,7 +2805,8 @@ impl PolyforgeClient {
 
     /// Create a new support ticket.
     pub async fn create_ticket(&self, params: &CreateTicketParams) -> Result<Ticket> {
-        self.post("/api/v1/tickets", &serde_json::to_value(params)?).await
+        self.post("/api/v1/tickets", &serde_json::to_value(params)?)
+            .await
     }
 
     /// List the authenticated user's support tickets.
@@ -2807,11 +2821,7 @@ impl PolyforgeClient {
     }
 
     /// Add a message to a support ticket.
-    pub async fn add_ticket_message(
-        &self,
-        ticket_id: &str,
-        body: &str,
-    ) -> Result<TicketMessage> {
+    pub async fn add_ticket_message(&self, ticket_id: &str, body: &str) -> Result<TicketMessage> {
         let path = format!("/api/v1/tickets/{}/messages", encode(ticket_id));
         self.post(&path, &json!({ "body": body })).await
     }
@@ -2830,7 +2840,331 @@ impl PolyforgeClient {
         &self,
         params: &UpdateNotificationPreferencesParams,
     ) -> Result<NotificationPreferences> {
-        self.put("/api/v1/users/me/notification-preferences", &serde_json::to_value(params)?).await
+        self.put(
+            "/api/v1/users/me/notification-preferences",
+            &serde_json::to_value(params)?,
+        )
+        .await
+    }
+
+    // -----------------------------------------------------------------------
+    // Misc public utility endpoints (POLA-1858)
+    // -----------------------------------------------------------------------
+
+    /// Get the authenticated user's accuracy overview (`GET /api/v1/accuracy`).
+    ///
+    /// Companion to [`Self::get_accuracy`] (`/accuracy/me`); both routes return
+    /// the same shape — the controller delegates to a single service method.
+    pub async fn get_accuracy_overview(&self) -> Result<AccuracyScore> {
+        self.get("/api/v1/accuracy").await
+    }
+
+    /// Fetch the authenticated user's whale trade feed (`GET /api/v1/feed`).
+    ///
+    /// The platform reuses [`GetWhaleFeedParams`] for filter+pagination params
+    /// — same controller backend (`WhalesService::getFeed`).
+    pub async fn get_feed(
+        &self,
+        params: Option<&GetWhaleFeedParams>,
+    ) -> Result<PaginatedResponse<WhaleTrade>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(min_size) = p.min_size {
+                qp.push(("minSize", min_size.to_string()));
+            }
+            if let Some(ref market_id) = p.market_id {
+                qp.push(("marketId", market_id.clone()));
+            }
+            if let Some(ref wallet) = p.wallet_address {
+                qp.push(("walletAddress", wallet.clone()));
+            }
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/feed{qs}")).await
+    }
+
+    /// List the authenticated user's order journal entries
+    /// (`GET /api/v1/journal`).
+    ///
+    /// Optional `mood` filter accepts one of `CONFIDENT | UNCERTAIN | FOMO |
+    /// DISCIPLINED | REVENGE`.
+    pub async fn list_journal(
+        &self,
+        params: Option<&ListJournalParams>,
+    ) -> Result<PaginatedResponse<JournalEntry>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+            if let Some(ref mood) = p.mood {
+                qp.push(("mood", mood.clone()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/journal{qs}")).await
+    }
+
+    /// List the authenticated user's notifications
+    /// (`GET /api/v1/notifications`).
+    ///
+    /// Distinct from [`Self::get_notification_settings`] /
+    /// [`Self::get_notification_preferences`], which expose user-level
+    /// preference toggles — this endpoint returns the actual notification
+    /// records.
+    pub async fn list_notifications(
+        &self,
+        params: Option<&PaginationParams>,
+    ) -> Result<PaginatedResponse<Notification>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/notifications{qs}")).await
+    }
+
+    /// Fetch the authenticated user's referral code, link, and stats
+    /// (`GET /api/v1/referrals/me`).
+    pub async fn get_my_referrals(&self) -> Result<ReferralsInfo> {
+        self.get("/api/v1/referrals/me").await
+    }
+
+    /// Preview the fees a hypothetical order would pay across venues
+    /// (`POST /api/v1/fees/preview`).
+    ///
+    /// Returns Polymarket and (when available) Kalshi fee estimates, savings,
+    /// and the recommended venue. `size` and `price` are validated client-side
+    /// against the server's `OrderPreviewDto` bounds (`size >= 1`,
+    /// `0.001 <= price <= 0.999`).
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Validation`] if `size` or `price` are NaN,
+    /// infinite, or outside the platform's allowed ranges.
+    pub async fn preview_fees(&self, params: &OrderPreviewParams) -> Result<OrderPreviewResponse> {
+        if params.size.is_nan() || params.size.is_infinite() || params.size < 1.0 {
+            return Err(PolyforgeError::Validation(format!(
+                "size must be a finite number >= 1, got {}",
+                params.size
+            )));
+        }
+        if params.price.is_nan()
+            || params.price.is_infinite()
+            || !(0.001..=0.999).contains(&params.price)
+        {
+            return Err(PolyforgeError::Validation(format!(
+                "price must be between 0.001 and 0.999, got {}",
+                params.price
+            )));
+        }
+        self.post("/api/v1/fees/preview", &serde_json::to_value(params)?)
+            .await
+    }
+
+    /// List the active fee schedules for all supported venues
+    /// (`GET /api/v1/fees/schedules`).
+    pub async fn list_fee_schedules(&self) -> Result<FeeSchedules> {
+        self.get("/api/v1/fees/schedules").await
+    }
+
+    /// List per-market price alerts the authenticated user has configured for
+    /// a single market (`GET /api/v1/markets/:marketId/alerts`).
+    ///
+    /// Distinct from [`Self::list_alerts`], which lists top-level token-based
+    /// alerts.
+    pub async fn list_market_alerts(&self, market_id: &str) -> Result<MarketAlertsResponse> {
+        self.get(&format!("/api/v1/markets/{}/alerts", encode(market_id)))
+            .await
+    }
+
+    /// Create a per-market price alert
+    /// (`POST /api/v1/markets/:marketId/alerts`).
+    ///
+    /// `params.threshold` is validated server-side to
+    /// `0.01 <= threshold <= 0.99`.
+    pub async fn create_market_alert(
+        &self,
+        market_id: &str,
+        params: &CreateMarketAlertParams,
+    ) -> Result<MarketAlert> {
+        self.post(
+            &format!("/api/v1/markets/{}/alerts", encode(market_id)),
+            &serde_json::to_value(params)?,
+        )
+        .await
+    }
+
+    /// Delete a per-market price alert
+    /// (`DELETE /api/v1/markets/:marketId/alerts/:alertId`).
+    ///
+    /// `alert_id` must be a UUID — the server applies `ParseUUIDPipe`.
+    pub async fn delete_market_alert(&self, market_id: &str, alert_id: &str) -> Result<()> {
+        self.delete(&format!(
+            "/api/v1/markets/{}/alerts/{}",
+            encode(market_id),
+            encode(alert_id)
+        ))
+        .await
+    }
+
+    /// Get aggregated price/volume history for a single market
+    /// (`GET /api/v1/markets/:marketId/history`).
+    ///
+    /// Server defaults `period` to `7d` when omitted.
+    pub async fn get_market_history(
+        &self,
+        market_id: &str,
+        period: Option<MarketHistoryPeriod>,
+    ) -> Result<serde_json::Value> {
+        let path = match period {
+            Some(p) => format!(
+                "/api/v1/markets/{}/history?period={}",
+                encode(market_id),
+                p.as_str()
+            ),
+            None => format!("/api/v1/markets/{}/history", encode(market_id)),
+        };
+        self.get(&path).await
+    }
+
+    /// Get the markets-controller sentiment report for a single market
+    /// (`GET /api/v1/markets/:marketId/sentiment`).
+    ///
+    /// Distinct from [`Self::get_market_sentiment`], which calls the
+    /// news-derived `/news/sentiment/:marketId` endpoint.
+    pub async fn get_market_sentiment_report(
+        &self,
+        market_id: &str,
+    ) -> Result<MarketSentimentReport> {
+        self.get(&format!("/api/v1/markets/{}/sentiment", encode(market_id)))
+            .await
+    }
+
+    /// Submit a sentiment vote for a single market
+    /// (`POST /api/v1/markets/:marketId/sentiment`).
+    ///
+    /// Server returns the same sentiment report shape as the GET variant.
+    pub async fn vote_market_sentiment(&self, market_id: &str) -> Result<MarketSentimentReport> {
+        self.post(
+            &format!("/api/v1/markets/{}/sentiment", encode(market_id)),
+            &json!({}),
+        )
+        .await
+    }
+
+    /// Attach or update the journal note + mood on one of the user's orders
+    /// (`PATCH /api/v1/orders/:id/journal`).
+    pub async fn update_order_journal(
+        &self,
+        order_id: &str,
+        params: &UpdateOrderJournalParams,
+    ) -> Result<JournalEntry> {
+        self.patch(
+            &format!("/api/v1/orders/{}/journal", encode(order_id)),
+            &serde_json::to_value(params)?,
+        )
+        .await
+    }
+
+    /// List Kalshi combo-market collections, optionally filtered by series and
+    /// paged via cursor (`GET /api/v1/markets/combo/collections`).
+    pub async fn list_combo_collections(
+        &self,
+        params: Option<&ListComboCollectionsParams>,
+    ) -> Result<serde_json::Value> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(ref series) = p.series_ticker {
+                qp.push(("seriesTicker", series.clone()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+            if let Some(ref cursor) = p.cursor {
+                qp.push(("cursor", cursor.clone()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/markets/combo/collections{qs}"))
+            .await
+    }
+
+    /// Fetch a single Kalshi combo-market collection by ticker
+    /// (`GET /api/v1/markets/combo/collections/:ticker`).
+    pub async fn get_combo_collection(&self, ticker: &str) -> Result<ComboCollection> {
+        self.get(&format!(
+            "/api/v1/markets/combo/collections/{}",
+            encode(ticker)
+        ))
+        .await
+    }
+
+    /// Look up the combo market that matches a collection ticker plus the
+    /// requested leg outcomes (`POST /api/v1/markets/combo/lookup`).
+    pub async fn lookup_combo_market(
+        &self,
+        params: &ComboLookupParams,
+    ) -> Result<serde_json::Value> {
+        self.post(
+            "/api/v1/markets/combo/lookup",
+            &serde_json::to_value(params)?,
+        )
+        .await
+    }
+
+    /// Get the cross-category correlation matrix
+    /// (`GET /api/v1/analytics/correlation/categories`).
+    ///
+    /// Returns the top 20 market categories ordered by market count plus a
+    /// symmetric correlation matrix derived from category volumes and counts.
+    pub async fn get_correlation_categories(&self) -> Result<CategoryCorrelation> {
+        self.get("/api/v1/analytics/correlation/categories").await
     }
 }
 
@@ -3381,9 +3715,7 @@ mod tests {
     async fn test_watch_strategy_rejects_oversized_error_body_without_content_length() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let oversized = "x".repeat(MAX_RESPONSE_BODY_SIZE + 1);
 
@@ -3524,7 +3856,10 @@ mod tests {
         // #173: start_strategy must send { mode: "paper" } to match platform contract
         let body = serde_json::to_value(StartStrategyParams::paper()).unwrap();
         assert_eq!(body["mode"], serde_json::Value::String("paper".to_string()));
-        assert!(body.get("paperMode").is_none(), "must not send obsolete `paperMode` field");
+        assert!(
+            body.get("paperMode").is_none(),
+            "must not send obsolete `paperMode` field"
+        );
     }
 
     #[test]
@@ -3532,7 +3867,10 @@ mod tests {
         // #173: start_strategy must send { mode: "live" } to match platform contract
         let body = serde_json::to_value(StartStrategyParams::live()).unwrap();
         assert_eq!(body["mode"], serde_json::Value::String("live".to_string()));
-        assert!(body.get("paperMode").is_none(), "must not send obsolete `paperMode` field");
+        assert!(
+            body.get("paperMode").is_none(),
+            "must not send obsolete `paperMode` field"
+        );
     }
 
     #[test]
@@ -6405,5 +6743,432 @@ mod tests {
         assert!(!resp.has_next);
         assert_eq!(resp.data.len(), 1);
         assert_eq!(resp.data[0].username, "alice");
+    }
+
+    // -----------------------------------------------------------------------
+    // Misc public utility endpoints (POLA-1858)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_accuracy_overview_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/accuracy");
+        assert!(url.ends_with("/api/v1/accuracy"));
+    }
+
+    #[test]
+    fn test_feed_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/feed");
+        assert!(url.ends_with("/api/v1/feed"));
+    }
+
+    #[test]
+    fn test_journal_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/journal");
+        assert!(url.ends_with("/api/v1/journal"));
+    }
+
+    #[test]
+    fn test_notifications_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/notifications");
+        assert!(url.ends_with("/api/v1/notifications"));
+    }
+
+    #[test]
+    fn test_referrals_me_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/referrals/me");
+        assert!(url.ends_with("/api/v1/referrals/me"));
+    }
+
+    #[test]
+    fn test_fees_preview_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/fees/preview");
+        assert!(url.ends_with("/api/v1/fees/preview"));
+    }
+
+    #[test]
+    fn test_fees_schedules_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/fees/schedules");
+        assert!(url.ends_with("/api/v1/fees/schedules"));
+    }
+
+    #[test]
+    fn test_market_alerts_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let path = format!("/api/v1/markets/{}/alerts", encode("market-42"));
+        let url = client.url(&path);
+        assert!(url.contains("/api/v1/markets/market-42/alerts"));
+    }
+
+    #[test]
+    fn test_market_alert_delete_path_encodes_uuid() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let alert_id = "8f1d2a3b-1234-4abc-9def-1234567890ab";
+        let path = format!(
+            "/api/v1/markets/{}/alerts/{}",
+            encode("market-42"),
+            encode(alert_id)
+        );
+        let url = client.url(&path);
+        assert!(url.contains(&format!("/api/v1/markets/market-42/alerts/{}", alert_id)));
+    }
+
+    #[test]
+    fn test_market_history_path_no_period() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let path = format!("/api/v1/markets/{}/history", encode("market-42"));
+        let url = client.url(&path);
+        assert!(url.ends_with("/api/v1/markets/market-42/history"));
+    }
+
+    #[test]
+    fn test_market_history_period_serializes() {
+        assert_eq!(MarketHistoryPeriod::OneDay.as_str(), "1d");
+        assert_eq!(MarketHistoryPeriod::SevenDays.as_str(), "7d");
+        assert_eq!(MarketHistoryPeriod::ThirtyDays.as_str(), "30d");
+        assert_eq!(MarketHistoryPeriod::NinetyDays.as_str(), "90d");
+    }
+
+    #[test]
+    fn test_market_sentiment_report_path_distinct_from_news() {
+        // Sanity-check that get_market_sentiment_report and the existing
+        // get_market_sentiment hit different routes.
+        let client = PolyforgeClient::new("k").unwrap();
+        let report_path = format!("/api/v1/markets/{}/sentiment", encode("m-1"));
+        let news_path = format!("/api/v1/news/sentiment/{}", encode("m-1"));
+        let report_url = client.url(&report_path);
+        let news_url = client.url(&news_path);
+        assert_ne!(report_url, news_url);
+        assert!(report_url.contains("/markets/m-1/sentiment"));
+        assert!(news_url.contains("/news/sentiment/m-1"));
+    }
+
+    #[test]
+    fn test_market_sentiment_report_deserializes_platform_vote_shape() {
+        let json = serde_json::json!({
+            "yesPercent": 60,
+            "noPercent": 40,
+            "totalVotes": 5,
+            "userVote": {
+                "direction": "BUY",
+                "confidence": 0.82
+            }
+        });
+        let report: MarketSentimentReport = serde_json::from_value(json).unwrap();
+        assert_eq!(report.yes_percent, 60);
+        assert_eq!(report.no_percent, 40);
+        assert_eq!(report.total_votes, 5);
+        let vote = report.user_vote.as_ref().unwrap();
+        assert_eq!(vote.direction, "BUY");
+        assert!((vote.confidence - 0.82).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_market_sentiment_report_deserializes_null_user_vote() {
+        let json = serde_json::json!({
+            "yesPercent": 67,
+            "noPercent": 33,
+            "totalVotes": 3,
+            "userVote": null
+        });
+        let report: MarketSentimentReport = serde_json::from_value(json).unwrap();
+        assert_eq!(report.yes_percent, 67);
+        assert_eq!(report.no_percent, 33);
+        assert_eq!(report.total_votes, 3);
+        assert!(report.user_vote.is_none());
+    }
+
+    #[test]
+    fn test_order_journal_patch_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let path = format!("/api/v1/orders/{}/journal", encode("ord-1"));
+        let url = client.url(&path);
+        assert!(url.ends_with("/api/v1/orders/ord-1/journal"));
+    }
+
+    #[test]
+    fn test_combo_collections_paths() {
+        let client = PolyforgeClient::new("k").unwrap();
+        assert!(client
+            .url("/api/v1/markets/combo/collections")
+            .ends_with("/api/v1/markets/combo/collections"));
+        let one = format!("/api/v1/markets/combo/collections/{}", encode("KXNFL-25"));
+        let url = client.url(&one);
+        assert!(url.contains("/api/v1/markets/combo/collections/KXNFL-25"));
+        assert!(client
+            .url("/api/v1/markets/combo/lookup")
+            .ends_with("/api/v1/markets/combo/lookup"));
+    }
+
+    #[test]
+    fn test_correlation_categories_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/analytics/correlation/categories");
+        assert!(url.ends_with("/api/v1/analytics/correlation/categories"));
+    }
+
+    #[test]
+    fn test_order_preview_params_serialize_camel_case() {
+        let p = OrderPreviewParams {
+            token_id: "tok-1".into(),
+            side: PreviewSide::Buy,
+            size: 100.0,
+            price: 0.55,
+            order_type: Some("POST_ONLY".into()),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["tokenId"], "tok-1");
+        assert_eq!(v["side"], "BUY");
+        assert_eq!(v["size"], 100.0);
+        assert_eq!(v["price"], 0.55);
+        assert_eq!(v["orderType"], "POST_ONLY");
+    }
+
+    #[test]
+    fn test_order_preview_params_omits_none_order_type() {
+        let p = OrderPreviewParams {
+            token_id: "tok-1".into(),
+            side: PreviewSide::Sell,
+            size: 50.0,
+            price: 0.5,
+            order_type: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert!(v.get("orderType").is_none());
+        assert_eq!(v["side"], "SELL");
+    }
+
+    #[tokio::test]
+    async fn test_preview_fees_rejects_size_below_one() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let p = OrderPreviewParams {
+            token_id: "tok-1".into(),
+            side: PreviewSide::Buy,
+            size: 0.5,
+            price: 0.5,
+            order_type: None,
+        };
+        let err = client.preview_fees(&p).await.unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+    }
+
+    #[tokio::test]
+    async fn test_preview_fees_rejects_price_out_of_band() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let too_low = OrderPreviewParams {
+            token_id: "tok-1".into(),
+            side: PreviewSide::Buy,
+            size: 10.0,
+            price: 0.0005,
+            order_type: None,
+        };
+        assert!(matches!(
+            client.preview_fees(&too_low).await.unwrap_err(),
+            PolyforgeError::Validation(_)
+        ));
+        let too_high = OrderPreviewParams {
+            token_id: "tok-1".into(),
+            side: PreviewSide::Buy,
+            size: 10.0,
+            price: 0.9995,
+            order_type: None,
+        };
+        assert!(matches!(
+            client.preview_fees(&too_high).await.unwrap_err(),
+            PolyforgeError::Validation(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_preview_fees_rejects_nonfinite_inputs() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let nan_size = OrderPreviewParams {
+            token_id: "tok-1".into(),
+            side: PreviewSide::Buy,
+            size: f64::NAN,
+            price: 0.5,
+            order_type: None,
+        };
+        assert!(matches!(
+            client.preview_fees(&nan_size).await.unwrap_err(),
+            PolyforgeError::Validation(_)
+        ));
+        let inf_price = OrderPreviewParams {
+            token_id: "tok-1".into(),
+            side: PreviewSide::Buy,
+            size: 10.0,
+            price: f64::INFINITY,
+            order_type: None,
+        };
+        assert!(matches!(
+            client.preview_fees(&inf_price).await.unwrap_err(),
+            PolyforgeError::Validation(_)
+        ));
+    }
+
+    #[test]
+    fn test_create_market_alert_params_serialize() {
+        let p = CreateMarketAlertParams {
+            outcome: MarketAlertOutcome::Yes,
+            condition: MarketAlertCondition::Above,
+            threshold: 0.6,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["outcome"], "YES");
+        assert_eq!(v["condition"], "above");
+        assert_eq!(v["threshold"], 0.6);
+    }
+
+    #[test]
+    fn test_market_alert_no_outcome_serializes_uppercase() {
+        let p = CreateMarketAlertParams {
+            outcome: MarketAlertOutcome::No,
+            condition: MarketAlertCondition::Below,
+            threshold: 0.4,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["outcome"], "NO");
+        assert_eq!(v["condition"], "below");
+    }
+
+    #[test]
+    fn test_market_alerts_response_deserializes_data_envelope() {
+        let json = serde_json::json!({
+            "data": [
+                {
+                    "id": "alert-1",
+                    "marketId": "market-1",
+                    "outcome": "YES",
+                    "condition": "above",
+                    "threshold": 0.6,
+                    "triggered": false,
+                    "createdAt": "2026-05-05T00:00:00Z"
+                }
+            ]
+        });
+        let response: MarketAlertsResponse = serde_json::from_value(json).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].id.as_deref(), Some("alert-1"));
+        assert_eq!(response.data[0].market_id.as_deref(), Some("market-1"));
+    }
+
+    #[test]
+    fn test_update_order_journal_params_serialize() {
+        let p = UpdateOrderJournalParams {
+            mood: OrderJournalMood::Confident,
+            note: Some("entered at support level".into()),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["mood"], "CONFIDENT");
+        assert_eq!(v["note"], "entered at support level");
+    }
+
+    #[test]
+    fn test_update_order_journal_omits_none_note() {
+        let p = UpdateOrderJournalParams {
+            mood: OrderJournalMood::Disciplined,
+            note: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["mood"], "DISCIPLINED");
+        assert!(v.get("note").is_none());
+    }
+
+    #[test]
+    fn test_combo_lookup_params_serialize() {
+        let p = ComboLookupParams {
+            collection_ticker: "KXNFL-COMBO-01".into(),
+            legs: vec![
+                ComboLeg {
+                    ticker: "KXNFL-25SEPCHIDET-CHI".into(),
+                    outcome: "yes".into(),
+                },
+                ComboLeg {
+                    ticker: "KXNFL-25SEPGBPHI-GB".into(),
+                    outcome: "no".into(),
+                },
+            ],
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["collectionTicker"], "KXNFL-COMBO-01");
+        assert_eq!(v["legs"][0]["ticker"], "KXNFL-25SEPCHIDET-CHI");
+        assert_eq!(v["legs"][0]["outcome"], "yes");
+        assert_eq!(v["legs"][1]["outcome"], "no");
+    }
+
+    #[test]
+    fn test_journal_entry_deserializes_with_extra_fields() {
+        let json = serde_json::json!({
+            "id": "j-1",
+            "orderId": "ord-1",
+            "mood": "CONFIDENT",
+            "note": "felt good",
+            "createdAt": "2026-05-01T00:00:00Z",
+            "futureField": "ignored"
+        });
+        let entry: JournalEntry = serde_json::from_value(json).unwrap();
+        assert_eq!(entry.id.as_deref(), Some("j-1"));
+        assert_eq!(entry.mood.as_deref(), Some("CONFIDENT"));
+        assert_eq!(
+            entry.extra.get("futureField").and_then(|v| v.as_str()),
+            Some("ignored")
+        );
+    }
+
+    #[test]
+    fn test_fee_schedules_deserializes_grouped_payload() {
+        let json = serde_json::json!({
+            "polymarket": [
+                { "category": "Politics", "role": "TAKER", "feeBps": 200, "effectiveAt": "2026-01-01T00:00:00Z" }
+            ],
+            "kalshi": [
+                { "role": "MAKER", "feeBps": 0, "minPrice": 0.01, "maxPrice": 0.99, "effectiveAt": "2026-01-01T00:00:00Z" }
+            ]
+        });
+        let schedules: FeeSchedules = serde_json::from_value(json).unwrap();
+        assert_eq!(schedules.polymarket.len(), 1);
+        assert_eq!(schedules.kalshi.len(), 1);
+        assert_eq!(
+            schedules.polymarket[0].category.as_deref(),
+            Some("Politics")
+        );
+        assert_eq!(schedules.kalshi[0].fee_bps, Some(0.0));
+    }
+
+    #[test]
+    fn test_referrals_info_deserializes() {
+        let json = serde_json::json!({
+            "referralCode": "ABCD1234",
+            "referralLink": "https://polyforge.trade/ref/ABCD1234",
+            "stats": {
+                "invited": 1,
+                "signedUp": 0,
+                "active": 0,
+                "creditsEarned": 0
+            },
+            "referrals": []
+        });
+        let info: ReferralsInfo = serde_json::from_value(json).unwrap();
+        assert_eq!(info.referral_code.as_deref(), Some("ABCD1234"));
+        assert_eq!(info.stats.as_ref().unwrap().invited, 1);
+    }
+
+    #[test]
+    fn test_correlation_categories_deserializes() {
+        let json = serde_json::json!({
+            "categories": ["Politics", "Sports"],
+            "matrix": [[1.0, 0.5], [0.5, 1.0]],
+            "updatedAt": "2026-05-01T00:00:00Z"
+        });
+        let cc: CategoryCorrelation = serde_json::from_value(json).unwrap();
+        assert_eq!(cc.categories.len(), 2);
+        assert_eq!(cc.matrix.len(), 2);
+        assert!((cc.matrix[0][0] - 1.0).abs() < f64::EPSILON);
     }
 }
