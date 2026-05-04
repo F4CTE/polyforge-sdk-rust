@@ -2148,17 +2148,43 @@ pub struct CreateArbitrageAlertParams {
 
 /// Parameters for `POST /api/v1/arbitrage/execute`.
 ///
-/// `size` must be in the `1..=10000` USDC range and `max_slippage_pct`, if set,
-/// in `0..=5` — these mirror the server-side `class-validator` bounds in
+/// `match_id` must be 1..=255 characters, `size` must be an integer USDC amount
+/// in the `1..=10000` range, and `max_slippage_pct`, if set, must be in
+/// `0..=5`. These mirror the server-side `class-validator` bounds in
 /// `ExecuteArbDto`. Use [`PolyforgeClient::execute_arbitrage`] which validates
 /// before any real-money order hits the wire.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecuteArbitrageParams {
     pub match_id: String,
-    pub size: f64,
+    pub size: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_slippage_pct: Option<f64>,
+}
+
+/// Lifecycle status for a cross-venue arbitrage position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ArbPositionStatus {
+    Pending,
+    Partial,
+    Open,
+    Closing,
+    Closed,
+    Failed,
+}
+
+impl ArbPositionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "PENDING",
+            Self::Partial => "PARTIAL",
+            Self::Open => "OPEN",
+            Self::Closing => "CLOSING",
+            Self::Closed => "CLOSED",
+            Self::Failed => "FAILED",
+        }
+    }
 }
 
 /// A single leg of an arbitrage execution result.
@@ -2190,7 +2216,7 @@ pub struct ArbExecutionResult {
     #[serde(default)]
     pub entry_spread_pct: Option<f64>,
     #[serde(default)]
-    pub status: Option<String>,
+    pub status: Option<ArbPositionStatus>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -2208,7 +2234,7 @@ pub struct ArbPosition {
     #[serde(default)]
     pub match_id: Option<String>,
     #[serde(default)]
-    pub status: Option<String>,
+    pub status: Option<ArbPositionStatus>,
 
     #[serde(default)]
     pub buy_venue: Option<String>,
@@ -2279,7 +2305,7 @@ pub struct ArbPositionsResponse {
 #[serde(rename_all = "camelCase")]
 pub struct ArbCloseResponse {
     #[serde(default)]
-    pub status: Option<String>,
+    pub status: Option<ArbPositionStatus>,
     #[serde(default)]
     pub position_id: Option<String>,
     #[serde(flatten)]
@@ -2320,7 +2346,7 @@ pub struct ArbRiskDashboard {
     #[serde(default)]
     pub avg_spread_pct: f64,
     #[serde(default)]
-    pub positions_by_status: std::collections::HashMap<String, u64>,
+    pub positions_by_status: std::collections::HashMap<ArbPositionStatus, u64>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
