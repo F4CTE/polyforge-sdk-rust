@@ -156,9 +156,25 @@ fn validate_arb_size(value: f64) -> Result<()> {
             "size must be a finite number, got {value}"
         )));
     }
+    if value.fract() != 0.0 {
+        return Err(PolyforgeError::Validation(format!(
+            "size must be an integer USDC amount, got {value}"
+        )));
+    }
     if !(1.0..=10000.0).contains(&value) {
         return Err(PolyforgeError::Validation(format!(
             "size must be between 1 and 10000, got {value}"
+        )));
+    }
+    Ok(())
+}
+
+/// Reject match IDs outside the server-enforced 1..=255 character range.
+fn validate_arb_match_id(value: &str) -> Result<()> {
+    if value.is_empty() || value.len() > 255 {
+        return Err(PolyforgeError::Validation(format!(
+            "match_id must be between 1 and 255 characters, got {}",
+            value.len()
         )));
     }
     Ok(())
@@ -2400,7 +2416,8 @@ impl PolyforgeClient {
         &self,
         params: &ExecuteArbitrageParams,
     ) -> Result<ArbExecutionResult> {
-        validate_arb_size(params.size)?;
+        validate_arb_match_id(&params.match_id)?;
+        validate_arb_size(params.size as f64)?;
         if let Some(slip) = params.max_slippage_pct {
             validate_arb_slippage(slip)?;
         }
@@ -2414,15 +2431,20 @@ impl PolyforgeClient {
     /// `limit` defaults to 50 server-side and `offset` to 0.
     pub async fn list_arbitrage_positions(
         &self,
-        status: Option<&str>,
+        status: Option<ArbPositionStatus>,
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> Result<ArbPositionsResponse> {
         let mut params = Vec::new();
         if let Some(s) = status {
-            params.push(format!("status={}", encode(s)));
+            params.push(format!("status={}", encode(s.as_str())));
         }
         if let Some(l) = limit {
+            if !(1..=100).contains(&l) {
+                return Err(PolyforgeError::Validation(format!(
+                    "limit must be between 1 and 100, got {l}"
+                )));
+            }
             params.push(format!("limit={}", l));
         }
         if let Some(o) = offset {
@@ -5508,7 +5530,7 @@ mod tests {
 
         let p = ExecuteArbitrageParams {
             match_id: "m-1".into(),
-            size: 100.0,
+            size: 100,
             max_slippage_pct: Some(0.5),
         };
         let v = serde_json::to_value(&p).unwrap();
@@ -5521,7 +5543,7 @@ mod tests {
     fn test_execute_arbitrage_params_omits_none_slippage() {
         let p = ExecuteArbitrageParams {
             match_id: "m-1".into(),
-            size: 50.0,
+            size: 50,
             max_slippage_pct: None,
         };
         let v = serde_json::to_value(&p).unwrap();
@@ -5533,10 +5555,19 @@ mod tests {
         assert!(validate_arb_size(1.0).is_ok());
         assert!(validate_arb_size(10000.0).is_ok());
         assert!(validate_arb_size(0.99).is_err());
+        assert!(validate_arb_size(100.5).is_err());
         assert!(validate_arb_size(10000.01).is_err());
         assert!(validate_arb_size(f64::NAN).is_err());
         assert!(validate_arb_size(f64::INFINITY).is_err());
         assert!(validate_arb_size(f64::NEG_INFINITY).is_err());
+    }
+
+    #[test]
+    fn test_validate_arb_match_id_bounds() {
+        assert!(validate_arb_match_id("m").is_ok());
+        assert!(validate_arb_match_id(&"x".repeat(255)).is_ok());
+        assert!(validate_arb_match_id("").is_err());
+        assert!(validate_arb_match_id(&"x".repeat(256)).is_err());
     }
 
     #[test]
@@ -5553,7 +5584,19 @@ mod tests {
         let client = PolyforgeClient::new("k").unwrap();
         let p = ExecuteArbitrageParams {
             match_id: "m-1".into(),
-            size: 0.5,
+            size: 0,
+            max_slippage_pct: None,
+        };
+        let err = client.execute_arbitrage(&p).await.unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+    }
+
+    #[tokio::test]
+    async fn test_execute_arbitrage_rejects_bad_match_id() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let p = ExecuteArbitrageParams {
+            match_id: "x".repeat(256),
+            size: 100,
             max_slippage_pct: None,
         };
         let err = client.execute_arbitrage(&p).await.unwrap_err();
@@ -5565,7 +5608,7 @@ mod tests {
         let client = PolyforgeClient::new("k").unwrap();
         let p = ExecuteArbitrageParams {
             match_id: "m-1".into(),
-            size: 100.0,
+            size: 100,
             max_slippage_pct: Some(7.5),
         };
         let err = client.execute_arbitrage(&p).await.unwrap_err();
@@ -5577,6 +5620,23 @@ mod tests {
         let client = PolyforgeClient::new("k").unwrap();
         let url = client.url("/api/v1/arbitrage/positions");
         assert!(url.ends_with("/api/v1/arbitrage/positions"));
+    }
+
+    #[tokio::test]
+    async fn test_list_arbitrage_positions_rejects_bad_limit() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let err = client
+            .list_arbitrage_positions(None, Some(101), None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+    }
+
+    #[test]
+    fn test_arb_position_status_deserializes_screaming_snake_case() {
+        let status: ArbPositionStatus = serde_json::from_str("\"PENDING\"").unwrap();
+        assert_eq!(status, ArbPositionStatus::Pending);
+        assert!(serde_json::from_str::<ArbPositionStatus>("\"EXPIRED\"").is_err());
     }
 
     #[test]
@@ -5631,7 +5691,7 @@ mod tests {
         let r: ArbExecutionResult = serde_json::from_str(json).unwrap();
         assert_eq!(r.arb_position_id.as_deref(), Some("ap-1"));
         assert_eq!(r.entry_spread_pct, Some(0.07));
-        assert_eq!(r.status.as_deref(), Some("PENDING"));
+        assert_eq!(r.status, Some(ArbPositionStatus::Pending));
         let buy = r.buy_leg.as_ref().unwrap();
         assert_eq!(buy.venue.as_deref(), Some("POLYMARKET"));
         assert_eq!(buy.token_id.as_deref(), Some("tok-y"));
@@ -5648,7 +5708,7 @@ mod tests {
         }"#;
         let p: ArbPosition = serde_json::from_str(json).unwrap();
         assert_eq!(p.id, "ap-1");
-        assert_eq!(p.status.as_deref(), Some("OPEN"));
+        assert_eq!(p.status, Some(ArbPositionStatus::Open));
         assert_eq!(p.buy_price.as_deref(), Some("0.55"));
         assert_eq!(p.entry_spread_pct.as_deref(), Some("0.07"));
         assert_eq!(p.unrealized_pnl.as_deref(), Some("2.50"));
@@ -5667,7 +5727,7 @@ mod tests {
     fn test_arb_close_response_deserializes() {
         let json = r#"{"status":"CLOSING","positionId":"ap-1"}"#;
         let r: ArbCloseResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(r.status.as_deref(), Some("CLOSING"));
+        assert_eq!(r.status, Some(ArbPositionStatus::Closing));
         assert_eq!(r.position_id.as_deref(), Some("ap-1"));
     }
 
@@ -5684,7 +5744,7 @@ mod tests {
         assert_eq!(d.pending_positions, 1);
         assert_eq!(d.net_exposure.polymarket, 750.0);
         assert_eq!(d.net_exposure.kalshi, -750.0);
-        assert_eq!(d.positions_by_status.get("OPEN"), Some(&3));
+        assert_eq!(d.positions_by_status.get(&ArbPositionStatus::Open), Some(&3));
     }
 
     #[test]

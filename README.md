@@ -125,6 +125,20 @@ async fn main() -> polyforge::Result<()> {
 | `place_order(params)` | Place a direct buy/sell order |
 | `cancel_order(order_id)` | Cancel a pending or live order |
 
+### Arbitrage
+
+| Method | Description |
+|--------|-------------|
+| `list_arbitrage_opportunities(min_spread)` | List cross-venue Polymarket/Kalshi opportunities |
+| `get_arbitrage_comparison(match_id)` | Compare prices for a matched cross-venue market |
+| `execute_arbitrage(params)` | Execute a real cross-venue arbitrage trade; validates `match_id` length, integer `size` 1..=10000, and optional slippage 0..=5 |
+| `list_arbitrage_positions(status, limit, offset)` | List arbitrage positions with typed `ArbPositionStatus` and `limit` 1..=100 |
+| `get_arbitrage_position(position_id)` | Fetch one arbitrage position |
+| `close_arbitrage_position(position_id)` | Close an open arbitrage position with real reverse orders |
+| `get_arbitrage_risk_dashboard()` | Get aggregate arbitrage exposure and P&L |
+| `get_arbitrage_settlement_risks()` | List settlement-date and resolution-criteria risks |
+| `refresh_arbitrage_pnl()` | Recompute unrealized arbitrage P&L |
+
 ### Social & Signals
 
 | Method | Description |

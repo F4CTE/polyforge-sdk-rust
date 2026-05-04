@@ -4,14 +4,17 @@
 
 ### Added
 - **Cross-venue arb execution / positions / risk endpoints (POLA-1852)** — 7 trading-impact-bearing methods that complete the `/api/v1/arbitrage/*` surface and bring the Rust SDK to parity with the Python SDK (POLA-1851):
-  - `execute_arbitrage(&ExecuteArbitrageParams)` → `POST /api/v1/arbitrage/execute`. Validates `size` ∈ `1..=10000` USDC and `max_slippage_pct` ∈ `0..=5` client-side before the order hits the wire (mirrors `ExecuteArbDto` `class-validator` bounds).
-  - `list_arbitrage_positions(status, limit, offset)` → `GET /api/v1/arbitrage/positions`.
+  - `execute_arbitrage(&ExecuteArbitrageParams)` → `POST /api/v1/arbitrage/execute`. Validates `match_id` length 1..=255, integer `size` ∈ `1..=10000` USDC, and `max_slippage_pct` ∈ `0..=5` client-side before the order hits the wire (mirrors `ExecuteArbDto` `class-validator` bounds).
+  - `list_arbitrage_positions(status, limit, offset)` → `GET /api/v1/arbitrage/positions`. Uses typed `ArbPositionStatus` and validates `limit` ∈ `1..=100`.
   - `get_arbitrage_position(id)` → `GET /api/v1/arbitrage/positions/{id}`.
   - `close_arbitrage_position(id)` → `POST /api/v1/arbitrage/positions/{id}/close`.
   - `get_arbitrage_risk_dashboard()` → `GET /api/v1/arbitrage/risk/dashboard`.
   - `get_arbitrage_settlement_risks()` → `GET /api/v1/arbitrage/risk/settlement`.
   - `refresh_arbitrage_pnl()` → `POST /api/v1/arbitrage/risk/refresh-pnl`.
-- New types: `ExecuteArbitrageParams`, `ArbExecutionLeg`, `ArbExecutionResult`, `ArbPosition`, `ArbPositionsResponse`, `ArbCloseResponse`, `ArbNetExposure`, `ArbRiskDashboard`, `ArbSettlementRisk`, `ArbPnlRefreshResult`. Decimal columns (`buy_price`, `sell_price`, P&L, spread) are typed as `Option<String>` to preserve full precision from the backend Prisma `Decimal` serialization, matching the Python SDK shape.
+- New types: `ExecuteArbitrageParams`, `ArbPositionStatus`, `ArbExecutionLeg`, `ArbExecutionResult`, `ArbPosition`, `ArbPositionsResponse`, `ArbCloseResponse`, `ArbNetExposure`, `ArbRiskDashboard`, `ArbSettlementRisk`, `ArbPnlRefreshResult`. Decimal columns (`buy_price`, `sell_price`, P&L, spread) are typed as `Option<String>` to preserve full precision from the backend Prisma `Decimal` serialization, matching the Python SDK shape.
+
+### ⚠️ Trading impact (severity: HIGH)
+- `execute_arbitrage()` and `close_arbitrage_position()` can place real offsetting orders. The SDK now fails fast on malformed `match_id`, fractional or out-of-range `size`, invalid slippage, invalid position status filters, and oversized page limits before requests reach the trading API.
 
 ## [1.7.6] — 2026-04-25
 
