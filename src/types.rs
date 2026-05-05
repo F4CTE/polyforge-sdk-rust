@@ -2148,9 +2148,9 @@ pub struct CreateArbitrageAlertParams {
 
 /// Parameters for `POST /api/v1/arbitrage/execute`.
 ///
-/// `match_id` must be 1..=255 characters, `size` must be an integer USDC amount
-/// in the `1..=10000` range, and `max_slippage_pct`, if set, must be in
-/// `0..=5`. These mirror the server-side `class-validator` bounds in
+/// `match_id` must be a UUID, `size` must be an integer USDC amount in the
+/// `1..=10000` range, and `max_slippage_pct`, if set, must be in `0..=5`.
+/// These mirror the server-side `class-validator` bounds in
 /// `ExecuteArbDto`. Use [`PolyforgeClient::execute_arbitrage`] which validates
 /// before any real-money order hits the wire.
 #[derive(Debug, Clone, Serialize)]
