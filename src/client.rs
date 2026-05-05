@@ -3630,7 +3630,6 @@ mod tests {
     #[test]
     fn test_place_order_params_validation_rejects_nan_size() {
         let params = PlaceOrderParams {
-            market_id: "m1".into(),
             token_id: "t1".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
@@ -3648,7 +3647,6 @@ mod tests {
     #[test]
     fn test_place_order_params_validation_rejects_negative_price() {
         let params = PlaceOrderParams {
-            market_id: "m1".into(),
             token_id: "t1".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
@@ -3664,9 +3662,8 @@ mod tests {
     }
 
     #[test]
-    fn test_place_order_params_serializes_market_id() {
+    fn test_place_order_params_omits_market_id() {
         let params = PlaceOrderParams {
-            market_id: "mkt-abc".into(),
             token_id: "tok-1".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
@@ -3675,11 +3672,10 @@ mod tests {
             order_type: None,
         };
         let json = serde_json::to_value(&params).unwrap();
-        assert_eq!(json["marketId"], "mkt-abc");
         assert_eq!(json["tokenId"], "tok-1");
         assert!(
-            json.get("market_id").is_none(),
-            "must use camelCase marketId"
+            json.get("marketId").is_none(),
+            "platform derives marketId from tokenId and rejects explicit marketId"
         );
         assert!(
             json.get("orderType").is_none(),
