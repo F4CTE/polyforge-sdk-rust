@@ -177,7 +177,22 @@ fn validate_arb_match_id(value: &str) -> Result<()> {
             value.len()
         )));
     }
+    if !is_uuid_like(value) {
+        return Err(PolyforgeError::Validation(format!(
+            "match_id must be a valid UUID, got {value}"
+        )));
+    }
     Ok(())
+}
+
+fn is_uuid_like(value: &str) -> bool {
+    if value.len() != 36 {
+        return false;
+    }
+    value.bytes().enumerate().all(|(idx, byte)| match idx {
+        8 | 13 | 18 | 23 => byte == b'-',
+        _ => byte.is_ascii_hexdigit(),
+    })
 }
 
 /// Reject slippage outside the server-enforced `0..=5` percent range.
@@ -5564,10 +5579,10 @@ mod tests {
 
     #[test]
     fn test_validate_arb_match_id_bounds() {
-        assert!(validate_arb_match_id("m").is_ok());
-        assert!(validate_arb_match_id(&"x".repeat(255)).is_ok());
+        assert!(validate_arb_match_id("550e8400-e29b-41d4-a716-446655440000").is_ok());
         assert!(validate_arb_match_id("").is_err());
         assert!(validate_arb_match_id(&"x".repeat(256)).is_err());
+        assert!(validate_arb_match_id("match-1").is_err());
     }
 
     #[test]

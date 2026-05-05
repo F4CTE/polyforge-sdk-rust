@@ -4,7 +4,7 @@
 
 ### Added
 - **Cross-venue arb execution / positions / risk endpoints (POLA-1852)** — 7 trading-impact-bearing methods that complete the `/api/v1/arbitrage/*` surface and bring the Rust SDK to parity with the Python SDK (POLA-1851):
-  - `execute_arbitrage(&ExecuteArbitrageParams)` → `POST /api/v1/arbitrage/execute`. Validates `match_id` length 1..=255, integer `size` ∈ `1..=10000` USDC, and `max_slippage_pct` ∈ `0..=5` client-side before the order hits the wire (mirrors `ExecuteArbDto` `class-validator` bounds).
+  - `execute_arbitrage(&ExecuteArbitrageParams)` → `POST /api/v1/arbitrage/execute`. Validates UUID `match_id`, integer `size` ∈ `1..=10000` USDC, and `max_slippage_pct` ∈ `0..=5` client-side before the order hits the wire (mirrors `ExecuteArbDto` `class-validator` bounds).
   - `list_arbitrage_positions(status, limit, offset)` → `GET /api/v1/arbitrage/positions`. Uses typed `ArbPositionStatus` and validates `limit` ∈ `1..=100`.
   - `get_arbitrage_position(id)` → `GET /api/v1/arbitrage/positions/{id}`.
   - `close_arbitrage_position(id)` → `POST /api/v1/arbitrage/positions/{id}/close`.

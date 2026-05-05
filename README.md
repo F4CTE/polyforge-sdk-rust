@@ -131,7 +131,7 @@ async fn main() -> polyforge::Result<()> {
 |--------|-------------|
 | `list_arbitrage_opportunities(min_spread)` | List cross-venue Polymarket/Kalshi opportunities |
 | `get_arbitrage_comparison(match_id)` | Compare prices for a matched cross-venue market |
-| `execute_arbitrage(params)` | Execute a real cross-venue arbitrage trade; validates `match_id` length, integer `size` 1..=10000, and optional slippage 0..=5 |
+| `execute_arbitrage(params)` | Execute a real cross-venue arbitrage trade; validates UUID `match_id`, integer `size` 1..=10000, and optional slippage 0..=5 |
 | `list_arbitrage_positions(status, limit, offset)` | List arbitrage positions with typed `ArbPositionStatus` and `limit` 1..=100 |
 | `get_arbitrage_position(position_id)` | Fetch one arbitrage position |
 | `close_arbitrage_position(position_id)` | Close an open arbitrage position with real reverse orders |
