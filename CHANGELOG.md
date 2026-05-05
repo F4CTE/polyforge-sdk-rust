@@ -43,6 +43,9 @@
 
   32 new unit tests cover URL paths, query/body camelCase serialization, validation bounds (size/price/non-finite inputs), enum casing, envelope handling, nullable sentiment votes, and JSON deserialization shapes. `cargo build`, `cargo clippy -- -D warnings`, and `cargo test` (321 unit tests plus 4 doc tests passing) are clean.
 
+### Fixed
+- **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
+
 ### Notes
 - Public user/profile lookup methods no longer send an `Authorization` header when
   the client was constructed with an empty API key. This keeps documented public

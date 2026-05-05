@@ -117,6 +117,10 @@ async fn main() -> polyforge::Result<()> {
 
 ### Portfolio & Orders
 
+Trading write methods automatically attach a fresh 32-character `Idempotency-Key`
+header on each request, matching the platform requirement for order placement,
+position, smart-order, and conditional-order mutations.
+
 | Method | Description |
 |--------|-------------|
 | `get_portfolio()` | Current portfolio and positions |
