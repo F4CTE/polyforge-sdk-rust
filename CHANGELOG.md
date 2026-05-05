@@ -74,7 +74,7 @@
   - `get_arbitrage_risk_dashboard()` → `GET /api/v1/arbitrage/risk/dashboard`.
   - `get_arbitrage_settlement_risks()` → `GET /api/v1/arbitrage/risk/settlement`.
   - `refresh_arbitrage_pnl()` → `POST /api/v1/arbitrage/risk/refresh-pnl`.
-- New types: `ExecuteArbitrageParams`, `ArbPositionStatus`, `ArbExecutionLeg`, `ArbExecutionResult`, `ArbPosition`, `ArbPositionsResponse`, `ArbCloseResponse`, `ArbNetExposure`, `ArbRiskDashboard`, `ArbSettlementRisk`, `ArbPnlRefreshResult`. Decimal columns (`buy_price`, `sell_price`, P&L, spread) are typed as `Option<String>` to preserve full precision from the backend Prisma `Decimal` serialization, matching the Python SDK shape.
+- New types: `ExecuteArbitrageParams`, `ArbPositionStatus`, `ArbExecutionLeg`, `ArbExecutionResult`, `ArbPosition`, `ArbPositionsResponse`, `ArbCloseResponse`, `ArbNetExposure`, `ArbRiskDashboard`, `ArbSettlementRisk`, `ArbPnlRefreshResult`. Decimal columns (`ArbExecutionLeg.price`, `buy_price`, `sell_price`, P&L, spread) are typed as `Option<String>` to preserve full precision from the backend Prisma `Decimal` serialization, matching the Python SDK shape.
 
 ### ⚠️ Trading impact (severity: HIGH)
 - `execute_arbitrage()` and `close_arbitrage_position()` can place real offsetting orders. Callers must supply an idempotency key for safe retries; the SDK sends it as `Idempotency-Key` and fails fast on missing/invalid keys, malformed `match_id`, fractional or out-of-range `size`, invalid slippage, invalid position status filters, and oversized page limits before requests reach the trading API.

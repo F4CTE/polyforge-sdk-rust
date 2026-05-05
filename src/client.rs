@@ -6720,8 +6720,8 @@ mod tests {
     fn test_arb_execution_result_deserializes() {
         let json = r#"{
             "arbPositionId":"ap-1",
-            "buyLeg":{"venue":"POLYMARKET","intentId":"b-1","tokenId":"tok-y","price":0.55},
-            "sellLeg":{"venue":"KALSHI","intentId":"s-1","tokenId":"tok-n","price":0.48},
+            "buyLeg":{"venue":"POLYMARKET","intentId":"b-1","tokenId":"tok-y","price":"0.550000000000000000"},
+            "sellLeg":{"venue":"KALSHI","intentId":"s-1","tokenId":"tok-n","price":"0.480000000000000000"},
             "entrySpreadPct":0.07,
             "status":"PENDING"
         }"#;
@@ -6732,6 +6732,7 @@ mod tests {
         let buy = r.buy_leg.as_ref().unwrap();
         assert_eq!(buy.venue.as_deref(), Some("POLYMARKET"));
         assert_eq!(buy.token_id.as_deref(), Some("tok-y"));
+        assert_eq!(buy.price.as_deref(), Some("0.550000000000000000"));
     }
 
     #[test]

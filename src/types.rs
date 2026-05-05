@@ -2198,7 +2198,7 @@ pub struct ArbExecutionLeg {
     #[serde(default)]
     pub token_id: Option<String>,
     #[serde(default)]
-    pub price: Option<f64>,
+    pub price: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
