@@ -2494,3 +2494,70 @@ pub struct SportsComboLookupParams {
     pub collection_ticker: String,
     pub selected_markets: Vec<SportsComboSelection>,
 }
+
+// ---------------------------------------------------------------------------
+// Public user profile lookups (POLA-1844)
+// ---------------------------------------------------------------------------
+
+/// One day on a public user's PnL curve. ``date`` is ``YYYY-MM-DD``.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserPerformancePoint {
+    pub date: String,
+    pub pnl: f64,
+    pub cum_pnl: f64,
+}
+
+/// Public summary of one of a user's strategies.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserStrategySummary {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub win_rate: f64,
+    pub trade_count: u64,
+    pub price_usdc: f64,
+    pub fork_count: u64,
+    pub like_count: u64,
+    pub is_liked: bool,
+}
+
+/// Resolved-position activity entry shown on a user's profile.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserActivityEntry {
+    pub id: String,
+    pub market_question: String,
+    pub outcome: String,
+    pub side: String,
+    pub size: f64,
+    pub pnl: f64,
+    pub resolved_at: String,
+}
+
+/// Badge entry returned by the public-profile endpoint (id is the badge type).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfileBadge {
+    pub id: String,
+    pub unlocked_at: String,
+}
+
+/// Pared-down user record returned by ``me/following``.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FollowedUser {
+    pub id: String,
+    pub username: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+}
+
+/// Envelope returned by `/users/:username/{performance,strategies,activity,badges}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserDataEnvelope<T> {
+    pub data: Vec<T>,
+}
