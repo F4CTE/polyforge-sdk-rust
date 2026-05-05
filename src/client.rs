@@ -3196,9 +3196,18 @@ impl PolyforgeClient {
         self.get(&format!("/api/v1/notifications{qs}")).await
     }
 
+    /// Deprecated alias for [`Self::list_notifications`].
+    #[deprecated(note = "use list_notifications instead")]
+    pub async fn get_notifications(
+        &self,
+        params: Option<&PaginationParams>,
+    ) -> Result<PaginatedResponse<Notification>> {
+        self.list_notifications(params).await
+    }
+
     /// Fetch the authenticated user's referral code, link, and stats
     /// (`GET /api/v1/referrals/me`).
-    pub async fn get_my_referrals(&self) -> Result<ReferralsInfo> {
+    pub async fn get_my_referrals(&self) -> Result<MyReferralsResponse> {
         self.get("/api/v1/referrals/me").await
     }
 
@@ -7837,7 +7846,26 @@ mod tests {
     }
 
     #[test]
-    fn test_referrals_info_deserializes() {
+    fn test_my_referrals_response_deserializes() {
+        let json = serde_json::json!({
+            "referralCode": "ABCD1234",
+            "referralLink": "https://polyforge.trade/ref/ABCD1234",
+            "stats": {
+                "invited": 1,
+                "signedUp": 0,
+                "active": 0,
+                "creditsEarned": 0
+            },
+            "referrals": []
+        });
+        let info: MyReferralsResponse = serde_json::from_value(json).unwrap();
+        assert_eq!(info.referral_code.as_deref(), Some("ABCD1234"));
+        assert_eq!(info.stats.as_ref().unwrap().invited, 1);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_deprecated_referrals_alias_deserializes() {
         let json = serde_json::json!({
             "referralCode": "ABCD1234",
             "referralLink": "https://polyforge.trade/ref/ABCD1234",
@@ -7852,6 +7880,14 @@ mod tests {
         let info: ReferralsInfo = serde_json::from_value(json).unwrap();
         assert_eq!(info.referral_code.as_deref(), Some("ABCD1234"));
         assert_eq!(info.stats.as_ref().unwrap().invited, 1);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_deprecated_get_notifications_alias_compiles() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let future = client.get_notifications(None);
+        drop(future);
     }
 
     #[test]

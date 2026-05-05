@@ -2950,7 +2950,7 @@ pub struct ReferralStats {
 /// Response of `GET /api/v1/referrals/me`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ReferralsInfo {
+pub struct MyReferralsResponse {
     #[serde(default)]
     pub referral_code: Option<String>,
     #[serde(default)]
@@ -2962,6 +2962,9 @@ pub struct ReferralsInfo {
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
+
+#[deprecated(note = "use MyReferralsResponse instead")]
+pub use self::MyReferralsResponse as ReferralsInfo;
 
 /// Side of an order preview request — `BUY` or `SELL`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

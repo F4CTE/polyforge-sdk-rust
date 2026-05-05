@@ -50,6 +50,9 @@
   when a key is configured. Added multi-chunk coverage for the 1-MiB error body
   cap and documented that exactly 1 MiB is allowed while the first byte over the
   limit is rejected.
+- Cross-SDK naming aliases: `get_notifications()` is now a deprecated alias for
+  `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the
+  canonical `MyReferralsResponse` type.
 - `GET /sports/combos/:collectionTicker` currently ignores its path param
   server-side (forwards to `listComboCollections({page:1, limit:1})`). The SDK
   wraps the route as-is for fidelity; a server-side fix is tracked separately.
