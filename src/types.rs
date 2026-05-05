@@ -2142,9 +2142,9 @@ pub struct CreateArbitrageAlertParams {
 //   - `GET  /api/v1/arbitrage/risk/settlement`    — resolution-criteria mismatches
 //   - `POST /api/v1/arbitrage/risk/refresh-pnl`   — recompute unrealized P&L
 //
-// Decimal columns (sizes, prices, P&L) arrive as JSON strings from Prisma; we
-// keep them as `Option<String>` so callers can convert with full precision
-// rather than relying on f64 coercion. Mirrors the Python SDK shapes.
+// Decimal columns (sizes, prices, P&L) generally arrive as JSON strings from
+// Prisma; we keep them as `Option<String>` so callers can convert with full
+// precision rather than relying on f64 coercion. Mirrors the Python SDK shapes.
 
 /// Parameters for `POST /api/v1/arbitrage/execute`.
 ///
@@ -2187,6 +2187,22 @@ impl ArbPositionStatus {
     }
 }
 
+fn deserialize_optional_string_or_number<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match Option::<serde_json::Value>::deserialize(deserializer)? {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(value)) => Ok(Some(value)),
+        Some(serde_json::Value::Number(value)) => Ok(Some(value.to_string())),
+        Some(value) => Err(serde::de::Error::custom(format!(
+            "expected string, number, or null, got {value}"
+        ))),
+    }
+}
+
 /// A single leg of an arbitrage execution result.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -2197,7 +2213,7 @@ pub struct ArbExecutionLeg {
     pub intent_id: Option<String>,
     #[serde(default)]
     pub token_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_string_or_number")]
     pub price: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,

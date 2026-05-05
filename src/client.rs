@@ -6736,6 +6736,22 @@ mod tests {
     }
 
     #[test]
+    fn test_arb_execution_result_deserializes_numeric_leg_prices() {
+        let json = r#"{
+            "arbPositionId":"ap-1",
+            "buyLeg":{"venue":"POLYMARKET","intentId":"b-1","tokenId":"tok-y","price":0.55},
+            "sellLeg":{"venue":"KALSHI","intentId":"s-1","tokenId":"tok-n","price":0.48},
+            "entrySpreadPct":0.07,
+            "status":"PENDING"
+        }"#;
+        let r: ArbExecutionResult = serde_json::from_str(json).unwrap();
+        let buy = r.buy_leg.as_ref().unwrap();
+        let sell = r.sell_leg.as_ref().unwrap();
+        assert_eq!(buy.price.as_deref(), Some("0.55"));
+        assert_eq!(sell.price.as_deref(), Some("0.48"));
+    }
+
+    #[test]
     fn test_arb_position_deserializes_with_decimal_strings() {
         let json = r#"{
             "id":"ap-1","userId":"u-1","matchId":"m-1","status":"OPEN",
