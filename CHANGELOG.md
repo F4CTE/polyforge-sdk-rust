@@ -44,6 +44,12 @@
   32 new unit tests cover URL paths, query/body camelCase serialization, validation bounds (size/price/non-finite inputs), enum casing, envelope handling, nullable sentiment votes, and JSON deserialization shapes. `cargo build`, `cargo clippy -- -D warnings`, and `cargo test` (321 unit tests plus 4 doc tests passing) are clean.
 
 ### Notes
+- Public user/profile lookup methods no longer send an `Authorization` header when
+  the client was constructed with an empty API key. This keeps documented public
+  endpoints usable without credentials while preserving authenticated behavior
+  when a key is configured. Added multi-chunk coverage for the 1-MiB error body
+  cap and documented that exactly 1 MiB is allowed while the first byte over the
+  limit is rejected.
 - `GET /sports/combos/:collectionTicker` currently ignores its path param
   server-side (forwards to `listComboCollections({page:1, limit:1})`). The SDK
   wraps the route as-is for fidelity; a server-side fix is tracked separately.
