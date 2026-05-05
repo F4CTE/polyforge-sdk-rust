@@ -415,6 +415,10 @@ impl PolyforgeClient {
         self.auth_header().map(Some)
     }
 
+    fn generate_idempotency_key() -> String {
+        uuid::Uuid::new_v4().simple().to_string()
+    }
+
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
         let resp = self
             .http
@@ -488,6 +492,22 @@ impl PolyforgeClient {
         self.handle_response(resp).await
     }
 
+    async fn post_idempotent<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<T> {
+        let resp = self
+            .http
+            .post(self.url(path))
+            .header(AUTHORIZATION, self.auth_header()?)
+            .header(IDEMPOTENCY_KEY_HEADER, Self::generate_idempotency_key())
+            .json(body)
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
     async fn patch<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
@@ -513,7 +533,18 @@ impl PolyforgeClient {
         self.handle_response(resp).await
     }
 
-    async fn delete_with_body<T: serde::de::DeserializeOwned>(
+    async fn delete_idempotent<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let resp = self
+            .http
+            .delete(self.url(path))
+            .header(AUTHORIZATION, self.auth_header()?)
+            .header(IDEMPOTENCY_KEY_HEADER, Self::generate_idempotency_key())
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
+    async fn delete_with_body_idempotent<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
         body: &serde_json::Value,
@@ -523,6 +554,7 @@ impl PolyforgeClient {
             .delete(self.url(path))
             .header(AUTHORIZATION, self.auth_header()?)
             .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+            .header(IDEMPOTENCY_KEY_HEADER, Self::generate_idempotency_key())
             .json(body)
             .send()
             .await?;
@@ -1592,6 +1624,9 @@ impl PolyforgeClient {
 
     /// Place a direct buy or sell order on a prediction market.
     ///
+    /// The SDK automatically sends an `Idempotency-Key` header required by the
+    /// platform for trading writes.
+    ///
     /// # Errors
     /// Returns [`PolyforgeError::Validation`] if `size` or `price` is NaN,
     /// infinite, zero, or negative.
@@ -1599,55 +1634,75 @@ impl PolyforgeClient {
         validate_financial_param("size", params.size)?;
         validate_financial_param("price", params.price)?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post("/api/v1/orders/place", &body).await
+        self.post_idempotent("/api/v1/orders/place", &body).await
     }
 
     /// Cancel a pending or live order.
     pub async fn cancel_order(&self, order_id: &str) -> Result<CancelOrderResponse> {
-        self.delete(&format!("/api/v1/orders/{}", encode(order_id)))
+        self.delete_idempotent(&format!("/api/v1/orders/{}", encode(order_id)))
             .await
     }
 
     /// Place up to 15 orders in a single batch request.
+    ///
+    /// The SDK automatically sends an `Idempotency-Key` header required by the
+    /// platform for trading writes.
     pub async fn batch_orders(&self, params: &BatchOrdersParams) -> Result<BatchOrdersResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post("/api/v1/orders/batch", &body).await
+        self.post_idempotent("/api/v1/orders/batch", &body).await
     }
 
     /// Cancel up to 3 000 orders in a single bulk request.
+    ///
+    /// The SDK automatically sends an `Idempotency-Key` header required by the
+    /// platform for trading writes.
     pub async fn bulk_cancel_orders(
         &self,
         params: &BulkCancelParams,
     ) -> Result<BulkCancelResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.delete_with_body("/api/v1/orders/bulk", &body).await
+        self.delete_with_body_idempotent("/api/v1/orders/bulk", &body)
+            .await
     }
 
     /// Close an open position (sell all shares at market price).
+    ///
+    /// The SDK automatically sends an `Idempotency-Key` header required by the
+    /// platform for trading writes.
     pub async fn close_position(&self, params: &ClosePositionParams) -> Result<PlaceOrderResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post("/api/v1/orders/close-position", &body).await
+        self.post_idempotent("/api/v1/orders/close-position", &body)
+            .await
     }
 
     /// Redeem winning shares after a market resolves.
+    ///
+    /// The SDK automatically sends an `Idempotency-Key` header required by the
+    /// platform for trading writes.
     pub async fn redeem_position(
         &self,
         params: &RedeemPositionParams,
     ) -> Result<RedeemPositionResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post("/api/v1/orders/redeem", &body).await
+        self.post_idempotent("/api/v1/orders/redeem", &body).await
     }
 
     /// Split a position into smaller positions.
+    ///
+    /// The SDK automatically sends an `Idempotency-Key` header required by the
+    /// platform for trading writes.
     pub async fn split_position(&self, params: &SplitPositionParams) -> Result<PlaceOrderResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post("/api/v1/orders/split", &body).await
+        self.post_idempotent("/api/v1/orders/split", &body).await
     }
 
     /// Merge a position (combine token shares).
+    ///
+    /// The SDK automatically sends an `Idempotency-Key` header required by the
+    /// platform for trading writes.
     pub async fn merge_position(&self, params: &MergePositionParams) -> Result<PlaceOrderResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post("/api/v1/orders/merge", &body).await
+        self.post_idempotent("/api/v1/orders/merge", &body).await
     }
 
     /// Export order history as CSV.
@@ -1729,6 +1784,9 @@ impl PolyforgeClient {
 
     /// Place an advanced smart order (TWAP, DCA, BRACKET, or OCO).
     ///
+    /// The SDK automatically sends an `Idempotency-Key` header required by the
+    /// platform for trading writes.
+    ///
     /// # Errors
     /// Returns [`PolyforgeError::Validation`] if `total_size` or any optional
     /// price parameter is NaN, infinite, zero, or negative.
@@ -1744,7 +1802,7 @@ impl PolyforgeClient {
         validate_optional_financial_param("price_a", params.price_a)?;
         validate_optional_financial_param("price_b", params.price_b)?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post("/api/v1/orders/smart", &body).await
+        self.post_idempotent("/api/v1/orders/smart", &body).await
     }
 
     /// List your smart orders with child order progress.
@@ -1754,7 +1812,7 @@ impl PolyforgeClient {
 
     /// Cancel a pending or active smart order and its child orders.
     pub async fn cancel_smart_order(&self, id: &str) -> Result<serde_json::Value> {
-        self.delete(&format!("/api/v1/orders/smart/{}", encode(id)))
+        self.delete_idempotent(&format!("/api/v1/orders/smart/{}", encode(id)))
             .await
     }
 
@@ -2292,6 +2350,9 @@ impl PolyforgeClient {
 
     /// Create a conditional order (limit, stop, trailing-stop, etc.).
     ///
+    /// The SDK automatically sends an `Idempotency-Key` header required by the
+    /// platform for trading writes.
+    ///
     /// # Errors
     /// Returns [`PolyforgeError::Validation`] if `size` or `trigger_price` is
     /// NaN, infinite, zero, or negative.
@@ -2303,7 +2364,8 @@ impl PolyforgeClient {
         validate_financial_param("trigger_price", params.trigger_price)?;
         validate_optional_financial_param("limit_price", params.limit_price)?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post("/api/v1/orders/conditional", &body).await
+        self.post_idempotent("/api/v1/orders/conditional", &body)
+            .await
     }
 
     /// Get a single conditional order by ID.
@@ -2315,7 +2377,7 @@ impl PolyforgeClient {
     /// Cancel a pending conditional order.
     pub async fn cancel_conditional_order(&self, order_id: &str) -> Result<()> {
         let _: serde_json::Value = self
-            .delete(&format!("/api/v1/orders/conditional/{}", encode(order_id)))
+            .delete_idempotent(&format!("/api/v1/orders/conditional/{}", encode(order_id)))
             .await?;
         Ok(())
     }
@@ -3416,6 +3478,136 @@ mod tests {
     use super::*;
     use std::future::Future;
 
+    async fn capture_request<F, Fut>(response_body: &'static str, invoke: F) -> String
+    where
+        F: FnOnce(PolyforgeClient) -> Fut,
+        Fut: Future<Output = Result<()>>,
+    {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = Vec::new();
+            let mut chunk = [0_u8; 1024];
+            loop {
+                let n = socket.read(&mut chunk).await.unwrap();
+                if n == 0 {
+                    break;
+                }
+                buf.extend_from_slice(&chunk[..n]);
+                if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+
+            let response = format!(
+                "HTTP/1.1 200 OK\r\n\
+                 content-type: application/json\r\n\
+                 content-length: {}\r\n\
+                 connection: close\r\n\
+                 \r\n\
+                 {}",
+                response_body.len(),
+                response_body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+            String::from_utf8(buf).unwrap()
+        });
+
+        let client = PolyforgeClient::with_url("test-key", format!("http://{addr}")).unwrap();
+        invoke(client).await.unwrap();
+        server.await.unwrap()
+    }
+
+    fn captured_header<'a>(request: &'a str, name: &str) -> Option<&'a str> {
+        request.lines().find_map(|line| {
+            let (header_name, value) = line.split_once(':')?;
+            header_name
+                .eq_ignore_ascii_case(name)
+                .then_some(value.trim())
+        })
+    }
+
+    fn assert_generated_idempotency_key(request: &str) {
+        let key = captured_header(request, "Idempotency-Key")
+            .expect("request must include Idempotency-Key header");
+        assert_eq!(key.len(), 32);
+        assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[tokio::test]
+    async fn test_place_order_sends_generated_idempotency_key() {
+        let request = capture_request(
+            r#"{"orderId":"order-1","intentId":"intent-1","status":"PENDING"}"#,
+            |client| async move {
+                let params = PlaceOrderParams {
+                    token_id: "tok-1".into(),
+                    side: "BUY".into(),
+                    outcome: "YES".into(),
+                    size: 10.0,
+                    price: 0.55,
+                    order_type: Some("GTC".into()),
+                };
+                client.place_order(&params).await.map(|_| ())
+            },
+        )
+        .await;
+
+        assert_generated_idempotency_key(&request);
+    }
+
+    #[tokio::test]
+    async fn test_cancel_order_sends_generated_idempotency_key() {
+        let request = capture_request(
+            r#"{"orderId":"order-1","status":"CANCELLED"}"#,
+            |client| async move { client.cancel_order("order-1").await.map(|_| ()) },
+        )
+        .await;
+
+        assert_generated_idempotency_key(&request);
+    }
+
+    #[tokio::test]
+    async fn test_bulk_cancel_orders_sends_generated_idempotency_key() {
+        let request = capture_request(
+            r#"{"cancelled":["order-1"],"failed":[]}"#,
+            |client| async move {
+                let params = BulkCancelParams {
+                    order_ids: vec!["order-1".into()],
+                };
+                client.bulk_cancel_orders(&params).await.map(|_| ())
+            },
+        )
+        .await;
+
+        assert_generated_idempotency_key(&request);
+    }
+
+    #[tokio::test]
+    async fn test_create_conditional_order_sends_generated_idempotency_key() {
+        let request = capture_request(r#"{"id":"conditional-1"}"#, |client| async move {
+            let params = CreateConditionalOrderParams {
+                market_id: "mkt-1".into(),
+                token_id: "tok-1".into(),
+                order_type: "LIMIT".into(),
+                side: "BUY".into(),
+                outcome: "YES".into(),
+                size: 10.0,
+                trigger_price: 0.55,
+                limit_price: Some(0.56),
+                trailing_pct: None,
+                expires_at: None,
+            };
+            client.create_conditional_order(&params).await.map(|_| ())
+        })
+        .await;
+
+        assert_generated_idempotency_key(&request);
+    }
+
     #[test]
     fn test_client_construction() {
         let client = PolyforgeClient::new("test-api-key").unwrap();
@@ -3453,42 +3645,6 @@ mod tests {
         let client = PolyforgeClient::new("my-secret-key").unwrap();
         let header = client.auth_header().unwrap();
         assert_eq!(header.to_str().unwrap(), "Bearer my-secret-key");
-    }
-
-    async fn capture_request<F, Fut>(response_body: &'static str, call: F) -> String
-    where
-        F: FnOnce(PolyforgeClient) -> Fut,
-        Fut: Future<Output = Result<()>>,
-    {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let base_url = format!("http://{}", listener.local_addr().unwrap());
-        let server = tokio::spawn(async move {
-            let (mut socket, _) = listener.accept().await.unwrap();
-            let mut buf = vec![0; 8192];
-            let n = socket.read(&mut buf).await.unwrap();
-            let request = String::from_utf8_lossy(&buf[..n]).to_string();
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-                response_body.len(),
-                response_body
-            );
-            socket.write_all(response.as_bytes()).await.unwrap();
-            request
-        });
-
-        let client = PolyforgeClient::with_url("test-api-key", base_url).unwrap();
-        call(client).await.unwrap();
-        server.await.unwrap()
-    }
-
-    fn captured_header(request: &str, header_name: &str) -> Option<String> {
-        request.lines().find_map(|line| {
-            let (name, value) = line.split_once(':')?;
-            name.eq_ignore_ascii_case(header_name)
-                .then(|| value.trim().to_string())
-        })
     }
 
     #[test]
