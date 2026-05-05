@@ -3313,6 +3313,11 @@ impl PolyforgeClient {
         self.get("/api/v1/fees/schedules").await
     }
 
+    /// Backward-compatible alias for [`Self::list_fee_schedules`].
+    pub async fn get_fee_schedules(&self) -> Result<FeeSchedules> {
+        self.list_fee_schedules().await
+    }
+
     /// List per-market price alerts the authenticated user has configured for
     /// a single market (`GET /api/v1/markets/:marketId/alerts`).
     ///
@@ -3464,6 +3469,14 @@ impl PolyforgeClient {
             &serde_json::to_value(params)?,
         )
         .await
+    }
+
+    /// Backward-compatible alias for [`Self::lookup_combo_market`].
+    pub async fn lookup_combo_ticker(
+        &self,
+        params: &ComboLookupParams,
+    ) -> Result<serde_json::Value> {
+        self.lookup_combo_market(params).await
     }
 
     /// Get the cross-category correlation matrix
@@ -3695,9 +3708,9 @@ mod tests {
                 );
                 let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
                     "[]"
-                } else if request.contains("/api/v1/scores/") {
-                    "{}"
-                } else if request.contains("/api/v1/profile/") {
+                } else if request.contains("/api/v1/scores/")
+                    || request.contains("/api/v1/profile/")
+                {
                     "{}"
                 } else {
                     "{\"data\":[]}"
@@ -4760,7 +4773,7 @@ mod tests {
         assert_eq!(resp.data.len(), 2);
         assert_eq!(resp.total, 2);
         assert_eq!(resp.page, 1);
-        assert_eq!(resp.has_next, true);
+        assert!(resp.has_next);
         assert_eq!(resp.data[0].id, "s1");
     }
 
@@ -6799,7 +6812,7 @@ mod tests {
 
         assert!(request.starts_with("POST /api/v1/arbitrage/execute "));
         assert_eq!(
-            captured_header(&request, "Idempotency-Key").as_deref(),
+            captured_header(&request, "Idempotency-Key"),
             Some("arb-execute-key-1")
         );
     }
@@ -6869,7 +6882,7 @@ mod tests {
 
         assert!(request.starts_with("POST /api/v1/arbitrage/positions/pos-42/close "));
         assert_eq!(
-            captured_header(&request, "Idempotency-Key").as_deref(),
+            captured_header(&request, "Idempotency-Key"),
             Some("arb-close-key-1")
         );
     }
