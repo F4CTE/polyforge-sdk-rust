@@ -408,6 +408,13 @@ impl PolyforgeClient {
         })
     }
 
+    fn optional_auth_header(&self) -> Result<Option<HeaderValue>> {
+        if self.api_key.expose_secret().is_empty() {
+            return Ok(None);
+        }
+        self.auth_header().map(Some)
+    }
+
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
         let resp = self
             .http
@@ -415,6 +422,18 @@ impl PolyforgeClient {
             .header(AUTHORIZATION, self.auth_header()?)
             .send()
             .await?;
+        self.handle_response(resp).await
+    }
+
+    async fn get_with_optional_auth<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+    ) -> Result<T> {
+        let mut req = self.http.get(self.url(path));
+        if let Some(auth_header) = self.optional_auth_header()? {
+            req = req.header(AUTHORIZATION, auth_header);
+        }
+        let resp = req.send().await?;
         self.handle_response(resp).await
     }
 
@@ -526,6 +545,7 @@ impl PolyforgeClient {
         serde_json::from_str(&body).map_err(PolyforgeError::from)
     }
 
+    /// Read an error response body, allowing bodies exactly 1 MiB and rejecting the first byte over.
     async fn read_error_body(
         mut resp: reqwest::Response,
         status: u16,
@@ -1227,13 +1247,13 @@ impl PolyforgeClient {
 
     /// Get the score for a specific user.
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
-        self.get(&format!("/api/v1/scores/{}", encode(user_id)))
+        self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
     /// Get the badges awarded to a specific user.
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
-        self.get(&format!("/api/v1/scores/{}/badges", encode(user_id)))
+        self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
     }
 
@@ -1252,7 +1272,7 @@ impl PolyforgeClient {
         period: &str,
     ) -> Result<Vec<UserPerformancePoint>> {
         let res: UserDataEnvelope<UserPerformancePoint> = self
-            .get(&format!(
+            .get_with_optional_auth(&format!(
                 "/api/v1/users/{}/performance?period={}",
                 encode(username),
                 encode(period)
@@ -1287,7 +1307,7 @@ impl PolyforgeClient {
             format!("?{}", pairs.join("&"))
         };
         let res: UserDataEnvelope<UserStrategySummary> = self
-            .get(&format!(
+            .get_with_optional_auth(&format!(
                 "/api/v1/users/{}/strategies{}",
                 encode(username),
                 qs
@@ -1308,7 +1328,7 @@ impl PolyforgeClient {
             None => String::new(),
         };
         let res: UserDataEnvelope<UserActivityEntry> = self
-            .get(&format!(
+            .get_with_optional_auth(&format!(
                 "/api/v1/users/{}/activity{}",
                 encode(username),
                 qs
@@ -1320,7 +1340,7 @@ impl PolyforgeClient {
     /// Badges earned by a public user (id is the badge type).
     pub async fn get_user_profile_badges(&self, username: &str) -> Result<Vec<UserProfileBadge>> {
         let res: UserDataEnvelope<UserProfileBadge> = self
-            .get(&format!("/api/v1/users/{}/badges", encode(username)))
+            .get_with_optional_auth(&format!("/api/v1/users/{}/badges", encode(username)))
             .await?;
         Ok(res.data)
     }
@@ -2958,7 +2978,7 @@ impl PolyforgeClient {
     /// Get a public user profile by username.
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
-        self.get(&path).await
+        self.get_with_optional_auth(&path).await
     }
 
     /// Follow a user by username.
@@ -3176,9 +3196,18 @@ impl PolyforgeClient {
         self.get(&format!("/api/v1/notifications{qs}")).await
     }
 
+    /// Deprecated alias for [`Self::list_notifications`].
+    #[deprecated(note = "use list_notifications instead")]
+    pub async fn get_notifications(
+        &self,
+        params: Option<&PaginationParams>,
+    ) -> Result<PaginatedResponse<Notification>> {
+        self.list_notifications(params).await
+    }
+
     /// Fetch the authenticated user's referral code, link, and stats
     /// (`GET /api/v1/referrals/me`).
-    pub async fn get_my_referrals(&self) -> Result<ReferralsInfo> {
+    pub async fn get_my_referrals(&self) -> Result<MyReferralsResponse> {
         self.get("/api/v1/referrals/me").await
     }
 
@@ -3460,6 +3489,67 @@ mod tests {
             name.eq_ignore_ascii_case(header_name)
                 .then(|| value.trim().to_string())
         })
+    }
+
+    #[test]
+    fn test_client_optional_auth_header_omits_empty_key() {
+        let client = PolyforgeClient::new("").unwrap();
+        assert!(client.optional_auth_header().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_public_user_endpoints_dispatch_without_api_key() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            for _ in 0..7 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = vec![0_u8; 4096];
+                let n = socket.read(&mut request).await.unwrap();
+                let request = String::from_utf8_lossy(&request[..n]);
+                assert!(
+                    !request.to_ascii_lowercase().contains("authorization:"),
+                    "public profile request unexpectedly included Authorization header: {request}"
+                );
+                let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
+                    "[]"
+                } else if request.contains("/api/v1/scores/") {
+                    "{}"
+                } else if request.contains("/api/v1/profile/") {
+                    "{}"
+                } else {
+                    "{\"data\":[]}"
+                };
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                     content-type: application/json\r\n\
+                     content-length: {}\r\n\
+                     connection: close\r\n\
+                     \r\n\
+                     {}",
+                    body.len(),
+                    body
+                );
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+
+        let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client.get_user_score("alice").await.unwrap();
+        client.get_user_badges("alice").await.unwrap();
+        client.get_user_performance("alice", "30d").await.unwrap();
+        client
+            .get_user_strategies("alice", None, None)
+            .await
+            .unwrap();
+        client.get_user_activity("alice", None).await.unwrap();
+        client.get_user_profile_badges("alice").await.unwrap();
+        client.get_user_profile("alice").await.unwrap();
+
+        server.await.unwrap();
     }
 
     #[test]
@@ -4054,6 +4144,58 @@ mod tests {
                 assert_eq!(status, 500);
             }
             other => panic!(
+                "Expected Api error with RESPONSE_BODY_TOO_LARGE, got: {:?}",
+                other
+            ),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_response_rejects_multichunk_oversized_error_body_without_content_length() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let first_chunk = vec![b'x'; 700 * 1024];
+        let second_chunk = vec![b'y'; 700 * 1024];
+
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0_u8; 1024];
+            let _ = socket.read(&mut request).await;
+            socket
+                .write_all(
+                    b"HTTP/1.1 500 Internal Server Error\r\n\
+                      content-type: application/json\r\n\
+                      connection: close\r\n\
+                      \r\n",
+                )
+                .await
+                .unwrap();
+            socket.write_all(&first_chunk).await.unwrap();
+            socket.write_all(&second_chunk).await.unwrap();
+        });
+
+        let client = PolyforgeClient::with_url("test-key", format!("http://{addr}")).unwrap();
+        let result: std::result::Result<serde_json::Value, _> =
+            client.get("/multi-chunk-error").await;
+
+        match result {
+            Err(PolyforgeError::Api {
+                code,
+                status,
+                message,
+                ..
+            }) => {
+                assert_eq!(code, "RESPONSE_BODY_TOO_LARGE");
+                assert_eq!(status, 500);
+                assert!(
+                    message.contains("limit 1048576"),
+                    "message should include the exact truncation limit: {message}"
+                );
+            }
+            Ok(_) => panic!("Expected Api error with RESPONSE_BODY_TOO_LARGE"),
+            Err(other) => panic!(
                 "Expected Api error with RESPONSE_BODY_TOO_LARGE, got: {:?}",
                 other
             ),
@@ -6578,8 +6720,8 @@ mod tests {
     fn test_arb_execution_result_deserializes() {
         let json = r#"{
             "arbPositionId":"ap-1",
-            "buyLeg":{"venue":"POLYMARKET","intentId":"b-1","tokenId":"tok-y","price":0.55},
-            "sellLeg":{"venue":"KALSHI","intentId":"s-1","tokenId":"tok-n","price":0.48},
+            "buyLeg":{"venue":"POLYMARKET","intentId":"b-1","tokenId":"tok-y","price":"0.550000000000000000"},
+            "sellLeg":{"venue":"KALSHI","intentId":"s-1","tokenId":"tok-n","price":"0.480000000000000000"},
             "entrySpreadPct":0.07,
             "status":"PENDING"
         }"#;
@@ -6590,6 +6732,23 @@ mod tests {
         let buy = r.buy_leg.as_ref().unwrap();
         assert_eq!(buy.venue.as_deref(), Some("POLYMARKET"));
         assert_eq!(buy.token_id.as_deref(), Some("tok-y"));
+        assert_eq!(buy.price.as_deref(), Some("0.550000000000000000"));
+    }
+
+    #[test]
+    fn test_arb_execution_result_deserializes_numeric_leg_prices() {
+        let json = r#"{
+            "arbPositionId":"ap-1",
+            "buyLeg":{"venue":"POLYMARKET","intentId":"b-1","tokenId":"tok-y","price":0.55},
+            "sellLeg":{"venue":"KALSHI","intentId":"s-1","tokenId":"tok-n","price":0.48},
+            "entrySpreadPct":0.07,
+            "status":"PENDING"
+        }"#;
+        let r: ArbExecutionResult = serde_json::from_str(json).unwrap();
+        let buy = r.buy_leg.as_ref().unwrap();
+        let sell = r.sell_leg.as_ref().unwrap();
+        assert_eq!(buy.price.as_deref(), Some("0.55"));
+        assert_eq!(sell.price.as_deref(), Some("0.48"));
     }
 
     #[test]
@@ -7704,7 +7863,26 @@ mod tests {
     }
 
     #[test]
-    fn test_referrals_info_deserializes() {
+    fn test_my_referrals_response_deserializes() {
+        let json = serde_json::json!({
+            "referralCode": "ABCD1234",
+            "referralLink": "https://polyforge.trade/ref/ABCD1234",
+            "stats": {
+                "invited": 1,
+                "signedUp": 0,
+                "active": 0,
+                "creditsEarned": 0
+            },
+            "referrals": []
+        });
+        let info: MyReferralsResponse = serde_json::from_value(json).unwrap();
+        assert_eq!(info.referral_code.as_deref(), Some("ABCD1234"));
+        assert_eq!(info.stats.as_ref().unwrap().invited, 1);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_deprecated_referrals_alias_deserializes() {
         let json = serde_json::json!({
             "referralCode": "ABCD1234",
             "referralLink": "https://polyforge.trade/ref/ABCD1234",
@@ -7719,6 +7897,14 @@ mod tests {
         let info: ReferralsInfo = serde_json::from_value(json).unwrap();
         assert_eq!(info.referral_code.as_deref(), Some("ABCD1234"));
         assert_eq!(info.stats.as_ref().unwrap().invited, 1);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_deprecated_get_notifications_alias_compiles() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let future = client.get_notifications(None);
+        drop(future);
     }
 
     #[test]

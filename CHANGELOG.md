@@ -44,6 +44,15 @@
   32 new unit tests cover URL paths, query/body camelCase serialization, validation bounds (size/price/non-finite inputs), enum casing, envelope handling, nullable sentiment votes, and JSON deserialization shapes. `cargo build`, `cargo clippy -- -D warnings`, and `cargo test` (321 unit tests plus 4 doc tests passing) are clean.
 
 ### Notes
+- Public user/profile lookup methods no longer send an `Authorization` header when
+  the client was constructed with an empty API key. This keeps documented public
+  endpoints usable without credentials while preserving authenticated behavior
+  when a key is configured. Added multi-chunk coverage for the 1-MiB error body
+  cap and documented that exactly 1 MiB is allowed while the first byte over the
+  limit is rejected.
+- Cross-SDK naming aliases: `get_notifications()` is now a deprecated alias for
+  `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the
+  canonical `MyReferralsResponse` type.
 - `GET /sports/combos/:collectionTicker` currently ignores its path param
   server-side (forwards to `listComboCollections({page:1, limit:1})`). The SDK
   wraps the route as-is for fidelity; a server-side fix is tracked separately.
@@ -65,7 +74,7 @@
   - `get_arbitrage_risk_dashboard()` → `GET /api/v1/arbitrage/risk/dashboard`.
   - `get_arbitrage_settlement_risks()` → `GET /api/v1/arbitrage/risk/settlement`.
   - `refresh_arbitrage_pnl()` → `POST /api/v1/arbitrage/risk/refresh-pnl`.
-- New types: `ExecuteArbitrageParams`, `ArbPositionStatus`, `ArbExecutionLeg`, `ArbExecutionResult`, `ArbPosition`, `ArbPositionsResponse`, `ArbCloseResponse`, `ArbNetExposure`, `ArbRiskDashboard`, `ArbSettlementRisk`, `ArbPnlRefreshResult`. Decimal columns (`buy_price`, `sell_price`, P&L, spread) are typed as `Option<String>` to preserve full precision from the backend Prisma `Decimal` serialization, matching the Python SDK shape.
+- New types: `ExecuteArbitrageParams`, `ArbPositionStatus`, `ArbExecutionLeg`, `ArbExecutionResult`, `ArbPosition`, `ArbPositionsResponse`, `ArbCloseResponse`, `ArbNetExposure`, `ArbRiskDashboard`, `ArbSettlementRisk`, `ArbPnlRefreshResult`. Decimal columns (`ArbExecutionLeg.price`, `buy_price`, `sell_price`, P&L, spread) are typed as `Option<String>` to preserve full precision from the backend Prisma `Decimal` serialization, matching the Python SDK shape.
 
 ### ⚠️ Trading impact (severity: HIGH)
 - `execute_arbitrage()` and `close_arbitrage_position()` can place real offsetting orders. Callers must supply an idempotency key for safe retries; the SDK sends it as `Idempotency-Key` and fails fast on missing/invalid keys, malformed `match_id`, fractional or out-of-range `size`, invalid slippage, invalid position status filters, and oversized page limits before requests reach the trading API.
