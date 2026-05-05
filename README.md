@@ -119,7 +119,7 @@ async fn main() -> polyforge::Result<()> {
 
 Trading write methods automatically attach a fresh 32-character `Idempotency-Key`
 header on each request, matching the platform requirement for order placement,
-position, smart-order, and conditional-order mutations.
+liquidity, position, smart-order, and conditional-order mutations.
 
 | Method | Description |
 |--------|-------------|
