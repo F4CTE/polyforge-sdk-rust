@@ -27,6 +27,7 @@ const MAX_SSE_BUFFER_SIZE: usize = 1_048_576; // 1 MiB
 /// entirely in memory.  This constant caps the readable size so that an
 /// oversized error response is rejected early instead of causing OOM.
 const MAX_RESPONSE_BODY_SIZE: usize = 1_048_576; // 1 MiB
+const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
 
 /// An open SSE connection to a strategy's execution event stream.
 ///
@@ -394,6 +395,19 @@ impl PolyforgeClient {
         })
     }
 
+    fn idempotency_key_header(idempotency_key: &str) -> Result<HeaderValue> {
+        if idempotency_key.trim().is_empty() {
+            return Err(PolyforgeError::Validation(
+                "idempotency_key must not be empty".into(),
+            ));
+        }
+        HeaderValue::from_str(idempotency_key).map_err(|_| {
+            PolyforgeError::Validation(
+                "idempotency_key contains invalid HTTP header characters".into(),
+            )
+        })
+    }
+
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
         let resp = self
             .http
@@ -429,6 +443,26 @@ impl PolyforgeClient {
             .http
             .post(self.url(path))
             .header(AUTHORIZATION, self.auth_header()?)
+            .json(body)
+            .send()
+            .await?;
+        self.handle_response(resp).await
+    }
+
+    async fn post_with_idempotency_key<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+        idempotency_key: &str,
+    ) -> Result<T> {
+        let resp = self
+            .http
+            .post(self.url(path))
+            .header(AUTHORIZATION, self.auth_header()?)
+            .header(
+                IDEMPOTENCY_KEY_HEADER,
+                Self::idempotency_key_header(idempotency_key)?,
+            )
             .json(body)
             .send()
             .await?;
@@ -2753,6 +2787,10 @@ impl PolyforgeClient {
     /// Execute a cross-venue arbitrage trade — places **real** offsetting
     /// orders on Polymarket and Kalshi for a matched market pair.
     ///
+    /// `idempotency_key` is sent as the `Idempotency-Key` header required by
+    /// the backend for this real-order endpoint; reuse the same key for safe
+    /// caller-managed retries of the same intended execution.
+    ///
     /// `size` must be in `1..=10000` USDC; `max_slippage_pct`, if set, must be
     /// in `0..=5`. Both are validated client-side before any order is sent.
     /// Server defaults `max_slippage_pct` to 0.5 when omitted.
@@ -2763,13 +2801,19 @@ impl PolyforgeClient {
     pub async fn execute_arbitrage(
         &self,
         params: &ExecuteArbitrageParams,
+        idempotency_key: &str,
     ) -> Result<ArbExecutionResult> {
         validate_arb_match_id(&params.match_id)?;
         validate_arb_size(params.size as f64)?;
         if let Some(slip) = params.max_slippage_pct {
             validate_arb_slippage(slip)?;
         }
-        self.post("/api/v1/arbitrage/execute", &serde_json::to_value(params)?).await
+        self.post_with_idempotency_key(
+            "/api/v1/arbitrage/execute",
+            &serde_json::to_value(params)?,
+            idempotency_key,
+        )
+        .await
     }
 
     /// List the authenticated user's cross-venue arbitrage positions.
@@ -2820,17 +2864,20 @@ impl PolyforgeClient {
     /// Close an open arbitrage position — places **real** reverse orders on
     /// both venues.
     ///
+    /// `idempotency_key` is sent as the `Idempotency-Key` header required by
+    /// the backend for this real-order endpoint; reuse the same key for safe
+    /// caller-managed retries of the same intended close.
+    ///
     /// Surfaces backend error codes verbatim (`ARB_POSITION_NOT_FOUND`,
     /// `INVALID_STATUS`).
     pub async fn close_arbitrage_position(
         &self,
         position_id: &str,
+        idempotency_key: &str,
     ) -> Result<ArbCloseResponse> {
-        let path = format!(
-            "/api/v1/arbitrage/positions/{}/close",
-            encode(position_id)
-        );
-        self.post(&path, &json!({})).await
+        let path = format!("/api/v1/arbitrage/positions/{}/close", encode(position_id));
+        self.post_with_idempotency_key(&path, &json!({}), idempotency_key)
+            .await
     }
 
     /// Get net exposure, P&L, and position breakdown across venues.
@@ -2845,7 +2892,8 @@ impl PolyforgeClient {
 
     /// Recompute unrealized P&L for all open arb positions.
     pub async fn refresh_arbitrage_pnl(&self) -> Result<ArbPnlRefreshResult> {
-        self.post("/api/v1/arbitrage/risk/refresh-pnl", &json!({})).await
+        self.post("/api/v1/arbitrage/risk/refresh-pnl", &json!({}))
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -3337,6 +3385,7 @@ impl PolyforgeClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::future::Future;
 
     #[test]
     fn test_client_construction() {
@@ -3375,6 +3424,42 @@ mod tests {
         let client = PolyforgeClient::new("my-secret-key").unwrap();
         let header = client.auth_header().unwrap();
         assert_eq!(header.to_str().unwrap(), "Bearer my-secret-key");
+    }
+
+    async fn capture_request<F, Fut>(response_body: &'static str, call: F) -> String
+    where
+        F: FnOnce(PolyforgeClient) -> Fut,
+        Fut: Future<Output = Result<()>>,
+    {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0; 8192];
+            let n = socket.read(&mut buf).await.unwrap();
+            let request = String::from_utf8_lossy(&buf[..n]).to_string();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                response_body.len(),
+                response_body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+            request
+        });
+
+        let client = PolyforgeClient::with_url("test-api-key", base_url).unwrap();
+        call(client).await.unwrap();
+        server.await.unwrap()
+    }
+
+    fn captured_header(request: &str, header_name: &str) -> Option<String> {
+        request.lines().find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case(header_name)
+                .then(|| value.trim().to_string())
+        })
     }
 
     #[test]
@@ -6339,7 +6424,10 @@ mod tests {
             size: 0,
             max_slippage_pct: None,
         };
-        let err = client.execute_arbitrage(&p).await.unwrap_err();
+        let err = client
+            .execute_arbitrage(&p, "arb-execute-key-1")
+            .await
+            .unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
     }
 
@@ -6351,7 +6439,10 @@ mod tests {
             size: 100,
             max_slippage_pct: None,
         };
-        let err = client.execute_arbitrage(&p).await.unwrap_err();
+        let err = client
+            .execute_arbitrage(&p, "arb-execute-key-1")
+            .await
+            .unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
     }
 
@@ -6363,7 +6454,45 @@ mod tests {
             size: 100,
             max_slippage_pct: Some(7.5),
         };
-        let err = client.execute_arbitrage(&p).await.unwrap_err();
+        let err = client
+            .execute_arbitrage(&p, "arb-execute-key-1")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+    }
+
+    #[tokio::test]
+    async fn test_execute_arbitrage_sends_idempotency_key() {
+        let request = capture_request("{}", |client| async move {
+            let p = ExecuteArbitrageParams {
+                match_id: "550e8400-e29b-41d4-a716-446655440000".into(),
+                size: 100,
+                max_slippage_pct: Some(0.5),
+            };
+            client
+                .execute_arbitrage(&p, "arb-execute-key-1")
+                .await
+                .map(|_| ())
+        })
+        .await;
+
+        assert!(request.starts_with("POST /api/v1/arbitrage/execute "));
+        assert_eq!(
+            captured_header(&request, "Idempotency-Key").as_deref(),
+            Some("arb-execute-key-1")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_execute_arbitrage_rejects_empty_idempotency_key() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let p = ExecuteArbitrageParams {
+            match_id: "550e8400-e29b-41d4-a716-446655440000".into(),
+            size: 100,
+            max_slippage_pct: None,
+        };
+
+        let err = client.execute_arbitrage(&p, " ").await.unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
     }
 
@@ -6402,12 +6531,26 @@ mod tests {
     #[test]
     fn test_arb_position_close_path() {
         let client = PolyforgeClient::new("k").unwrap();
-        let path = format!(
-            "/api/v1/arbitrage/positions/{}/close",
-            encode("pos-42")
-        );
+        let path = format!("/api/v1/arbitrage/positions/{}/close", encode("pos-42"));
         let url = client.url(&path);
         assert!(url.contains("/api/v1/arbitrage/positions/pos-42/close"));
+    }
+
+    #[tokio::test]
+    async fn test_close_arbitrage_position_sends_idempotency_key() {
+        let request = capture_request("{}", |client| async move {
+            client
+                .close_arbitrage_position("pos-42", "arb-close-key-1")
+                .await
+                .map(|_| ())
+        })
+        .await;
+
+        assert!(request.starts_with("POST /api/v1/arbitrage/positions/pos-42/close "));
+        assert_eq!(
+            captured_header(&request, "Idempotency-Key").as_deref(),
+            Some("arb-close-key-1")
+        );
     }
 
     #[test]
@@ -6496,7 +6639,10 @@ mod tests {
         assert_eq!(d.pending_positions, 1);
         assert_eq!(d.net_exposure.polymarket, 750.0);
         assert_eq!(d.net_exposure.kalshi, -750.0);
-        assert_eq!(d.positions_by_status.get(&ArbPositionStatus::Open), Some(&3));
+        assert_eq!(
+            d.positions_by_status.get(&ArbPositionStatus::Open),
+            Some(&3)
+        );
     }
 
     #[test]
