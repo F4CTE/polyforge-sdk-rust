@@ -2783,7 +2783,14 @@ impl PolyforgeClient {
         self.get(&path).await
     }
 
-    /// Create a new arbitrage match between a Polymarket and Kalshi market.
+    /// Admin-only: create a new arbitrage match between a Polymarket and Kalshi market.
+    ///
+    /// Requires an admin JWT/AdminRole on the platform. Ordinary public SDK API
+    /// keys receive `403 Forbidden`.
+    #[doc(hidden)]
+    #[deprecated(
+        note = "admin-only endpoint; requires an admin JWT/AdminRole and ordinary public API keys receive 403"
+    )]
     pub async fn create_arbitrage_match(
         &self,
         params: &CreateArbitrageMatchParams,
@@ -2792,19 +2799,40 @@ impl PolyforgeClient {
             .await
     }
 
-    /// Verify an arbitrage match (admin action).
+    /// Admin-only: verify an arbitrage match.
+    ///
+    /// Requires an admin JWT/AdminRole on the platform. Ordinary public SDK API
+    /// keys receive `403 Forbidden`.
+    #[doc(hidden)]
+    #[deprecated(
+        note = "admin-only endpoint; requires an admin JWT/AdminRole and ordinary public API keys receive 403"
+    )]
     pub async fn verify_arbitrage_match(&self, match_id: &str) -> Result<ArbitrageMatch> {
         let path = format!("/api/v1/arbitrage/matches/{}/verify", encode(match_id));
         self.post(&path, &json!({})).await
     }
 
-    /// Delete an arbitrage match.
+    /// Admin-only: delete an arbitrage match.
+    ///
+    /// Requires an admin JWT/AdminRole on the platform. Ordinary public SDK API
+    /// keys receive `403 Forbidden`.
+    #[doc(hidden)]
+    #[deprecated(
+        note = "admin-only endpoint; requires an admin JWT/AdminRole and ordinary public API keys receive 403"
+    )]
     pub async fn delete_arbitrage_match(&self, match_id: &str) -> Result<()> {
         let path = format!("/api/v1/arbitrage/matches/{}", encode(match_id));
         self.delete(&path).await
     }
 
-    /// Trigger a sync of arbitrage matches from external sources.
+    /// Admin-only: trigger a sync of arbitrage matches from external sources.
+    ///
+    /// Requires an admin JWT/AdminRole on the platform. Ordinary public SDK API
+    /// keys receive `403 Forbidden`.
+    #[doc(hidden)]
+    #[deprecated(
+        note = "admin-only endpoint; requires an admin JWT/AdminRole and ordinary public API keys receive 403"
+    )]
     pub async fn sync_arbitrage_matches(&self) -> Result<MatchSyncResult> {
         self.post("/api/v1/arbitrage/matches/sync", &json!({}))
             .await
@@ -6579,6 +6607,36 @@ mod tests {
         };
         let v = serde_json::to_value(&p).unwrap();
         assert!(v.get("notes").is_none());
+    }
+
+    #[test]
+    fn test_admin_only_arbitrage_match_mutations_are_hidden_and_deprecated() {
+        let source = include_str!("client.rs");
+        for method in [
+            "create_arbitrage_match",
+            "verify_arbitrage_match",
+            "delete_arbitrage_match",
+            "sync_arbitrage_matches",
+        ] {
+            let method_pos = source
+                .find(&format!("pub async fn {method}"))
+                .unwrap_or_else(|| panic!("{method} should exist for compatibility"));
+            let prefix_start = source[..method_pos].rfind("\n\n").map_or(0, |idx| idx + 2);
+            let prefix = &source[prefix_start..method_pos];
+
+            assert!(
+                prefix.contains("#[doc(hidden)]"),
+                "{method} must be hidden from the public Rustdoc surface"
+            );
+            assert!(
+                prefix.contains("#[deprecated(") && prefix.contains("admin-only"),
+                "{method} must be deprecated with an admin-only note"
+            );
+            assert!(
+                prefix.contains("Admin-only"),
+                "{method} docs must explicitly say the endpoint is admin-only"
+            );
+        }
     }
 
     // -----------------------------------------------------------------------
