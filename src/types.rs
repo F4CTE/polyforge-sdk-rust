@@ -189,11 +189,15 @@ pub struct StartStrategyParams {
 
 impl StartStrategyParams {
     pub fn paper() -> Self {
-        Self { mode: TradingMode::Paper }
+        Self {
+            mode: TradingMode::Paper,
+        }
     }
 
     pub fn live() -> Self {
-        Self { mode: TradingMode::Live }
+        Self {
+            mode: TradingMode::Live,
+        }
     }
 }
 
@@ -2597,4 +2601,431 @@ pub struct FollowedUser {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserDataEnvelope<T> {
     pub data: Vec<T>,
+}
+
+// ---------------------------------------------------------------------------
+// Misc public utility endpoints (POLA-1858)
+// ---------------------------------------------------------------------------
+
+/// A journal entry attached to a placed order.
+///
+/// Backend `/api/v1/journal` returns a flat paginated list. Field names match
+/// the platform's `OrderJournal` Prisma model.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JournalEntry {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub order_id: Option<String>,
+    /// One of `CONFIDENT | UNCERTAIN | FOMO | DISCIPLINED | REVENGE`.
+    #[serde(default)]
+    pub mood: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Optional filters for `list_journal`.
+#[derive(Debug, Default, Clone)]
+pub struct ListJournalParams {
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+    /// One of `ORDER_MOODS`: `CONFIDENT | UNCERTAIN | FOMO | DISCIPLINED | REVENGE`.
+    pub mood: Option<String>,
+}
+
+/// A user-facing notification record.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Notification {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub user_id: Option<String>,
+    #[serde(default)]
+    pub r#type: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub body: Option<String>,
+    #[serde(default)]
+    pub read: Option<bool>,
+    #[serde(default)]
+    pub read_at: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub data: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Plain page/limit pagination params (matches platform `PaginationDto`).
+#[derive(Debug, Default, Clone)]
+pub struct PaginationParams {
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+/// Stats block on the referrals payload.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferralStats {
+    #[serde(default)]
+    pub invited: u32,
+    #[serde(default)]
+    pub signed_up: u32,
+    #[serde(default)]
+    pub active: u32,
+    #[serde(default)]
+    pub credits_earned: u32,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Response of `GET /api/v1/referrals/me`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferralsInfo {
+    #[serde(default)]
+    pub referral_code: Option<String>,
+    #[serde(default)]
+    pub referral_link: Option<String>,
+    #[serde(default)]
+    pub stats: Option<ReferralStats>,
+    #[serde(default)]
+    pub referrals: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Side of an order preview request — `BUY` or `SELL`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PreviewSide {
+    #[serde(rename = "BUY")]
+    Buy,
+    #[serde(rename = "SELL")]
+    Sell,
+}
+
+/// Body of `POST /api/v1/fees/preview`.
+///
+/// Mirrors the server's `OrderPreviewDto` class-validator bounds: `size >= 1`,
+/// `0.001 <= price <= 0.999`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderPreviewParams {
+    pub token_id: String,
+    pub side: PreviewSide,
+    pub size: f64,
+    pub price: f64,
+    /// Set to `"POST_ONLY"` to preview a maker-fee estimate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_type: Option<String>,
+}
+
+/// Per-venue fee estimate inside an `OrderPreviewResponse`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VenueFeeEstimate {
+    #[serde(default)]
+    pub venue: Option<String>,
+    #[serde(default)]
+    pub fee_bps: Option<f64>,
+    #[serde(default)]
+    pub fee_usd: Option<f64>,
+    #[serde(default)]
+    pub total_cost_usd: Option<f64>,
+    #[serde(default)]
+    pub is_maker: Option<bool>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Match metadata when a Polymarket order can be cross-quoted on Kalshi.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketMatchRef {
+    #[serde(default)]
+    pub match_id: Option<String>,
+    #[serde(default)]
+    pub confidence: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Response of `POST /api/v1/fees/preview` — cross-venue fee comparison.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderPreviewResponse {
+    #[serde(default)]
+    pub polymarket: Option<VenueFeeEstimate>,
+    #[serde(default)]
+    pub kalshi: Option<VenueFeeEstimate>,
+    #[serde(default)]
+    pub savings: Option<f64>,
+    #[serde(default)]
+    pub recommended_venue: Option<String>,
+    #[serde(default)]
+    pub market_match: Option<MarketMatchRef>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// One row in `/api/v1/fees/schedules` for Polymarket (no price band).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PolymarketFeeSchedule {
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub role: Option<String>,
+    #[serde(default)]
+    pub fee_bps: Option<f64>,
+    #[serde(default)]
+    pub effective_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// One row in `/api/v1/fees/schedules` for Kalshi (with price band).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KalshiFeeSchedule {
+    #[serde(default)]
+    pub role: Option<String>,
+    #[serde(default)]
+    pub fee_bps: Option<f64>,
+    #[serde(default)]
+    pub min_price: Option<f64>,
+    #[serde(default)]
+    pub max_price: Option<f64>,
+    #[serde(default)]
+    pub effective_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Response of `GET /api/v1/fees/schedules`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FeeSchedules {
+    #[serde(default)]
+    pub polymarket: Vec<PolymarketFeeSchedule>,
+    #[serde(default)]
+    pub kalshi: Vec<KalshiFeeSchedule>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Outcome side for a per-market alert (matches server `IsIn` set:
+/// `YES | NO | Yes | No`). Serialized in the canonical uppercase form.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MarketAlertOutcome {
+    #[serde(rename = "YES")]
+    Yes,
+    #[serde(rename = "NO")]
+    No,
+}
+
+/// Direction comparator for a per-market alert.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MarketAlertCondition {
+    Above,
+    Below,
+}
+
+/// A per-market price alert (response shape).
+///
+/// Distinct from the top-level token-based [`Alert`]; per-market alerts are
+/// scoped to a `marketId` + outcome (`YES`/`NO`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketAlert {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub user_id: Option<String>,
+    #[serde(default)]
+    pub market_id: Option<String>,
+    #[serde(default)]
+    pub outcome: Option<String>,
+    #[serde(default)]
+    pub condition: Option<String>,
+    #[serde(default)]
+    pub threshold: Option<f64>,
+    #[serde(default)]
+    pub triggered: Option<bool>,
+    #[serde(default)]
+    pub triggered_at: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Response of `GET /api/v1/markets/:marketId/alerts`.
+///
+/// The platform wraps per-market alerts in a `{ "data": [...] }` envelope.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketAlertsResponse {
+    #[serde(default)]
+    pub data: Vec<MarketAlert>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Body of `POST /api/v1/markets/:marketId/alerts`.
+///
+/// `threshold` is validated server-side to `0.01 <= threshold <= 0.99`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMarketAlertParams {
+    pub outcome: MarketAlertOutcome,
+    pub condition: MarketAlertCondition,
+    pub threshold: f64,
+}
+
+/// Lookback period for `get_market_history` (matches the server's
+/// `MarketHistoryQueryDto`).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MarketHistoryPeriod {
+    #[serde(rename = "1d")]
+    OneDay,
+    #[serde(rename = "7d")]
+    SevenDays,
+    #[serde(rename = "30d")]
+    ThirtyDays,
+    #[serde(rename = "90d")]
+    NinetyDays,
+}
+
+impl MarketHistoryPeriod {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            MarketHistoryPeriod::OneDay => "1d",
+            MarketHistoryPeriod::SevenDays => "7d",
+            MarketHistoryPeriod::ThirtyDays => "30d",
+            MarketHistoryPeriod::NinetyDays => "90d",
+        }
+    }
+}
+
+/// The authenticated user's sentiment vote inside a market sentiment report.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketSentimentVote {
+    pub direction: String,
+    pub confidence: f64,
+}
+
+/// Aggregated, market-controller-derived sentiment report.
+///
+/// Distinct from [`MarketSentiment`], which is news-derived sentiment from
+/// `/news/sentiment/:marketId`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketSentimentReport {
+    #[serde(default)]
+    pub yes_percent: u32,
+    #[serde(default)]
+    pub no_percent: u32,
+    #[serde(default)]
+    pub total_votes: u32,
+    #[serde(default)]
+    pub user_vote: Option<MarketSentimentVote>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Mood tag attached to a placed order via `update_order_journal`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum OrderJournalMood {
+    #[serde(rename = "CONFIDENT")]
+    Confident,
+    #[serde(rename = "UNCERTAIN")]
+    Uncertain,
+    #[serde(rename = "FOMO")]
+    Fomo,
+    #[serde(rename = "DISCIPLINED")]
+    Disciplined,
+    #[serde(rename = "REVENGE")]
+    Revenge,
+}
+
+/// Body of `PATCH /api/v1/orders/:id/journal`.
+///
+/// `note` is capped at 2000 characters server-side.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateOrderJournalParams {
+    pub mood: OrderJournalMood,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// A Kalshi combo collection (group of related combo markets).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComboCollection {
+    #[serde(default)]
+    pub ticker: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub series_ticker: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Optional filters/cursor for `list_combo_collections`.
+#[derive(Debug, Default, Clone)]
+pub struct ListComboCollectionsParams {
+    pub series_ticker: Option<String>,
+    pub limit: Option<u32>,
+    pub cursor: Option<String>,
+}
+
+/// One leg of a combo lookup — a market ticker plus its outcome.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComboLeg {
+    pub ticker: String,
+    /// `"yes"` or `"no"` — must be lowercase to match the server enum.
+    pub outcome: String,
+}
+
+/// Body of `POST /api/v1/markets/combo/lookup`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComboLookupParams {
+    pub collection_ticker: String,
+    pub legs: Vec<ComboLeg>,
+}
+
+/// Aggregated correlation matrix between top market categories.
+///
+/// `matrix[i][j]` is the correlation between `categories[i]` and
+/// `categories[j]` (square, symmetric, with `1.0` on the diagonal).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryCorrelation {
+    #[serde(default)]
+    pub categories: Vec<String>,
+    #[serde(default)]
+    pub matrix: Vec<Vec<f64>>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
 }
