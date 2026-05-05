@@ -2593,13 +2593,16 @@ impl PolyforgeClient {
 
     /// Provide liquidity on a market.
     ///
+    /// The SDK automatically sends an `Idempotency-Key` header required by the
+    /// platform for trading writes.
+    ///
     /// # Errors
     /// Returns [`PolyforgeError::Validation`] if `amount_usdc` is NaN, infinite, zero,
     /// or negative.
     pub async fn provide_liquidity(&self, params: &ProvideLiquidityParams) -> Result<LpPosition> {
         validate_financial_param("amount_usdc", params.amount_usdc)?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post("/api/v1/lp/provide", &body).await
+        self.post_idempotent("/api/v1/lp/provide", &body).await
     }
 
     // -----------------------------------------------------------------------
@@ -3605,6 +3608,26 @@ mod tests {
         })
         .await;
 
+        assert_generated_idempotency_key(&request);
+    }
+
+    #[tokio::test]
+    async fn test_provide_liquidity_sends_generated_idempotency_key() {
+        let request = capture_request(
+            r#"{"buyOrderId":"buy-1","sellOrderId":"sell-1","tokenId":"tok-1","buyPrice":"0.49","sellPrice":"0.51","size":"100"}"#,
+            |client| async move {
+                let params = ProvideLiquidityParams {
+                    market_id: "mkt-1".into(),
+                    token_id: "tok-1".into(),
+                    amount_usdc: 100.0,
+                    target_spread: Some(0.02),
+                };
+                client.provide_liquidity(&params).await.map(|_| ())
+            },
+        )
+        .await;
+
+        assert!(request.starts_with("POST /api/v1/lp/provide "));
         assert_generated_idempotency_key(&request);
     }
 
