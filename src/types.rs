@@ -1842,28 +1842,47 @@ pub struct Badge {
 // Portfolio — Polymarket-native
 // ---------------------------------------------------------------------------
 
-/// Native Polymarket portfolio snapshot.
+/// A single native Polymarket portfolio entry.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct PolymarketPortfolio {
-    #[serde(default)]
-    pub positions: Vec<serde_json::Value>,
-    #[serde(default)]
-    pub total_value: Option<String>,
+pub struct PolymarketPortfolioEntry {
+    pub asset: String,
+    pub size: String,
+    pub avg_price: String,
+    pub realized_pnl: String,
+    pub unrealized_pnl: String,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
 
-/// Native Polymarket earnings summary.
+/// Native Polymarket portfolio response.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PolymarketPortfolio {
+    #[serde(default)]
+    pub entries: Vec<PolymarketPortfolioEntry>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A single native Polymarket earnings entry.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PolymarketEarningsEntry {
+    pub date: String,
+    pub earnings: String,
+    pub volume: String,
+    pub win_rate: String,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Native Polymarket earnings response.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PolymarketEarnings {
     #[serde(default)]
-    pub total: Option<String>,
-    #[serde(default)]
-    pub realized: Option<String>,
-    #[serde(default)]
-    pub unrealized: Option<String>,
+    pub entries: Vec<PolymarketEarningsEntry>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -1878,8 +1897,24 @@ pub struct PolymarketActivityItem {
     pub activity_type: Option<String>,
     #[serde(default)]
     pub amount: Option<String>,
+    #[serde(default)]
+    pub asset: Option<String>,
+    #[serde(default)]
+    pub timestamp: Option<String>,
     #[serde(rename = "createdAt", default)]
     pub created_at: Option<String>,
+    #[serde(default)]
+    pub metadata: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Native Polymarket activity response.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PolymarketActivityResponse {
+    #[serde(default)]
+    pub activities: Vec<PolymarketActivityItem>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -1887,7 +1922,7 @@ pub struct PolymarketActivityItem {
 /// Query parameters for the Polymarket activity endpoint.
 #[derive(Debug, Default)]
 pub struct GetPolymarketActivityParams {
-    /// Activity type filter, e.g. `"trade"`, `"deposit"`, `"withdrawal"`.
+    /// Activity type filter, e.g. `"TRADE"`, `"SPLIT"`, or `"REDEEM"`.
     pub activity_type: Option<String>,
 }
 
