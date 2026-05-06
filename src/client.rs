@@ -2458,7 +2458,7 @@ impl PolyforgeClient {
     pub async fn get_polymarket_activity(
         &self,
         params: Option<&GetPolymarketActivityParams>,
-    ) -> Result<PaginatedResponse<PolymarketActivityItem>> {
+    ) -> Result<PolymarketActivityResponse> {
         let qs = match params.and_then(|p| p.activity_type.as_deref()) {
             Some(t) => format!("?type={}", encode(t)),
             None => String::new(),
@@ -6363,32 +6363,78 @@ mod tests {
 
     #[test]
     fn test_polymarket_portfolio_deserializes() {
-        let json = r#"{"positions": [], "totalValue": "1500.00"}"#;
+        let json = r#"{
+            "entries": [{
+                "asset": "tok-1",
+                "size": "50",
+                "avgPrice": "0.6",
+                "realizedPnl": "10",
+                "unrealizedPnl": "5"
+            }]
+        }"#;
         let p: PolymarketPortfolio = serde_json::from_str(json).unwrap();
-        assert_eq!(p.total_value.as_deref(), Some("1500.00"));
-        assert!(p.positions.is_empty());
+        assert_eq!(p.entries.len(), 1);
+        assert_eq!(p.entries[0].asset, "tok-1");
+        assert_eq!(p.entries[0].avg_price, "0.6");
+        assert_eq!(p.entries[0].realized_pnl, "10");
+        assert_eq!(p.entries[0].unrealized_pnl, "5");
     }
 
     #[test]
     fn test_polymarket_earnings_deserializes() {
-        let json = r#"{"total": "200.00", "realized": "150.00", "unrealized": "50.00"}"#;
+        let json = r#"{
+            "entries": [{
+                "date": "2026-01-01",
+                "earnings": "25.50",
+                "volume": "500",
+                "winRate": "0.60"
+            }]
+        }"#;
         let e: PolymarketEarnings = serde_json::from_str(json).unwrap();
-        assert_eq!(e.total.as_deref(), Some("200.00"));
-        assert_eq!(e.realized.as_deref(), Some("150.00"));
+        assert_eq!(e.entries.len(), 1);
+        assert_eq!(e.entries[0].date, "2026-01-01");
+        assert_eq!(e.entries[0].earnings, "25.50");
+        assert_eq!(e.entries[0].volume, "500");
+        assert_eq!(e.entries[0].win_rate, "0.60");
     }
 
     #[test]
     fn test_polymarket_activity_item_deserializes() {
         let json = r#"{
             "id": "act-1",
-            "type": "trade",
+            "type": "TRADE",
             "amount": "50.00",
-            "createdAt": "2025-01-15T12:00:00Z"
+            "asset": "tok-1",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "metadata": {"market": "m-1"}
         }"#;
         let item: PolymarketActivityItem = serde_json::from_str(json).unwrap();
         assert_eq!(item.id.as_deref(), Some("act-1"));
-        assert_eq!(item.activity_type.as_deref(), Some("trade"));
+        assert_eq!(item.activity_type.as_deref(), Some("TRADE"));
         assert_eq!(item.amount.as_deref(), Some("50.00"));
+        assert_eq!(item.asset.as_deref(), Some("tok-1"));
+        assert_eq!(item.timestamp.as_deref(), Some("2026-01-01T00:00:00Z"));
+        assert_eq!(item.metadata.as_ref().unwrap()["market"], "m-1");
+    }
+
+    #[test]
+    fn test_polymarket_activity_response_deserializes() {
+        let json = r#"{
+            "activities": [{
+                "id": "act-1",
+                "type": "TRADE",
+                "amount": "50.00",
+                "asset": "tok-1",
+                "timestamp": "2026-01-01T00:00:00Z"
+            }]
+        }"#;
+        let response: PolymarketActivityResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.activities.len(), 1);
+        assert_eq!(response.activities[0].id.as_deref(), Some("act-1"));
+        assert_eq!(
+            response.activities[0].activity_type.as_deref(),
+            Some("TRADE")
+        );
     }
 
     #[test]
