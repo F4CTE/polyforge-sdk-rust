@@ -88,6 +88,11 @@
   wraps the route as-is for fidelity; a server-side fix is tracked separately.
 
 ### Fixed
+- **Admin-only arbitrage match mutations** — hide `create_arbitrage_match`,
+  `verify_arbitrage_match`, `delete_arbitrage_match`, and
+  `sync_arbitrage_matches` from the public Rustdoc surface and deprecate them
+  with an explicit admin-only note. The wrappers remain temporarily for source
+  compatibility, but ordinary public API keys still receive `403 Forbidden`.
 - **NotificationSettings / UpdateNotificationSettingsParams** — rewrite both structs to mirror the platform's `UpdateNotificationsDto`. Removes fictional fields (`pushEnabled`, `orderFills`, `strategyErrors`, `whaleAlerts`, `marketResolutions`, `dailySummary`) that the platform rejected with 400 under `forbidNonWhitelisted: true`, and adds the real DTO fields (`telegramEnabled`, `discordEnabled`, `onOrderFilled`, `onStrategyError`, `onBacktestComplete`, `onDailyLossLimit`, `onMarketResolved`, `onSomeoneForked`, `onSomeoneFollowed`, `onSomeoneLiked`, `onSomeoneCommented`). The `extra` flatten bucket is preserved on the read struct so server-only fields (`userId`, `updatedAt`, `eventPrefs`, `emailDigest`, `notificationFreq`, `minFillNotifyUsdc`, `onTicketReply`) round-trip. Added a wire-format key-set test. (closes #184)
 
 ## [1.7.6] — 2026-04-25
