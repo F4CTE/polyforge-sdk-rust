@@ -1647,7 +1647,15 @@ impl PolyforgeClient {
     ///
     /// The SDK automatically sends an `Idempotency-Key` header required by the
     /// platform for trading writes.
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Validation`] if any order `size` or `price` is
+    /// NaN, infinite, zero, or negative.
     pub async fn batch_orders(&self, params: &BatchOrdersParams) -> Result<BatchOrdersResponse> {
+        for (index, order) in params.orders.iter().enumerate() {
+            validate_financial_param(&format!("orders[{index}].size"), order.size)?;
+            validate_financial_param(&format!("orders[{index}].price"), order.price)?;
+        }
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post_idempotent("/api/v1/orders/batch", &body).await
     }
@@ -4610,6 +4618,52 @@ mod tests {
         let err = rt.block_on(client.place_order(&params)).unwrap_err();
         assert!(matches!(err, PolyforgeError::Validation(_)));
         assert!(err.to_string().contains("price"));
+    }
+
+    #[test]
+    fn test_batch_orders_validation_rejects_invalid_size_values() {
+        let invalid_values = [f64::NAN, f64::INFINITY, 0.0, -1.0];
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::with_url("test-key", "http://127.0.0.1:9").unwrap();
+
+        for size in invalid_values {
+            let params = BatchOrdersParams {
+                orders: vec![PlaceOrderParams {
+                    token_id: "t1".into(),
+                    side: "BUY".into(),
+                    outcome: "YES".into(),
+                    size,
+                    price: 0.5,
+                    order_type: None,
+                }],
+            };
+            let err = rt.block_on(client.batch_orders(&params)).unwrap_err();
+            assert!(matches!(err, PolyforgeError::Validation(_)));
+            assert!(err.to_string().contains("orders[0].size"));
+        }
+    }
+
+    #[test]
+    fn test_batch_orders_validation_rejects_invalid_price_values() {
+        let invalid_values = [f64::NAN, f64::INFINITY, 0.0, -1.0];
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = PolyforgeClient::with_url("test-key", "http://127.0.0.1:9").unwrap();
+
+        for price in invalid_values {
+            let params = BatchOrdersParams {
+                orders: vec![PlaceOrderParams {
+                    token_id: "t1".into(),
+                    side: "BUY".into(),
+                    outcome: "YES".into(),
+                    size: 10.0,
+                    price,
+                    order_type: None,
+                }],
+            };
+            let err = rt.block_on(client.batch_orders(&params)).unwrap_err();
+            assert!(matches!(err, PolyforgeError::Validation(_)));
+            assert!(err.to_string().contains("orders[0].price"));
+        }
     }
 
     #[test]
