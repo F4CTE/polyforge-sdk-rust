@@ -2298,6 +2298,29 @@ pub struct StrategyEvent {
     pub timestamp: u64,
 }
 
+/// Known strategy event types emitted by the platform.
+///
+/// The platform may emit additional event types not listed here;
+/// clients should handle unknown types gracefully.
+pub const KNOWN_STRATEGY_EVENT_TYPES: &[&str] = &[
+    "CONNECTED",
+    "STRATEGY_STARTED",
+    "STRATEGY_STOPPED",
+    "STRATEGY_PAUSED",
+    "STRATEGY_RESUMED",
+    "STRATEGY_ERROR",
+    "ORDER_PLACED",
+    "ORDER_SUBMITTED",
+    "ORDER_PARTIAL",
+    "ORDER_FILLED",
+    "ORDER_FAILED",
+    "ORDER_CANCELLED",
+    "ORDER_ERROR",
+    "BACKTEST_PROGRESS",
+    "BACKTEST_COMPLETED",
+    "BACKTEST_FAILED",
+];
+
 // ---------------------------------------------------------------------------
 // Cross-Venue Arbitrage (POLA-782)
 // ---------------------------------------------------------------------------
