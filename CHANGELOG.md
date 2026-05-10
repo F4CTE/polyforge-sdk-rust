@@ -45,6 +45,7 @@
 
 ### Fixed
 - **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, liquidity, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
+- `get_user_score`, `get_user_badges`, and `get_user_profile` now use optional auth (send `Authorization` header only when an API key is configured). Previously these methods always sent the header, which caused 401 errors when the client was constructed with an empty key. (#211)
 
 ### Notes
 - Public user/profile lookup methods no longer send an `Authorization` header when

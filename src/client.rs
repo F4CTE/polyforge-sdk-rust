@@ -1277,13 +1277,13 @@ impl PolyforgeClient {
         self.get("/api/v1/scores/me/badges").await
     }
 
-    /// Get the score for a specific user.
+    /// Get the score for a specific user (optional auth).
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
         self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
-    /// Get the badges awarded to a specific user.
+    /// Get the badges awarded to a specific user (optional auth).
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
         self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
@@ -3068,7 +3068,7 @@ impl PolyforgeClient {
         .await
     }
 
-    /// Get a public user profile by username.
+    /// Get a public user profile by username (optional auth).
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
         self.get_with_optional_auth(&path).await
@@ -3725,15 +3725,25 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..7 {
+            for i in 0..14 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
                 let request = String::from_utf8_lossy(&request[..n]);
-                assert!(
-                    !request.to_ascii_lowercase().contains("authorization:"),
-                    "public profile request unexpectedly included Authorization header: {request}"
-                );
+                let has_auth = request.to_ascii_lowercase().contains("authorization:");
+                // First 7 requests use optional-auth with empty key -> no auth header
+                // Last 7 requests use optional-auth with a key -> auth header present
+                if i < 7 {
+                    assert!(
+                        !has_auth,
+                        "empty-key optional-auth request unexpectedly included Authorization header: {request}"
+                    );
+                } else {
+                    assert!(
+                        has_auth,
+                        "keyed optional-auth request missing Authorization header: {request}"
+                    );
+                }
                 let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
                     "[]"
                 } else if request.contains("/api/v1/scores/")
@@ -3757,17 +3767,50 @@ mod tests {
             }
         });
 
-        let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
-        client.get_user_score("alice").await.unwrap();
-        client.get_user_badges("alice").await.unwrap();
-        client.get_user_performance("alice", "30d").await.unwrap();
-        client
+        // All 7 public endpoints with empty key (no auth header expected)
+        let client_no_auth = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client_no_auth.get_user_score("alice").await.unwrap();
+        client_no_auth.get_user_badges("alice").await.unwrap();
+        client_no_auth
+            .get_user_performance("alice", "30d")
+            .await
+            .unwrap();
+        client_no_auth
             .get_user_strategies("alice", None, None)
             .await
             .unwrap();
-        client.get_user_activity("alice", None).await.unwrap();
-        client.get_user_profile_badges("alice").await.unwrap();
-        client.get_user_profile("alice").await.unwrap();
+        client_no_auth
+            .get_user_activity("alice", None)
+            .await
+            .unwrap();
+        client_no_auth
+            .get_user_profile_badges("alice")
+            .await
+            .unwrap();
+        client_no_auth.get_user_profile("alice").await.unwrap();
+
+        // All 7 public endpoints with key (auth header expected)
+        let client_with_auth =
+            PolyforgeClient::with_url("test-key", format!("http://{addr}")).unwrap();
+        client_with_auth.get_user_score("alice").await.unwrap();
+        client_with_auth.get_user_badges("alice").await.unwrap();
+        client_with_auth
+            .get_user_performance("alice", "30d")
+            .await
+            .unwrap();
+        client_with_auth
+            .get_user_strategies("alice", None, None)
+            .await
+            .unwrap();
+        client_with_auth
+            .get_user_activity("alice", None)
+            .await
+            .unwrap();
+        client_with_auth
+            .get_user_profile_badges("alice")
+            .await
+            .unwrap();
+        client_with_auth.get_user_profile("alice").await.unwrap();
 
         server.await.unwrap();
     }
