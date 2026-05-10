@@ -2278,10 +2278,10 @@ pub struct Rebates {
 /// Iterate over these via [`crate::client::StrategyEventStream::next`].
 ///
 /// Common event types: `CONNECTED`, `STRATEGY_STARTED`, `STRATEGY_STOPPED`,
-/// `STRATEGY_PAUSED`, `STRATEGY_RESUMED`, `STRATEGY_ERROR`, `ORDER_PLACED`,
-/// `ORDER_SUBMITTED`, `ORDER_FILLED`, `ORDER_PARTIAL`, `ORDER_CANCELLED`,
-/// `ORDER_FAILED`, `ORDER_ERROR`, `BACKTEST_PROGRESS`, `BACKTEST_COMPLETED`,
-/// `BACKTEST_FAILED`.
+/// `STRATEGY_PAUSED`, `STRATEGY_RESUMED`, `STRATEGY_ERROR`,
+/// `ORDER_PLACED`, `ORDER_SUBMITTED`, `ORDER_PARTIAL`, `ORDER_FILLED`,
+/// `ORDER_FAILED`, `ORDER_CANCELLED`, `ORDER_ERROR`,
+/// `BACKTEST_PROGRESS`, `BACKTEST_COMPLETED`, `BACKTEST_FAILED`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyEvent {
     /// Event type identifier.
