@@ -2222,6 +2222,26 @@ impl ArbPositionStatus {
     }
 }
 
+/// Trading venue identifier. Used wherever an order or position is
+/// scoped to a specific exchange.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Venue {
+    Polymarket,
+    Kalshi,
+    PolymarketUs,
+}
+
+impl Venue {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Polymarket => "POLYMARKET",
+            Self::Kalshi => "KALSHI",
+            Self::PolymarketUs => "POLYMARKET_US",
+        }
+    }
+}
+
 fn deserialize_optional_string_or_number<'de, D>(
     deserializer: D,
 ) -> std::result::Result<Option<String>, D::Error>
@@ -2243,7 +2263,7 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct ArbExecutionLeg {
     #[serde(default)]
-    pub venue: Option<String>,
+    pub venue: Option<Venue>,
     #[serde(default)]
     pub intent_id: Option<String>,
     #[serde(default)]
@@ -2288,7 +2308,7 @@ pub struct ArbPosition {
     pub status: Option<ArbPositionStatus>,
 
     #[serde(default)]
-    pub buy_venue: Option<String>,
+    pub buy_venue: Option<Venue>,
     #[serde(default)]
     pub buy_order_id: Option<String>,
     #[serde(default)]
@@ -2303,7 +2323,7 @@ pub struct ArbPosition {
     pub buy_fill_size: Option<String>,
 
     #[serde(default)]
-    pub sell_venue: Option<String>,
+    pub sell_venue: Option<Venue>,
     #[serde(default)]
     pub sell_order_id: Option<String>,
     #[serde(default)]
