@@ -5148,7 +5148,7 @@ mod tests {
     fn test_redeem_position_params_uses_position_id_and_market_id() {
         // #31: Must send positionId/marketId, not tokenId/conditionId
         let params = RedeemPositionParams {
-            position_id: "pos-123".into(),
+            position_id: Some("pos-123".into()),
             market_id: Some("mkt-456".into()),
         };
         let json = serde_json::to_value(&params).unwrap();
@@ -5162,12 +5162,35 @@ mod tests {
     fn test_redeem_position_params_market_id_omitted_when_none() {
         // #31: marketId should be omitted when None
         let params = RedeemPositionParams {
-            position_id: "pos-123".into(),
+            position_id: Some("pos-123".into()),
             market_id: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["positionId"], "pos-123");
         assert!(json.get("marketId").is_none());
+    }
+
+    #[test]
+    fn test_redeem_position_params_position_id_omitted_when_none() {
+        // #213: positionId should be optional — only marketId may be provided
+        let params = RedeemPositionParams {
+            position_id: None,
+            market_id: Some("mkt-456".into()),
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["marketId"], "mkt-456");
+        assert!(json.get("positionId").is_none());
+    }
+
+    #[test]
+    fn test_redeem_position_params_both_fields_omitted_when_none() {
+        // #213: both fields may be None; platform validates at least one is present
+        let params = RedeemPositionParams {
+            position_id: None,
+            market_id: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json, serde_json::json!({}));
     }
 
     #[test]
