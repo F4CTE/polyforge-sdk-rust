@@ -88,6 +88,7 @@
 
 ### Fixed
 - **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, liquidity, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
+<<<<<<< HEAD
 - **`RewardMarket.extra` / `RewardMarketDetail.extra` backward compatibility** — custom `Deserialize` implementations now preserve ALL response fields (including named ones) inside `extra`, so downstream code that reads `extra["conditionId"]` or other previously-dynamic keys continues to work after the keys were promoted to first-class struct fields. 1 new test and 6 new assertions verify the backward-compatible shape.
 - **Admin-only arbitrage match mutations** — hide `create_arbitrage_match`,
   `verify_arbitrage_match`, `delete_arbitrage_match`, and
@@ -99,6 +100,7 @@
 - **BREAKING** `PlaceSmartOrderParams`: revert `interval_seconds`/`"intervalSeconds"` back to `interval_minutes`/`"intervalMinutes"` — the #66 fix was based on incorrect platform contract info; platform DTO uses `intervalMinutes` (closes #80)
 - **BREAKING** `handle_response()`: handle 204 No Content by returning `serde_json::Value::Null` instead of crashing on empty body — `delete_strategy()` now returns `Result<()>` (closes #70)
 - **Endpoint path/method compatibility audit** — verified all 10 reported route mismatches against platform controllers (`#206`): `get_price_history` (`price-history` vs `history`), `watch_strategy` (`/events` vs `/watch`), `rollback_strategy` (`/versions/{id}/rollback`), `reset_circuit_breaker` (`/reset` vs `/reset-circuit-breaker`), `change_profile_password` (POST vs PATCH), `follow_user` (`/profile/*/follow` vs `/users/*/follow`), `get_arbitrage_comparison` (`/cross-venue/{id}/comparison` vs `/compare/{id}`), `get_rebates` (`/rewards/rebates` vs `/rebates`), `get_sports_live_data` (`/live-data/{id}` vs `/milestones/{id}/live`), `lookup_combo_market` (POST vs GET). All paths already match — no code changes required. (closes #206)
+- **StrategyEvent documented type list** — add 6 event types that the platform already emits to the `KNOWN_STRATEGY_EVENT_TYPES` constant and doc comments: `STRATEGY_PAUSED`, `STRATEGY_RESUMED`, `ORDER_SUBMITTED`, `ORDER_PARTIAL`, `ORDER_FAILED`, `ORDER_ERROR`. New tests verify all 16 known types and deserialization. (closes #214)
 
 ### Notes
 - Cross-SDK naming aliases: `get_notifications()` is now a deprecated alias for
