@@ -7867,6 +7867,61 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
+    // System Health — HTTP request-capture tests (POLA-3671)
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_get_health_path_and_auth() {
+        let request = capture_request(
+            r#"{"status":"ok"}"#,
+            |client| async move { client.get_health().await.map(|_| ()) },
+        )
+        .await;
+        assert!(
+            request.contains("GET /health HTTP/1.1"),
+            "request must hit GET /health; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        assert!(
+            captured_header(&request, "Authorization")
+                .is_some_and(|v| v.starts_with("Bearer ")),
+            "Authorization header must be present with Bearer token"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_health_authenticated_path_and_auth() {
+        let request = capture_request(
+            r#"{"status":"operational"}"#,
+            |client| async move { client.get_health_authenticated().await.map(|_| ()) },
+        )
+        .await;
+        assert!(
+            request.contains("GET /api/v1/status HTTP/1.1"),
+            "request must hit GET /api/v1/status; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        let auth = captured_header(&request, "Authorization")
+            .expect("get_health_authenticated must include Authorization header");
+        assert!(auth.starts_with("Bearer "), "Authorization must be Bearer token");
+    }
+
+    #[tokio::test]
+    async fn test_get_health_authenticated_deserializes_response() {
+        let response_json = r#"{"status":"operational","db":{"connections":5,"status":"connected"},"redis":{"memoryUsageMb":128,"status":"connected"},"queueDepth":42}"#;
+        let request = capture_request(response_json, |client| async move {
+            let health = client.get_health_authenticated().await?;
+            assert_eq!(health.status, "operational");
+            assert_eq!(health.queue_depth, Some(42));
+            assert!(health.db.is_some());
+            assert!(health.redis.is_some());
+            Ok(())
+        })
+        .await;
+        assert!(request.contains("GET /api/v1/status HTTP/1.1"));
+    }
+
+    // -----------------------------------------------------------------------
     // System Health — type tests
     // -----------------------------------------------------------------------
 
