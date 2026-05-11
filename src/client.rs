@@ -7866,6 +7866,46 @@ mod tests {
         assert!(!param.required);
     }
 
+    #[tokio::test]
+    async fn test_get_actions_dispatch_without_api_key() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = vec![0_u8; 4096];
+            let n = socket.read(&mut request).await.unwrap();
+            let request = String::from_utf8_lossy(&request[..n]);
+            assert!(
+                !request.to_ascii_lowercase().contains("authorization:"),
+                "get_actions request unexpectedly included Authorization header: {request}"
+            );
+            assert!(
+                request.contains("GET /api/v1/actions HTTP/1.1"),
+                "request must hit GET /api/v1/actions; got: {}",
+                request.lines().next().unwrap_or("")
+            );
+            let body = r#"{"version":"1.0","actions":[]}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\n\
+                 content-type: application/json\r\n\
+                 content-length: {}\r\n\
+                 connection: close\r\n\
+                 \r\n\
+                 {}",
+                body.len(),
+                body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client.get_actions().await.unwrap();
+        server.await.unwrap();
+    }
+
     // -----------------------------------------------------------------------
     // System Health — HTTP request-capture tests (POLA-3671)
     // -----------------------------------------------------------------------
@@ -7919,6 +7959,46 @@ mod tests {
         })
         .await;
         assert!(request.contains("GET /api/v1/status HTTP/1.1"));
+    }
+
+    #[tokio::test]
+    async fn test_get_health_dispatch_without_api_key() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = vec![0_u8; 4096];
+            let n = socket.read(&mut request).await.unwrap();
+            let request = String::from_utf8_lossy(&request[..n]);
+            assert!(
+                !request.to_ascii_lowercase().contains("authorization:"),
+                "get_health request unexpectedly included Authorization header: {request}"
+            );
+            assert!(
+                request.contains("GET /health HTTP/1.1"),
+                "request must hit GET /health; got: {}",
+                request.lines().next().unwrap_or("")
+            );
+            let body = r#"{"status":"ok"}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\n\
+                 content-type: application/json\r\n\
+                 content-length: {}\r\n\
+                 connection: close\r\n\
+                 \r\n\
+                 {}",
+                body.len(),
+                body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client.get_health().await.unwrap();
+        server.await.unwrap();
     }
 
     // -----------------------------------------------------------------------
