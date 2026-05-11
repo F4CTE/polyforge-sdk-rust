@@ -1143,11 +1143,13 @@ impl PolyforgeClient {
 
     /// Fetch the platform's public API actions catalog.
     ///
-    /// This capability manifest is intended for agent/tooling discovery and
-    /// mirrors sdk-ts's `getActions()` / sdk-python's `get_actions()` for
+    /// This endpoint is public (no authentication required) — the client
+    /// can be constructed with an empty API key.  The capability manifest
+    /// is intended for agent/tooling discovery and mirrors sdk-ts's
+    /// `getActions()` / sdk-python's `get_actions()` for
     /// `GET /api/v1/actions`.
     pub async fn get_actions(&self) -> Result<ActionsSchema> {
-        self.get("/api/v1/actions").await
+        self.get_with_optional_auth("/api/v1/actions").await
     }
 
     // -----------------------------------------------------------------------
