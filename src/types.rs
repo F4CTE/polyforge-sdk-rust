@@ -1934,43 +1934,16 @@ pub struct GetPolymarketActivityParams {
 // Rewards
 // ---------------------------------------------------------------------------
 
-/// A market that distributes liquidity rewards.
-#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarket {
-    #[serde(default)]
-    pub condition_id: Option<String>,
-    #[serde(default)]
-    pub rewards_daily: Option<String>,
-    #[serde(default)]
-    pub rewards_max_spread: Option<String>,
-    #[serde(default)]
-    pub rewards_min_size: Option<String>,
-    #[serde(default)]
-    pub start_date: Option<String>,
-    #[serde(default)]
-    pub end_date: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
 
-#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarketDetail {
-    #[serde(default)]
-    pub condition_id: Option<String>,
-    #[serde(default)]
-    pub rewards_daily: Option<String>,
-    #[serde(default)]
-    pub rewards_max_spread: Option<String>,
-    #[serde(default)]
-    pub rewards_min_size: Option<String>,
-    #[serde(default)]
-    pub start_date: Option<String>,
-    #[serde(default)]
-    pub end_date: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
