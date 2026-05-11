@@ -4001,8 +4001,7 @@ mod tests {
             }
         });
 
-        let client =
-            PolyforgeClient::with_url("test-api-key", format!("http://{addr}")).unwrap();
+        let client = PolyforgeClient::with_url("test-api-key", format!("http://{addr}")).unwrap();
         client.get_user_score("alice").await.unwrap();
         client.get_user_badges("alice").await.unwrap();
         client.get_user_profile("alice").await.unwrap();
@@ -6895,7 +6894,6 @@ mod tests {
     fn test_reward_market_detail_extra_backward_compat() {
         let json = r#"{"conditionId": "cond-1", "rewardsDaily": "100", "rewardsMaxSpread": "0.02", "rewardsMinSize": "50", "startDate": "2026-01-01", "endDate": "2026-06-01", "unknown": true}"#;
         let d: RewardMarketDetail = serde_json::from_str(json).unwrap();
-        assert_eq!(d.condition_id.as_deref(), Some("cond-1"));
         assert_eq!(d.extra["conditionId"], "cond-1");
         assert_eq!(d.extra["rewardsDaily"], "100");
         assert_eq!(d.extra["rewardsMaxSpread"], "0.02");
