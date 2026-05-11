@@ -1931,6 +1931,7 @@ pub struct GetPolymarketActivityParams {
 // ---------------------------------------------------------------------------
 
 /// A market that distributes liquidity rewards.
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarket {
@@ -1950,6 +1951,7 @@ pub struct RewardMarket {
     pub extra: serde_json::Value,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarketDetail {
