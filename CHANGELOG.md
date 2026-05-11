@@ -45,7 +45,7 @@
 - **System health check (POLA-3671)** — two new `PolyforgeClient` methods for the platform health/status endpoints:
   - `get_health()` → `GET /health` — returns `SystemHealthPublic` with public status fields (`status`, `service?`, `version?`, `uptime?`). Uses `get_with_optional_auth()` so the endpoint works without an API key while still returning richer data when authenticated.
   - `get_health_authenticated()` → `GET /api/v1/status` — returns `SystemHealthAuthenticated` with full operational metrics (DB, Redis, queue depth, services) alongside the public health fields. Always sends `Authorization: Bearer <key>`.
-  - New types: `SystemHealthPublic`, `SystemHealthAuthenticated`. Both use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility with backend shape evolution. 3 new integration tests verify URL paths, auth headers, and response deserialization through the full request pipeline. All 375 unit tests and 5 doc tests pass, clippy is clean.
+  - New types: `SystemHealthPublic`, `SystemHealthAuthenticated`. Both use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility with backend shape evolution. 4 new integration tests verify URL paths, auth headers, no-key dispatch, and response deserialization through the full request pipeline. All 378 unit tests and 5 doc tests pass, clippy is clean.
 
 ### Changed
 - **`get_user_score`, `get_user_badges`, `get_user_profile` now require authentication.** These methods previously used optional auth but the platform requires a valid JWT for `GET /api/v1/scores/{userId}`, `GET /api/v1/scores/{userId}/badges`, and `GET /api/v1/profile/{username}`. They now use mandatory auth to match the platform's auth requirements. (closes #211)
@@ -54,6 +54,7 @@
 
 ### Fixed
 - **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, liquidity, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
+- **`RewardMarket.extra` / `RewardMarketDetail.extra` backward compatibility** — custom `Deserialize` implementations now preserve ALL response fields (including named ones) inside `extra`, so downstream code that reads `extra["conditionId"]` or other previously-dynamic keys continues to work after the keys were promoted to first-class struct fields. 1 new test and 6 new assertions verify the backward-compatible shape.
 
 ### Notes
 - The POLA-1844 public profile lookup methods (`get_user_performance`, `get_user_strategies`, `get_user_activity`, `get_user_profile_badges`) skip the `Authorization` header when the client is constructed with an empty API key, keeping documented public endpoints usable without credentials while preserving authenticated behavior when a key is configured. Added multi-chunk coverage for the 1-MiB error body
