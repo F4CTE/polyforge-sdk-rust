@@ -7682,7 +7682,7 @@ mod tests {
         assert_eq!(vp.default_venue.as_deref(), Some("polymarket"));
         assert_eq!(
             vp.enabled_venues.as_deref(),
-            Some(&vec!["polymarket".to_string(), "kalshi".to_string()] as &[String])
+            Some(&["polymarket".to_string(), "kalshi".to_string()] as &[String])
         );
         assert_eq!(vp.single_platform_mode, Some(false));
     }
@@ -7735,7 +7735,7 @@ mod tests {
         assert_eq!(param.description.as_deref(), Some("Market identifier"));
         assert_eq!(
             param.enum_values.as_deref(),
-            Some(&vec!["abc".to_string(), "def".to_string()] as &[String])
+            Some(&["abc".to_string(), "def".to_string()] as &[String])
         );
         assert_eq!(param.max, Some(255.0));
         assert_eq!(param.min, Some(1.0));
