@@ -507,11 +507,15 @@ pub struct ClosePositionParams {
     pub size: Option<String>,
 }
 
+// The platform RedeemPositionDto permits either marketId or positionId
+// — the caller can supply whichever is available, leaving the other `None`.
 /// Parameters for redeeming a resolved position.
+///
+/// At least one of `position_id` or `market_id` must be provided.
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct RedeemPositionParams {
-    #[serde(rename = "positionId")]
-    pub position_id: String,
+    #[serde(rename = "positionId", skip_serializing_if = "Option::is_none")]
+    pub position_id: Option<String>,
     #[serde(rename = "marketId", skip_serializing_if = "Option::is_none")]
     pub market_id: Option<String>,
 }
@@ -1934,18 +1938,6 @@ pub struct GetPolymarketActivityParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarket {
-    #[serde(default)]
-    pub condition_id: Option<String>,
-    #[serde(default)]
-    pub rewards_daily: Option<String>,
-    #[serde(default)]
-    pub rewards_max_spread: Option<String>,
-    #[serde(default)]
-    pub rewards_min_size: Option<String>,
-    #[serde(default)]
-    pub start_date: Option<String>,
-    #[serde(default)]
-    pub end_date: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -1953,18 +1945,6 @@ pub struct RewardMarket {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarketDetail {
-    #[serde(default)]
-    pub condition_id: Option<String>,
-    #[serde(default)]
-    pub rewards_daily: Option<String>,
-    #[serde(default)]
-    pub rewards_max_spread: Option<String>,
-    #[serde(default)]
-    pub rewards_min_size: Option<String>,
-    #[serde(default)]
-    pub start_date: Option<String>,
-    #[serde(default)]
-    pub end_date: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }

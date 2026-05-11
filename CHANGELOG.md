@@ -43,14 +43,16 @@
 
   32 new unit tests cover URL paths, query/body camelCase serialization, validation bounds (size/price/non-finite inputs), enum casing, envelope handling, nullable sentiment votes, and JSON deserialization shapes. `cargo build`, `cargo clippy -- -D warnings`, and `cargo test` (321 unit tests plus 4 doc tests passing) are clean.
 
+### Changed
+- **`get_user_score`, `get_user_badges`, `get_user_profile` now require authentication.** These methods previously used optional auth but the platform requires a valid JWT for `GET /api/v1/scores/{userId}`, `GET /api/v1/scores/{userId}/badges`, and `GET /api/v1/profile/{username}`. They now use mandatory auth to match the platform's auth requirements. (closes #211)
+- **`get_actions` switched to optional auth.** The platform's actions controller is unguarded, so `get_actions` now uses `get_with_optional_auth()` so the method works even when the client is constructed without an API key.
+- **Docstrings updated** for `get_user_score`, `get_user_badges`, `get_user_profile` to clarify they require authentication.
+
 ### Fixed
 - **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, liquidity, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
 
 ### Notes
-- Public user/profile lookup methods no longer send an `Authorization` header when
-  the client was constructed with an empty API key. This keeps documented public
-  endpoints usable without credentials while preserving authenticated behavior
-  when a key is configured. Added multi-chunk coverage for the 1-MiB error body
+- The POLA-1844 public profile lookup methods (`get_user_performance`, `get_user_strategies`, `get_user_activity`, `get_user_profile_badges`) skip the `Authorization` header when the client is constructed with an empty API key, keeping documented public endpoints usable without credentials while preserving authenticated behavior when a key is configured. Added multi-chunk coverage for the 1-MiB error body
   cap and documented that exactly 1 MiB is allowed while the first byte over the
   limit is rejected.
 - Cross-SDK naming aliases: `get_notifications()` is now a deprecated alias for

@@ -1143,8 +1143,10 @@ impl PolyforgeClient {
 
     /// Fetch the platform's public API actions catalog.
     ///
-    /// This capability manifest is intended for agent/tooling discovery and
-    /// mirrors sdk-ts's `getActions()` / sdk-python's `get_actions()` for
+    /// This endpoint is public (no authentication required) — the client
+    /// can be constructed with an empty API key.  The capability manifest
+    /// is intended for agent/tooling discovery and mirrors sdk-ts's
+    /// `getActions()` / sdk-python's `get_actions()` for
     /// `GET /api/v1/actions`.
     pub async fn get_actions(&self) -> Result<ActionsSchema> {
         self.get_with_optional_auth("/api/v1/actions").await
@@ -1309,15 +1311,15 @@ impl PolyforgeClient {
         self.get("/api/v1/scores/me/badges").await
     }
 
-    /// Get the score for a specific user.
+    /// Get the score for a specific user (requires authentication).
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
-        self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
+        self.get(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
-    /// Get the badges awarded to a specific user.
+    /// Get the badges awarded to a specific user (requires authentication).
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
-        self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
+        self.get(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
     }
 
@@ -1723,6 +1725,11 @@ impl PolyforgeClient {
         &self,
         params: &RedeemPositionParams,
     ) -> Result<RedeemPositionResponse> {
+        if params.position_id.is_none() && params.market_id.is_none() {
+            return Err(PolyforgeError::Validation(
+                "at least one of position_id or market_id is required".into(),
+            ));
+        }
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post_idempotent("/api/v1/orders/redeem", &body).await
     }
@@ -2742,16 +2749,17 @@ impl PolyforgeClient {
 
     /// List the authenticated user's sponsored rewards markets.
     pub async fn get_user_sponsored_markets(&self) -> Result<UserSponsoredMarkets> {
-        self.get("/api/v1/rewards/user/sponsored-markets").await
+        self.get("/api/v1/rewards/user/sponsored-markets")
+            .await
     }
 
     /// Get the Polymarket sponsor page URL for a specific market.
-    pub async fn get_rewards_sponsor_url(&self, market_id: &str) -> Result<RewardsSponsorUrl> {
-        self.get(&format!(
-            "/api/v1/rewards/sponsor-url/{}",
-            encode(market_id)
-        ))
-        .await
+    pub async fn get_rewards_sponsor_url(
+        &self,
+        market_id: &str,
+    ) -> Result<RewardsSponsorUrl> {
+        self.get(&format!("/api/v1/rewards/sponsor-url/{}", encode(market_id)))
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -3177,10 +3185,10 @@ impl PolyforgeClient {
         .await
     }
 
-    /// Get a public user profile by username.
+    /// Get a user profile by username (requires authentication).
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
-        self.get_with_optional_auth(&path).await
+        self.get(&path).await
     }
 
     /// Follow a user by username.
@@ -3858,7 +3866,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..7 {
+            for _ in 0..4 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
@@ -3867,15 +3875,7 @@ mod tests {
                     !request.to_ascii_lowercase().contains("authorization:"),
                     "public profile request unexpectedly included Authorization header: {request}"
                 );
-                let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
-                    "[]"
-                } else if request.contains("/api/v1/scores/")
-                    || request.contains("/api/v1/profile/")
-                {
-                    "{}"
-                } else {
-                    "{\"data\":[]}"
-                };
+                let body = "{\"data\":[]}";
                 let response = format!(
                     "HTTP/1.1 200 OK\r\n\
                      content-type: application/json\r\n\
@@ -3891,8 +3891,6 @@ mod tests {
         });
 
         let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
-        client.get_user_score("alice").await.unwrap();
-        client.get_user_badges("alice").await.unwrap();
         client.get_user_performance("alice", "30d").await.unwrap();
         client
             .get_user_strategies("alice", None, None)
@@ -3900,6 +3898,96 @@ mod tests {
             .unwrap();
         client.get_user_activity("alice", None).await.unwrap();
         client.get_user_profile_badges("alice").await.unwrap();
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_actions_no_auth_header_with_empty_key() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = vec![0_u8; 4096];
+            let n = socket.read(&mut request).await.unwrap();
+            let request = String::from_utf8_lossy(&request[..n]);
+
+            assert!(
+                !request.to_ascii_lowercase().contains("authorization:"),
+                "get_actions with empty API key must not send Authorization header: {request}"
+            );
+
+            let body = r#"{"version":"1.0","actions":[]}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\n\
+                 content-type: application/json\r\n\
+                 content-length: {}\r\n\
+                 connection: close\r\n\
+                 \r\n\
+                 {}",
+                body.len(),
+                body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        let actions = client.get_actions().await.unwrap();
+        assert_eq!(actions.version, "1.0");
+        assert!(actions.actions.is_empty());
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_protected_user_endpoints_send_authorization_header() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            for _ in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = vec![0_u8; 4096];
+                let n = socket.read(&mut request).await.unwrap();
+                let request = String::from_utf8_lossy(&request[..n]);
+                assert!(
+                    request.to_ascii_lowercase().contains("authorization:"),
+                    "protected user endpoint request missing Authorization header: {request}"
+                );
+
+                let body = if request.contains("/badges") {
+                    "[]"
+                } else if request.contains("/scores/") {
+                    "{}"
+                } else if request.contains("/profile/") {
+                    "{}"
+                } else {
+                    "{}"
+                };
+
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                     content-type: application/json\r\n\
+                     content-length: {}\r\n\
+                     connection: close\r\n\
+                     \r\n\
+                     {}",
+                    body.len(),
+                    body
+                );
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+
+        let client =
+            PolyforgeClient::with_url("test-api-key", format!("http://{addr}")).unwrap();
+        client.get_user_score("alice").await.unwrap();
+        client.get_user_badges("alice").await.unwrap();
         client.get_user_profile("alice").await.unwrap();
 
         server.await.unwrap();
@@ -5327,7 +5415,7 @@ mod tests {
     fn test_redeem_position_params_uses_position_id_and_market_id() {
         // #31: Must send positionId/marketId, not tokenId/conditionId
         let params = RedeemPositionParams {
-            position_id: "pos-123".into(),
+            position_id: Some("pos-123".into()),
             market_id: Some("mkt-456".into()),
         };
         let json = serde_json::to_value(&params).unwrap();
@@ -5341,11 +5429,23 @@ mod tests {
     fn test_redeem_position_params_market_id_omitted_when_none() {
         // #31: marketId should be omitted when None
         let params = RedeemPositionParams {
-            position_id: "pos-123".into(),
+            position_id: Some("pos-123".into()),
             market_id: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["positionId"], "pos-123");
+        assert!(json.get("marketId").is_none());
+    }
+
+    #[test]
+    fn test_redeem_position_params_position_id_omitted_when_none() {
+        // #213: positionId should be omitted when None
+        let params = RedeemPositionParams {
+            position_id: None,
+            market_id: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert!(json.get("positionId").is_none());
         assert!(json.get("marketId").is_none());
     }
 
@@ -6725,8 +6825,8 @@ mod tests {
     fn test_reward_market_captures_extra_fields() {
         let json = r#"{"conditionId": "cond-1", "rewardsDaily": "100", "rewardsMaxSpread": "0.02", "rewardsMinSize": "50", "startDate": "2026-01-01", "endDate": "2026-06-01", "unknown": true}"#;
         let rm: RewardMarket = serde_json::from_str(json).unwrap();
-        assert_eq!(rm.condition_id.as_deref(), Some("cond-1"));
-        assert_eq!(rm.rewards_daily.as_deref(), Some("100"));
+        assert_eq!(rm.extra["conditionId"], "cond-1");
+        assert_eq!(rm.extra["rewardsDaily"], "100");
         assert_eq!(rm.extra["unknown"], true);
     }
 
@@ -7682,7 +7782,7 @@ mod tests {
         assert_eq!(vp.default_venue.as_deref(), Some("polymarket"));
         assert_eq!(
             vp.enabled_venues.as_deref(),
-            Some(&["polymarket".to_string(), "kalshi".to_string()] as &[String])
+            Some(&vec!["polymarket".to_string(), "kalshi".to_string()] as &[String])
         );
         assert_eq!(vp.single_platform_mode, Some(false));
     }
@@ -7735,7 +7835,7 @@ mod tests {
         assert_eq!(param.description.as_deref(), Some("Market identifier"));
         assert_eq!(
             param.enum_values.as_deref(),
-            Some(&["abc".to_string(), "def".to_string()] as &[String])
+            Some(&vec!["abc".to_string(), "def".to_string()] as &[String])
         );
         assert_eq!(param.max, Some(255.0));
         assert_eq!(param.min, Some(1.0));
