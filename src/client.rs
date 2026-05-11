@@ -1311,15 +1311,15 @@ impl PolyforgeClient {
         self.get("/api/v1/scores/me/badges").await
     }
 
-    /// Get the score for a specific user (requires authentication).
+    /// Get the score for a specific user.
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
-        self.get(&format!("/api/v1/scores/{}", encode(user_id)))
+        self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
-    /// Get the badges awarded to a specific user (requires authentication).
+    /// Get the badges awarded to a specific user.
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
-        self.get(&format!("/api/v1/scores/{}/badges", encode(user_id)))
+        self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
     }
 
@@ -2749,17 +2749,16 @@ impl PolyforgeClient {
 
     /// List the authenticated user's sponsored rewards markets.
     pub async fn get_user_sponsored_markets(&self) -> Result<UserSponsoredMarkets> {
-        self.get("/api/v1/rewards/user/sponsored-markets")
-            .await
+        self.get("/api/v1/rewards/user/sponsored-markets").await
     }
 
     /// Get the Polymarket sponsor page URL for a specific market.
-    pub async fn get_rewards_sponsor_url(
-        &self,
-        market_id: &str,
-    ) -> Result<RewardsSponsorUrl> {
-        self.get(&format!("/api/v1/rewards/sponsor-url/{}", encode(market_id)))
-            .await
+    pub async fn get_rewards_sponsor_url(&self, market_id: &str) -> Result<RewardsSponsorUrl> {
+        self.get(&format!(
+            "/api/v1/rewards/sponsor-url/{}",
+            encode(market_id)
+        ))
+        .await
     }
 
     // -----------------------------------------------------------------------
@@ -3185,10 +3184,10 @@ impl PolyforgeClient {
         .await
     }
 
-    /// Get a user profile by username (requires authentication).
+    /// Get a public user profile by username.
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
-        self.get(&path).await
+        self.get_with_optional_auth(&path).await
     }
 
     /// Follow a user by username.
@@ -3866,16 +3865,26 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..4 {
+            for _ in 0..8 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
                 let request = String::from_utf8_lossy(&request[..n]);
                 assert!(
                     !request.to_ascii_lowercase().contains("authorization:"),
-                    "public profile request unexpectedly included Authorization header: {request}"
+                    "public endpoint request unexpectedly included Authorization header: {request}"
                 );
-                let body = "{\"data\":[]}";
+                let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
+                    r#"[]"#
+                } else if request.contains("/api/v1/scores/") {
+                    r#"{"overall":0.5,"rank":1,"profitability":0.6,"consistency":0.7,"riskManagement":0.8,"volume":0.9,"percentile":0.95}"#
+                } else if request.contains("/api/v1/profile/") {
+                    r#"{"id":"user-1","username":"alice","displayName":"Alice","bio":"hello","avatarUrl":"https://example.com/avatar.png","joinedAt":"2024-01-01T00:00:00Z","followerCount":0,"followingCount":0,"strategyCount":0,"tradeCount":0,"score":null,"stats":{"volume":"100","pnl":"50","trades":10,"winRate":"0.75","bestMarket":"market-1","favoriteCategory":"sports"}}"#
+                } else if request.contains("/api/v1/actions") {
+                    r#"{"version":"1.0","actions":[]}"#
+                } else {
+                    r#"{"data":[]}"#
+                };
                 let response = format!(
                     "HTTP/1.1 200 OK\r\n\
                      content-type: application/json\r\n\
@@ -3898,6 +3907,10 @@ mod tests {
             .unwrap();
         client.get_user_activity("alice", None).await.unwrap();
         client.get_user_profile_badges("alice").await.unwrap();
+        client.get_user_score("user-123").await.unwrap();
+        client.get_user_badges("user-123").await.unwrap();
+        client.get_user_profile("alice").await.unwrap();
+        client.get_actions().await.unwrap();
 
         server.await.unwrap();
     }
@@ -3950,7 +3963,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..3 {
+            for _ in 0..4 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
@@ -3966,6 +3979,8 @@ mod tests {
                     "{}"
                 } else if request.contains("/profile/") {
                     "{}"
+                } else if request.contains("/actions") {
+                    r#"{"version":"1.0","actions":[]}"#
                 } else {
                     "{}"
                 };
@@ -3989,6 +4004,7 @@ mod tests {
         client.get_user_score("alice").await.unwrap();
         client.get_user_badges("alice").await.unwrap();
         client.get_user_profile("alice").await.unwrap();
+        client.get_actions().await.unwrap();
 
         server.await.unwrap();
     }
@@ -6825,8 +6841,8 @@ mod tests {
     fn test_reward_market_captures_extra_fields() {
         let json = r#"{"conditionId": "cond-1", "rewardsDaily": "100", "rewardsMaxSpread": "0.02", "rewardsMinSize": "50", "startDate": "2026-01-01", "endDate": "2026-06-01", "unknown": true}"#;
         let rm: RewardMarket = serde_json::from_str(json).unwrap();
-        assert_eq!(rm.extra["conditionId"], "cond-1");
-        assert_eq!(rm.extra["rewardsDaily"], "100");
+        assert_eq!(rm.condition_id.as_deref(), Some("cond-1"));
+        assert_eq!(rm.rewards_daily.as_deref(), Some("100"));
         assert_eq!(rm.extra["unknown"], true);
     }
 
@@ -7782,7 +7798,7 @@ mod tests {
         assert_eq!(vp.default_venue.as_deref(), Some("polymarket"));
         assert_eq!(
             vp.enabled_venues.as_deref(),
-            Some(&vec!["polymarket".to_string(), "kalshi".to_string()] as &[String])
+            Some(&["polymarket".to_string(), "kalshi".to_string()] as &[String])
         );
         assert_eq!(vp.single_platform_mode, Some(false));
     }
@@ -7835,10 +7851,19 @@ mod tests {
         assert_eq!(param.description.as_deref(), Some("Market identifier"));
         assert_eq!(
             param.enum_values.as_deref(),
-            Some(&vec!["abc".to_string(), "def".to_string()] as &[String])
+            Some(&["abc".to_string(), "def".to_string()] as &[String])
         );
         assert_eq!(param.max, Some(255.0));
         assert_eq!(param.min, Some(1.0));
+    }
+
+    #[test]
+    fn test_action_parameter_required_defaults_false() {
+        let json = r#"{"name":"marketId","type":"string"}"#;
+        let param: ActionParameter = serde_json::from_str(json).unwrap();
+        assert_eq!(param.name, "marketId");
+        assert_eq!(param.param_type, "string");
+        assert!(!param.required);
     }
 
     // -----------------------------------------------------------------------
