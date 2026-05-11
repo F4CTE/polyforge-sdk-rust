@@ -1723,6 +1723,11 @@ impl PolyforgeClient {
         &self,
         params: &RedeemPositionParams,
     ) -> Result<RedeemPositionResponse> {
+        if params.position_id.is_none() && params.market_id.is_none() {
+            return Err(PolyforgeError::Validation(
+                "at least one of position_id or market_id is required".into(),
+            ));
+        }
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post_idempotent("/api/v1/orders/redeem", &body).await
     }
@@ -5316,7 +5321,7 @@ mod tests {
     fn test_redeem_position_params_uses_position_id_and_market_id() {
         // #31: Must send positionId/marketId, not tokenId/conditionId
         let params = RedeemPositionParams {
-            position_id: "pos-123".into(),
+            position_id: Some("pos-123".into()),
             market_id: Some("mkt-456".into()),
         };
         let json = serde_json::to_value(&params).unwrap();
@@ -5330,11 +5335,23 @@ mod tests {
     fn test_redeem_position_params_market_id_omitted_when_none() {
         // #31: marketId should be omitted when None
         let params = RedeemPositionParams {
-            position_id: "pos-123".into(),
+            position_id: Some("pos-123".into()),
             market_id: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["positionId"], "pos-123");
+        assert!(json.get("marketId").is_none());
+    }
+
+    #[test]
+    fn test_redeem_position_params_position_id_omitted_when_none() {
+        // #213: positionId should be omitted when None
+        let params = RedeemPositionParams {
+            position_id: None,
+            market_id: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert!(json.get("positionId").is_none());
         assert!(json.get("marketId").is_none());
     }
 
