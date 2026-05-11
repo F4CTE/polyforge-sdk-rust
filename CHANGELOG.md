@@ -45,6 +45,8 @@
 
 ### Changed
 - **`get_user_score`, `get_user_badges`, `get_user_profile` now require authentication.** These methods previously used optional auth but the platform requires a valid JWT for `GET /api/v1/scores/{userId}`, `GET /api/v1/scores/{userId}/badges`, and `GET /api/v1/profile/{username}`. They now use mandatory auth to match the platform's auth requirements. (closes #211)
+- **`get_actions` switched to optional auth.** The platform's actions controller is unguarded, so `get_actions` now uses `get_with_optional_auth()` so the method works even when the client is constructed without an API key.
+- **Docstrings updated** for `get_user_score`, `get_user_badges`, `get_user_profile` to clarify they require authentication.
 
 ### Fixed
 - **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, liquidity, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
