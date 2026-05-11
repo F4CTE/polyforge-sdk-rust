@@ -58,7 +58,62 @@ pub struct Token {
     #[serde(default)]
     pub outcome: Option<String>,
     #[serde(default)]
-    pub price: Option<f64>,
+    pub updated_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
+// GDPR Personal Data Export
+// ---------------------------------------------------------------------------
+
+/// Metadata inside the GDPR personal data export response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalDataExportMeta {
+    /// Collections that were truncated due to record limits.
+    #[serde(default)]
+    pub collections_truncated: std::collections::HashMap<String, u32>,
+    /// Maximum number of records returned per collection.
+    #[serde(default)]
+    pub max_records_per_collection: u32,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Top-level JSON response for `GET /api/v1/me/export`.
+///
+/// Returns a comprehensive JSON object with your account details,
+/// trading history, settings, and all platform activity organised
+/// into sections for GDPR compliance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalDataExport {
+    /// ISO-8601 timestamp when the export was generated.
+    pub generated_at: String,
+    /// Schema version of the export format (e.g. `"2026-05-privacy-export-v1"`).
+    pub format_version: String,
+    /// Export metadata (truncation info, record limits).
+    #[serde(rename = "_meta")]
+    pub meta: Option<PersonalDataExportMeta>,
+    /// Account-level information (id, username, email, etc.).
+    #[serde(default)]
+    pub account: serde_json::Value,
+    /// User settings and preferences.
+    #[serde(default)]
+    pub settings: serde_json::Value,
+    /// Security-related information (login history, 2FA status, etc.).
+    #[serde(default)]
+    pub security: serde_json::Value,
+    /// Trading activity (orders, positions, PnL, etc.).
+    #[serde(default)]
+    pub trading: serde_json::Value,
+    /// Communication records (notifications, emails, etc.).
+    #[serde(default)]
+    pub communications: serde_json::Value,
+    /// Social activity (comments, likes, follows, etc.).
+    #[serde(default)]
+    pub social: serde_json::Value,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
