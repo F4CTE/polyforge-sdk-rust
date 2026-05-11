@@ -1935,7 +1935,7 @@ pub struct GetPolymarketActivityParams {
 // ---------------------------------------------------------------------------
 
 /// A market that distributes liquidity rewards.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarket {
     #[serde(default)]
@@ -1954,7 +1954,52 @@ pub struct RewardMarket {
     pub extra: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl<'de> Deserialize<'de> for RewardMarket {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let map: serde_json::Map<String, serde_json::Value> =
+            serde_json::Map::deserialize(deserializer)?;
+
+        let condition_id = map
+            .get("conditionId")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let rewards_daily = map
+            .get("rewardsDaily")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let rewards_max_spread = map
+            .get("rewardsMaxSpread")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let rewards_min_size = map
+            .get("rewardsMinSize")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let start_date = map
+            .get("startDate")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let end_date = map
+            .get("endDate")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        Ok(RewardMarket {
+            condition_id,
+            rewards_daily,
+            rewards_max_spread,
+            rewards_min_size,
+            start_date,
+            end_date,
+            extra: serde_json::Value::Object(map),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarketDetail {
     #[serde(default)]
@@ -1971,6 +2016,51 @@ pub struct RewardMarketDetail {
     pub end_date: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+impl<'de> Deserialize<'de> for RewardMarketDetail {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let map: serde_json::Map<String, serde_json::Value> =
+            serde_json::Map::deserialize(deserializer)?;
+
+        let condition_id = map
+            .get("conditionId")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let rewards_daily = map
+            .get("rewardsDaily")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let rewards_max_spread = map
+            .get("rewardsMaxSpread")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let rewards_min_size = map
+            .get("rewardsMinSize")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let start_date = map
+            .get("startDate")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let end_date = map
+            .get("endDate")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        Ok(RewardMarketDetail {
+            condition_id,
+            rewards_daily,
+            rewards_max_spread,
+            rewards_min_size,
+            start_date,
+            end_date,
+            extra: serde_json::Value::Object(map),
+        })
+    }
 }
 
 /// Detailed reward information for a market by platform market ID.
