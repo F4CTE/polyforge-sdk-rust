@@ -1746,6 +1746,42 @@ impl PolyforgeClient {
         self.get_text("/api/v1/portfolio/export/csv").await
     }
 
+    /// Export your personal data in JSON format (GDPR compliance).
+    ///
+    /// Returns a structured [`PersonalDataExport`] object with your account
+    /// details, trading history, settings, and all platform activity organised
+    /// into `account`, `settings`, `security`, `trading`, `communications`,
+    /// and `social` sections.
+    /// The response is delivered as a file download (Content-Disposition: attachment).
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Api`] if the request fails (e.g., insufficient
+    /// scope).
+    pub async fn export_personal_data(&self) -> Result<PersonalDataExport> {
+        self.get("/api/v1/me/export").await
+    }
+
+    /// Export your personal data in CSV format (GDPR compliance).
+    ///
+    /// Returns CSV text with columns `section, index, data_json` for
+    /// machine-readable processing.  The response is delivered as a file
+    /// download (Content-Disposition: attachment).
+    ///
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = polyforge::PolyforgeClient::new("key")?;
+    /// let csv = client.export_personal_data_csv().await?;
+    /// std::fs::write("personal-data.csv", &csv)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Api`] if the request fails.
+    pub async fn export_personal_data_csv(&self) -> Result<String> {
+        self.get_text("/api/v1/me/export?format=csv").await
+    }
+
     // -----------------------------------------------------------------------
     // Risk Settings
     // -----------------------------------------------------------------------
@@ -8285,5 +8321,97 @@ mod tests {
         assert_eq!(cc.categories.len(), 2);
         assert_eq!(cc.matrix.len(), 2);
         assert!((cc.matrix[0][0] - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_export_personal_data_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        assert!(client
+            .url("/api/v1/me/export")
+            .ends_with("/api/v1/me/export"));
+        assert!(client
+            .url("/api/v1/me/export?format=csv")
+            .ends_with("/api/v1/me/export?format=csv"));
+    }
+
+    #[test]
+    fn test_personal_data_export_deserializes_full() {
+        let json = r#"{
+            "generatedAt": "2026-05-11T00:00:00.000Z",
+            "formatVersion": "2026-05-privacy-export-v1",
+            "_meta": {
+                "collectionsTruncated": {},
+                "maxRecordsPerCollection": 1000
+            },
+            "account": {"id": "u-1", "username": "testuser", "email": "test@example.com"},
+            "settings": {"theme": "dark"},
+            "security": {"twoFactorEnabled": false},
+            "trading": {"totalOrders": 42},
+            "communications": {"emailsSent": 5},
+            "social": {"comments": 10}
+        }"#;
+        let export: PersonalDataExport = serde_json::from_str(json).unwrap();
+        assert_eq!(export.generated_at, "2026-05-11T00:00:00.000Z");
+        assert_eq!(export.format_version, "2026-05-privacy-export-v1");
+        let meta = export.meta.unwrap();
+        assert!(meta.collections_truncated.is_empty());
+        assert_eq!(meta.max_records_per_collection, 1000);
+        assert_eq!(export.account["username"], "testuser");
+        assert_eq!(export.trading["totalOrders"], 42);
+    }
+
+    #[test]
+    fn test_personal_data_export_deserializes_minimal() {
+        let json = r#"{
+            "generatedAt": "2026-05-11T00:00:00.000Z",
+            "formatVersion": "1"
+        }"#;
+        let export: PersonalDataExport = serde_json::from_str(json).unwrap();
+        assert_eq!(export.generated_at, "2026-05-11T00:00:00.000Z");
+        assert_eq!(export.format_version, "1");
+        assert!(export.meta.is_none());
+        assert!(export.account.is_null());
+        assert!(export.settings.is_null());
+    }
+
+    #[test]
+    fn test_personal_data_export_deserializes_with_truncations() {
+        let json = r#"{
+            "generatedAt": "2026-05-11T00:00:00.000Z",
+            "formatVersion": "1",
+            "_meta": {
+                "collectionsTruncated": {"trading.orders": 150, "social.comments": 75},
+                "maxRecordsPerCollection": 500
+            },
+            "account": {},
+            "settings": {},
+            "security": {},
+            "trading": {},
+            "communications": {},
+            "social": {}
+        }"#;
+        let export: PersonalDataExport = serde_json::from_str(json).unwrap();
+        let meta = export.meta.unwrap();
+        assert_eq!(meta.collections_truncated.len(), 2);
+        assert_eq!(meta.collections_truncated["trading.orders"], 150);
+        assert_eq!(meta.collections_truncated["social.comments"], 75);
+        assert_eq!(meta.max_records_per_collection, 500);
+    }
+
+    #[test]
+    fn test_personal_data_export_preserves_unknown_fields() {
+        let json = r#"{
+            "generatedAt": "2026-05-11T00:00:00.000Z",
+            "formatVersion": "1",
+            "account": {},
+            "customField": "hello",
+            "settings": {},
+            "security": {},
+            "trading": {},
+            "communications": {},
+            "social": {}
+        }"#;
+        let export: PersonalDataExport = serde_json::from_str(json).unwrap();
+        assert_eq!(export.extra["customField"], "hello");
     }
 }
