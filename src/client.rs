@@ -642,6 +642,25 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
+    // System Health (POLA-3327)
+    // -----------------------------------------------------------------------
+
+    /// Get the public API health payload (unauthenticated).
+    ///
+    /// Returns only public status; operational internals are not exposed.
+    pub async fn get_health(&self) -> Result<SystemHealthPublic> {
+        self.get_with_optional_auth("/health").await
+    }
+
+    /// Get the authenticated health/status payload.
+    ///
+    /// Full operational metrics (DB, Redis, queue depth) are returned when
+    /// an API key is provided.
+    pub async fn get_health_authenticated(&self) -> Result<SystemHealthAuthenticated> {
+        self.get("/api/v1/status").await
+    }
+
+    // -----------------------------------------------------------------------
     // Markets
     // -----------------------------------------------------------------------
 
@@ -1119,6 +1138,19 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
+    // Actions Catalog (POLA-3329)
+    // -----------------------------------------------------------------------
+
+    /// Fetch the platform's public API actions catalog.
+    ///
+    /// This capability manifest is intended for agent/tooling discovery and
+    /// mirrors sdk-ts's `getActions()` / sdk-python's `get_actions()` for
+    /// `GET /api/v1/actions`.
+    pub async fn get_actions(&self) -> Result<ActionsSchema> {
+        self.get("/api/v1/actions").await
+    }
+
+    // -----------------------------------------------------------------------
     // API Key Management
     // -----------------------------------------------------------------------
 
@@ -1279,13 +1311,13 @@ impl PolyforgeClient {
 
     /// Get the score for a specific user.
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
-        self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
+        self.get(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
     /// Get the badges awarded to a specific user.
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
-        self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
+        self.get(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
     }
 
@@ -1744,6 +1776,40 @@ impl PolyforgeClient {
     /// ```
     pub async fn export_portfolio_csv(&self) -> Result<String> {
         self.get_text("/api/v1/portfolio/export/csv").await
+    }
+
+    /// Export your personal data in JSON format (GDPR compliance).
+    ///
+    /// Returns a comprehensive JSON object with your account details,
+    /// trading history, settings, and all platform activity.
+    /// The response is delivered as a file download (Content-Disposition: attachment).
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Api`] if the request fails (e.g., insufficient
+    /// scope).
+    pub async fn export_personal_data(&self) -> Result<serde_json::Value> {
+        self.get("/api/v1/me/export").await
+    }
+
+    /// Export your personal data in CSV format (GDPR compliance).
+    ///
+    /// Returns CSV text with columns `section, index, data_json` for
+    /// machine-readable processing.  The response is delivered as a file
+    /// download (Content-Disposition: attachment).
+    ///
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = polyforge::PolyforgeClient::new("key")?;
+    /// let csv = client.export_personal_data_csv().await?;
+    /// std::fs::write("personal-data.csv", &csv)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Api`] if the request fails.
+    pub async fn export_personal_data_csv(&self) -> Result<String> {
+        self.get_text("/api/v1/me/export?format=csv").await
     }
 
     // -----------------------------------------------------------------------
@@ -2658,6 +2724,42 @@ impl PolyforgeClient {
         self.get("/api/v1/rewards/rebates").await
     }
 
+    /// Get CLOB liquidity-reward details for a market by platform market ID.
+    ///
+    /// Returns `None` when the market has no active rewards configuration
+    /// (platform returns 404).
+    pub async fn get_market_rewards_detail(
+        &self,
+        market_id: &str,
+    ) -> Result<Option<RewardsMarketDetail>> {
+        let path = format!("/api/v1/rewards/market/{}", encode(market_id));
+        let resp = self
+            .http
+            .get(self.url(&path))
+            .header(AUTHORIZATION, self.auth_header()?)
+            .send()
+            .await?;
+        if resp.status().as_u16() == 404 {
+            return Ok(None);
+        }
+        self.handle_response(resp).await.map(Some)
+    }
+
+    /// List the authenticated user's sponsored rewards markets.
+    pub async fn get_user_sponsored_markets(&self) -> Result<UserSponsoredMarkets> {
+        self.get("/api/v1/rewards/user/sponsored-markets")
+            .await
+    }
+
+    /// Get the Polymarket sponsor page URL for a specific market.
+    pub async fn get_rewards_sponsor_url(
+        &self,
+        market_id: &str,
+    ) -> Result<RewardsSponsorUrl> {
+        self.get(&format!("/api/v1/rewards/sponsor-url/{}", encode(market_id)))
+            .await
+    }
+
     // -----------------------------------------------------------------------
     // Strategy Execution Watching (SSE)
     // -----------------------------------------------------------------------
@@ -3084,7 +3186,7 @@ impl PolyforgeClient {
     /// Get a public user profile by username.
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
-        self.get_with_optional_auth(&path).await
+        self.get(&path).await
     }
 
     /// Follow a user by username.
@@ -3182,6 +3284,30 @@ impl PolyforgeClient {
     ) -> Result<NotificationPreferences> {
         self.put(
             "/api/v1/users/me/notification-preferences",
+            &serde_json::to_value(params)?,
+        )
+        .await
+    }
+
+    // -----------------------------------------------------------------------
+    // Venue Preferences (POLA-3330)
+    // -----------------------------------------------------------------------
+
+    /// Get the authenticated user's venue/platform preferences.
+    pub async fn get_my_preferences(&self) -> Result<UserPreferences> {
+        self.get("/api/v1/users/me/venue-preferences").await
+    }
+
+    /// Update the authenticated user's venue/platform preferences.
+    ///
+    /// Only the fields present in `params` are changed; omitted fields keep
+    /// their current values (JSON Merge Patch semantics via HTTP PATCH).
+    pub async fn update_my_preferences(
+        &self,
+        params: &UpdateUserPreferencesParams,
+    ) -> Result<UserPreferences> {
+        self.patch(
+            "/api/v1/users/me/venue-preferences",
             &serde_json::to_value(params)?,
         )
         .await
@@ -3738,7 +3864,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..7 {
+            for _ in 0..4 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
@@ -3747,15 +3873,7 @@ mod tests {
                     !request.to_ascii_lowercase().contains("authorization:"),
                     "public profile request unexpectedly included Authorization header: {request}"
                 );
-                let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
-                    "[]"
-                } else if request.contains("/api/v1/scores/")
-                    || request.contains("/api/v1/profile/")
-                {
-                    "{}"
-                } else {
-                    "{\"data\":[]}"
-                };
+                let body = "{\"data\":[]}";
                 let response = format!(
                     "HTTP/1.1 200 OK\r\n\
                      content-type: application/json\r\n\
@@ -3771,8 +3889,6 @@ mod tests {
         });
 
         let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
-        client.get_user_score("alice").await.unwrap();
-        client.get_user_badges("alice").await.unwrap();
         client.get_user_performance("alice", "30d").await.unwrap();
         client
             .get_user_strategies("alice", None, None)
@@ -3780,7 +3896,6 @@ mod tests {
             .unwrap();
         client.get_user_activity("alice", None).await.unwrap();
         client.get_user_profile_badges("alice").await.unwrap();
-        client.get_user_profile("alice").await.unwrap();
 
         server.await.unwrap();
     }
@@ -6615,19 +6730,52 @@ mod tests {
 
     #[test]
     fn test_reward_market_captures_extra_fields() {
-        let json = r#"{"conditionId": "cond-1", "dailyRate": "0.05", "unknown": true}"#;
+        let json = r#"{"conditionId": "cond-1", "rewardsDaily": "100", "rewardsMaxSpread": "0.02", "rewardsMinSize": "50", "startDate": "2026-01-01", "endDate": "2026-06-01", "unknown": true}"#;
         let rm: RewardMarket = serde_json::from_str(json).unwrap();
-        assert_eq!(rm.extra["conditionId"], "cond-1");
+        assert_eq!(rm.condition_id.as_deref(), Some("cond-1"));
+        assert_eq!(rm.rewards_daily.as_deref(), Some("100"));
         assert_eq!(rm.extra["unknown"], true);
     }
 
     #[test]
     fn test_user_rewards_percentages_captures_dynamic_keys() {
-        let json = r#"{"marketA": 0.5, "marketB": 0.3}"#;
-        let p: UserRewardsPercentages = serde_json::from_str(json).unwrap();
-        assert_eq!(p.extra["marketA"], 0.5);
+        let json = r#"{"0xabc123":42.5,"0xdef456":18.0}"#;
+        let v: UserRewardsPercentages = serde_json::from_str(json).unwrap();
+        assert!(v.extra.get("0xabc123").is_some());
     }
 
+    // -----------------------------------------------------------------------
+    // Rewards — newer endpoints (POLA-3328)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_rewards_market_detail_deserializes() {
+        let json = r#"{"conditionId":"0xabc","ratePerDay":"100.5","totalRewards":"5000","remainingRewardAmount":"3500","maxSpread":"0.02","minSize":"100"}"#;
+        let d: RewardsMarketDetail = serde_json::from_str(json).unwrap();
+        assert_eq!(d.condition_id.as_deref(), Some("0xabc"));
+        assert_eq!(d.rate_per_day.as_deref(), Some("100.5"));
+        assert_eq!(d.total_rewards.as_deref(), Some("5000"));
+        assert_eq!(d.remaining_reward_amount.as_deref(), Some("3500"));
+        assert_eq!(d.max_spread.as_deref(), Some("0.02"));
+        assert_eq!(d.min_size.as_deref(), Some("100"));
+    }
+
+    #[test]
+    fn test_user_sponsored_markets_deserializes() {
+        let json = r#"{"markets":[{"conditionId":"0xabc","title":"Test"}]}"#;
+        let m: UserSponsoredMarkets = serde_json::from_str(json).unwrap();
+        assert_eq!(m.markets.len(), 1);
+    }
+
+    #[test]
+    fn test_rewards_sponsor_url_deserializes() {
+        let json = r#"{"url":"https://polymarket.com/rewards/0xabc"}"#;
+        let s: RewardsSponsorUrl = serde_json::from_str(json).unwrap();
+        assert_eq!(s.url, "https://polymarket.com/rewards/0xabc");
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-Venue Arbitrage — type tests
     // -----------------------------------------------------------------------
     // Cross-Venue Arbitrage — type tests
     // -----------------------------------------------------------------------
@@ -7530,6 +7678,109 @@ mod tests {
         assert!(v.get("strategyError").is_none());
     }
 
+    // -----------------------------------------------------------------------
+    // Venue Preferences — type tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_venue_preferences_deserializes() {
+        let json = r#"{"defaultVenue":"polymarket","enabledVenues":["polymarket","kalshi"],"singlePlatformMode":false}"#;
+        let vp: UserPreferences = serde_json::from_str(json).unwrap();
+        assert_eq!(vp.default_venue.as_deref(), Some("polymarket"));
+        assert_eq!(
+            vp.enabled_venues.as_deref(),
+            Some(&vec!["polymarket".to_string(), "kalshi".to_string()] as &[String])
+        );
+        assert_eq!(vp.single_platform_mode, Some(false));
+    }
+
+    #[test]
+    fn test_venue_preferences_defaults_to_none() {
+        let json = r#"{}"#;
+        let vp: UserPreferences = serde_json::from_str(json).unwrap();
+        assert_eq!(vp.default_venue, None);
+        assert_eq!(vp.enabled_venues, None);
+        assert_eq!(vp.single_platform_mode, None);
+    }
+
+    #[test]
+    fn test_update_venue_preferences_omits_none() {
+        let p = UpdateUserPreferencesParams {
+            default_venue: Some("polymarket".to_string()),
+            enabled_venues: None,
+            single_platform_mode: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["defaultVenue"], "polymarket");
+        assert!(v.get("enabledVenues").is_none());
+        assert!(v.get("singlePlatformMode").is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Actions Catalog — type tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_actions_schema_deserializes() {
+        let json = r#"{"version":"1.0","actions":[{"name":"listMarkets","method":"GET","path":"/api/v1/markets","scope":"READ","category":"Markets"}]}"#;
+        let schema: ActionsSchema = serde_json::from_str(json).unwrap();
+        assert_eq!(schema.version, "1.0");
+        assert_eq!(schema.actions.len(), 1);
+        assert_eq!(schema.actions[0].name, "listMarkets");
+        assert_eq!(schema.actions[0].method, "GET");
+        assert_eq!(schema.actions[0].scope, "READ");
+    }
+
+    #[test]
+    fn test_action_parameter_deserializes() {
+        let json = r#"{"name":"marketId","type":"string","required":true,"in":"path","description":"Market identifier","enum":["abc","def"],"default":"abc","max":255,"min":1}"#;
+        let param: ActionParameter = serde_json::from_str(json).unwrap();
+        assert_eq!(param.name, "marketId");
+        assert_eq!(param.param_type, "string");
+        assert!(param.required);
+        assert_eq!(param.param_in.as_deref(), Some("path"));
+        assert_eq!(param.description.as_deref(), Some("Market identifier"));
+        assert_eq!(
+            param.enum_values.as_deref(),
+            Some(&vec!["abc".to_string(), "def".to_string()] as &[String])
+        );
+        assert_eq!(param.max, Some(255.0));
+        assert_eq!(param.min, Some(1.0));
+    }
+
+    // -----------------------------------------------------------------------
+    // System Health — type tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_system_health_public_deserializes() {
+        let json = r#"{"status":"ok","service":"api-service","version":"2.0.0","uptime":3600}"#;
+        let h: SystemHealthPublic = serde_json::from_str(json).unwrap();
+        assert_eq!(h.status, "ok");
+        assert_eq!(h.service.as_deref(), Some("api-service"));
+        assert_eq!(h.version.as_deref(), Some("2.0.0"));
+        assert_eq!(h.uptime, Some(3600));
+    }
+
+    #[test]
+    fn test_system_health_authenticated_deserializes() {
+        let json = r#"{"status":"operational","db":{"connections":5,"status":"connected"},"redis":{"memoryUsageMb":128,"status":"connected"},"queueDepth":42}"#;
+        let h: SystemHealthAuthenticated = serde_json::from_str(json).unwrap();
+        assert_eq!(h.status, "operational");
+        assert!(h.db.is_some());
+        assert!(h.redis.is_some());
+        assert_eq!(h.queue_depth, Some(42));
+    }
+
+    #[test]
+    fn test_system_health_public_defaults() {
+        let json = r#"{"status":"ok"}"#;
+        let h: SystemHealthPublic = serde_json::from_str(json).unwrap();
+        assert_eq!(h.status, "ok");
+        assert_eq!(h.service, None);
+        assert_eq!(h.uptime, None);
+    }
+
     #[test]
     fn test_ticket_category_serializes() {
         let c = TicketCategory::Billing;
@@ -7970,6 +8221,17 @@ mod tests {
         assert_eq!(report.no_percent, 33);
         assert_eq!(report.total_votes, 3);
         assert!(report.user_vote.is_none());
+    }
+
+    #[test]
+    fn test_export_personal_data_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        assert!(client
+            .url("/api/v1/me/export")
+            .ends_with("/api/v1/me/export"));
+        assert!(client
+            .url("/api/v1/me/export?format=csv")
+            .ends_with("/api/v1/me/export?format=csv"));
     }
 
     #[test]
