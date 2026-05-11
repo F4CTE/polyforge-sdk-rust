@@ -1143,8 +1143,10 @@ impl PolyforgeClient {
 
     /// Fetch the platform's public API actions catalog.
     ///
-    /// This capability manifest is intended for agent/tooling discovery and
-    /// mirrors sdk-ts's `getActions()` / sdk-python's `get_actions()` for
+    /// This endpoint is public (no authentication required) — the client
+    /// can be constructed with an empty API key.  The capability manifest
+    /// is intended for agent/tooling discovery and mirrors sdk-ts's
+    /// `getActions()` / sdk-python's `get_actions()` for
     /// `GET /api/v1/actions`.
     pub async fn get_actions(&self) -> Result<ActionsSchema> {
         self.get_with_optional_auth("/api/v1/actions").await
@@ -1309,13 +1311,13 @@ impl PolyforgeClient {
         self.get("/api/v1/scores/me/badges").await
     }
 
-    /// Get the score for a specific user.
+    /// Get the score for a specific user (requires authentication).
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
         self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
-    /// Get the badges awarded to a specific user.
+    /// Get the badges awarded to a specific user (requires authentication).
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
         self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
@@ -3182,7 +3184,7 @@ impl PolyforgeClient {
         .await
     }
 
-    /// Get a public user profile by username.
+    /// Get a user profile by username (requires authentication).
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
         self.get_with_optional_auth(&path).await
