@@ -3902,6 +3902,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_actions_no_auth_header_with_empty_key() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = vec![0_u8; 4096];
+            let n = socket.read(&mut request).await.unwrap();
+            let request = String::from_utf8_lossy(&request[..n]);
+
+            assert!(
+                !request.to_ascii_lowercase().contains("authorization:"),
+                "get_actions with empty API key must not send Authorization header: {request}"
+            );
+
+            let body = r#"{"version":"1.0","actions":[]}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\n\
+                 content-type: application/json\r\n\
+                 content-length: {}\r\n\
+                 connection: close\r\n\
+                 \r\n\
+                 {}",
+                body.len(),
+                body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        let actions = client.get_actions().await.unwrap();
+        assert_eq!(actions.version, "1.0");
+        assert!(actions.actions.is_empty());
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn test_protected_user_endpoints_send_authorization_header() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
