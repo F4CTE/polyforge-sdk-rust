@@ -3865,7 +3865,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..8 {
+            for _ in 0..10 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
@@ -3900,6 +3900,8 @@ mod tests {
         });
 
         let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client.get_user_score("alice").await.unwrap();
+        client.get_user_badges("alice").await.unwrap();
         client.get_user_performance("alice", "30d").await.unwrap();
         client
             .get_user_strategies("alice", None, None)
