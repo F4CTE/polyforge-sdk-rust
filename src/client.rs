@@ -7677,6 +7677,13 @@ mod tests {
         assert_eq!(param.min, Some(1.0));
     }
 
+    #[test]
+    fn test_get_actions_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/actions");
+        assert!(url.ends_with("/api/v1/actions"));
+    }
+
     // -----------------------------------------------------------------------
     // System Health — type tests
     // -----------------------------------------------------------------------

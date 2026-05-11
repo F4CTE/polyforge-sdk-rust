@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Actions Catalog (POLA-3675)** — `get_actions()` method for `GET /api/v1/actions`. Returns the platform's public API actions catalog (`ActionsSchema`) for agent/tooling discovery, matching `getActions()` in sdk-ts and `get_actions()` in sdk-python. New types: `ActionsSchema`, `ActionDefinition`, `ActionParameter`. (closes #208)
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
   - `list_sports_categories()` → typed `Vec<SportsCategory>`
   - `list_sports_markets(params)` → `PaginatedResponse<serde_json::Value>`
