@@ -1935,7 +1935,7 @@ pub struct GetPolymarketActivityParams {
 // ---------------------------------------------------------------------------
 
 /// A market that distributes liquidity rewards.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarket {
     #[serde(default)]
@@ -1954,7 +1954,32 @@ pub struct RewardMarket {
     pub extra: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl<'de> Deserialize<'de> for RewardMarket {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw: serde_json::Value = serde_json::Value::deserialize(deserializer)?;
+        let extra = raw.clone();
+        let obj = raw.as_object();
+        let get_str = |key: &str| -> Option<String> {
+            obj.and_then(|o| o.get(key))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        };
+        Ok(RewardMarket {
+            condition_id: get_str("conditionId"),
+            rewards_daily: get_str("rewardsDaily"),
+            rewards_max_spread: get_str("rewardsMaxSpread"),
+            rewards_min_size: get_str("rewardsMinSize"),
+            start_date: get_str("startDate"),
+            end_date: get_str("endDate"),
+            extra,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarketDetail {
     #[serde(default)]
@@ -1971,6 +1996,31 @@ pub struct RewardMarketDetail {
     pub end_date: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+impl<'de> Deserialize<'de> for RewardMarketDetail {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw: serde_json::Value = serde_json::Value::deserialize(deserializer)?;
+        let extra = raw.clone();
+        let obj = raw.as_object();
+        let get_str = |key: &str| -> Option<String> {
+            obj.and_then(|o| o.get(key))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        };
+        Ok(RewardMarketDetail {
+            condition_id: get_str("conditionId"),
+            rewards_daily: get_str("rewardsDaily"),
+            rewards_max_spread: get_str("rewardsMaxSpread"),
+            rewards_min_size: get_str("rewardsMinSize"),
+            start_date: get_str("startDate"),
+            end_date: get_str("endDate"),
+            extra,
+        })
+    }
 }
 
 /// Detailed reward information for a market by platform market ID.

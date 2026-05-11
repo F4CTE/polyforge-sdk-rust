@@ -6844,6 +6844,12 @@ mod tests {
         assert_eq!(rm.condition_id.as_deref(), Some("cond-1"));
         assert_eq!(rm.rewards_daily.as_deref(), Some("100"));
         assert_eq!(rm.extra["unknown"], true);
+        assert_eq!(rm.extra["conditionId"], "cond-1");
+        assert_eq!(rm.extra["rewardsDaily"], "100");
+        assert_eq!(rm.extra["rewardsMaxSpread"], "0.02");
+        assert_eq!(rm.extra["rewardsMinSize"], "50");
+        assert_eq!(rm.extra["startDate"], "2026-01-01");
+        assert_eq!(rm.extra["endDate"], "2026-06-01");
     }
 
     #[test]
@@ -6881,6 +6887,20 @@ mod tests {
         let json = r#"{"url":"https://polymarket.com/rewards/0xabc"}"#;
         let s: RewardsSponsorUrl = serde_json::from_str(json).unwrap();
         assert_eq!(s.url, "https://polymarket.com/rewards/0xabc");
+    }
+
+    #[test]
+    fn test_reward_market_detail_extra_backward_compat() {
+        let json = r#"{"conditionId": "cond-1", "rewardsDaily": "100", "rewardsMaxSpread": "0.02", "rewardsMinSize": "50", "startDate": "2026-01-01", "endDate": "2026-06-01", "unknown": true}"#;
+        let d: RewardMarketDetail = serde_json::from_str(json).unwrap();
+        assert_eq!(d.condition_id.as_deref(), Some("cond-1"));
+        assert_eq!(d.extra["conditionId"], "cond-1");
+        assert_eq!(d.extra["rewardsDaily"], "100");
+        assert_eq!(d.extra["rewardsMaxSpread"], "0.02");
+        assert_eq!(d.extra["rewardsMinSize"], "50");
+        assert_eq!(d.extra["startDate"], "2026-01-01");
+        assert_eq!(d.extra["endDate"], "2026-06-01");
+        assert_eq!(d.extra["unknown"], true);
     }
 
     // -----------------------------------------------------------------------
