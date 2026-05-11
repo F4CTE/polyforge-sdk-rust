@@ -7932,10 +7932,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_health_path_and_auth() {
-        let request = capture_request(
-            r#"{"status":"ok"}"#,
-            |client| async move { client.get_health().await.map(|_| ()) },
-        )
+        let request = capture_request(r#"{"status":"ok"}"#, |client| async move {
+            client.get_health().await.map(|_| ())
+        })
         .await;
         assert!(
             request.contains("GET /health HTTP/1.1"),
@@ -7943,18 +7942,16 @@ mod tests {
             request.lines().next().unwrap_or("")
         );
         assert!(
-            captured_header(&request, "Authorization")
-                .is_some_and(|v| v.starts_with("Bearer ")),
+            captured_header(&request, "Authorization").is_some_and(|v| v.starts_with("Bearer ")),
             "Authorization header must be present with Bearer token"
         );
     }
 
     #[tokio::test]
     async fn test_get_health_authenticated_path_and_auth() {
-        let request = capture_request(
-            r#"{"status":"operational"}"#,
-            |client| async move { client.get_health_authenticated().await.map(|_| ()) },
-        )
+        let request = capture_request(r#"{"status":"operational"}"#, |client| async move {
+            client.get_health_authenticated().await.map(|_| ())
+        })
         .await;
         assert!(
             request.contains("GET /api/v1/status HTTP/1.1"),
@@ -7963,7 +7960,10 @@ mod tests {
         );
         let auth = captured_header(&request, "Authorization")
             .expect("get_health_authenticated must include Authorization header");
-        assert!(auth.starts_with("Bearer "), "Authorization must be Bearer token");
+        assert!(
+            auth.starts_with("Bearer "),
+            "Authorization must be Bearer token"
+        );
     }
 
     #[tokio::test]
