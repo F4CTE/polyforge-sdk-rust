@@ -507,6 +507,8 @@ pub struct ClosePositionParams {
     pub size: Option<String>,
 }
 
+// The platform RedeemPositionDto permits either marketId or positionId
+// — the caller can supply whichever is available, leaving the other `None`.
 /// Parameters for redeeming a resolved position.
 ///
 /// At least one of `position_id` or `market_id` must be provided.
