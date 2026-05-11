@@ -508,10 +508,12 @@ pub struct ClosePositionParams {
 }
 
 /// Parameters for redeeming a resolved position.
+///
+/// At least one of `position_id` or `market_id` must be provided.
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct RedeemPositionParams {
-    #[serde(rename = "positionId")]
-    pub position_id: String,
+    #[serde(rename = "positionId", skip_serializing_if = "Option::is_none")]
+    pub position_id: Option<String>,
     #[serde(rename = "marketId", skip_serializing_if = "Option::is_none")]
     pub market_id: Option<String>,
 }
