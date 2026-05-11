@@ -2742,17 +2742,16 @@ impl PolyforgeClient {
 
     /// List the authenticated user's sponsored rewards markets.
     pub async fn get_user_sponsored_markets(&self) -> Result<UserSponsoredMarkets> {
-        self.get("/api/v1/rewards/user/sponsored-markets")
-            .await
+        self.get("/api/v1/rewards/user/sponsored-markets").await
     }
 
     /// Get the Polymarket sponsor page URL for a specific market.
-    pub async fn get_rewards_sponsor_url(
-        &self,
-        market_id: &str,
-    ) -> Result<RewardsSponsorUrl> {
-        self.get(&format!("/api/v1/rewards/sponsor-url/{}", encode(market_id)))
-            .await
+    pub async fn get_rewards_sponsor_url(&self, market_id: &str) -> Result<RewardsSponsorUrl> {
+        self.get(&format!(
+            "/api/v1/rewards/sponsor-url/{}",
+            encode(market_id)
+        ))
+        .await
     }
 
     // -----------------------------------------------------------------------
