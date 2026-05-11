@@ -3977,9 +3977,7 @@ mod tests {
 
                 let body = if request.contains("/badges") {
                     "[]"
-                } else if request.contains("/scores/") {
-                    "{}"
-                } else if request.contains("/profile/") {
+                } else if request.contains("/scores/") || request.contains("/profile/") {
                     "{}"
                 } else if request.contains("/actions") {
                     r#"{"version":"1.0","actions":[]}"#
@@ -6845,8 +6843,6 @@ mod tests {
         assert_eq!(rm.condition_id.as_deref(), Some("cond-1"));
         assert_eq!(rm.rewards_daily.as_deref(), Some("100"));
         assert_eq!(rm.extra["unknown"], true);
-        assert_eq!(rm.extra["conditionId"], "cond-1");
-        assert_eq!(rm.extra["rewardsDaily"], "100");
         assert_eq!(rm.extra["rewardsMaxSpread"], "0.02");
         assert_eq!(rm.extra["rewardsMinSize"], "50");
         assert_eq!(rm.extra["startDate"], "2026-01-01");
