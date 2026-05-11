@@ -3064,10 +3064,12 @@ pub struct UserDataEnvelope<T> {
 // Misc public utility endpoints (POLA-1858)
 // ---------------------------------------------------------------------------
 
-/// A journal entry attached to a placed order.
+/// A row in the trading journal (order annotated with mood + optional note).
 ///
-/// Backend `/api/v1/journal` returns a flat paginated list. Field names match
-/// the platform's `OrderJournal` Prisma model.
+/// `GET /api/v1/journal` returns a flat paginated list of orders that have been
+/// annotated with a journal mood/note.  The response merges order fields
+/// (`marketId`, `side`, `outcome`, `price`, `size`, `status`) with the journal
+/// annotation (`mood`, `note`).  Unknown fields are preserved in `extra`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JournalEntry {
@@ -3075,11 +3077,23 @@ pub struct JournalEntry {
     pub id: Option<String>,
     #[serde(default)]
     pub order_id: Option<String>,
+    #[serde(default)]
+    pub market_id: Option<String>,
     /// One of `CONFIDENT | UNCERTAIN | FOMO | DISCIPLINED | REVENGE`.
     #[serde(default)]
     pub mood: Option<String>,
     #[serde(default)]
     pub note: Option<String>,
+    #[serde(default)]
+    pub side: Option<String>,
+    #[serde(default)]
+    pub outcome: Option<String>,
+    #[serde(default)]
+    pub price: Option<String>,
+    #[serde(default)]
+    pub size: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
     #[serde(default)]
     pub created_at: Option<String>,
     #[serde(default)]

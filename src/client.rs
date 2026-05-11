@@ -1147,7 +1147,7 @@ impl PolyforgeClient {
     /// mirrors sdk-ts's `getActions()` / sdk-python's `get_actions()` for
     /// `GET /api/v1/actions`.
     pub async fn get_actions(&self) -> Result<ActionsSchema> {
-        self.get("/api/v1/actions").await
+        self.get_with_optional_auth("/api/v1/actions").await
     }
 
     // -----------------------------------------------------------------------
@@ -1311,13 +1311,13 @@ impl PolyforgeClient {
 
     /// Get the score for a specific user.
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
-        self.get(&format!("/api/v1/scores/{}", encode(user_id)))
+        self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
     /// Get the badges awarded to a specific user.
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
-        self.get(&format!("/api/v1/scores/{}/badges", encode(user_id)))
+        self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
     }
 
@@ -3181,7 +3181,7 @@ impl PolyforgeClient {
     /// Get a public user profile by username.
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
-        self.get(&path).await
+        self.get_with_optional_auth(&path).await
     }
 
     /// Follow a user by username.
@@ -3859,7 +3859,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..4 {
+            for _ in 0..7 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
@@ -3868,7 +3868,15 @@ mod tests {
                     !request.to_ascii_lowercase().contains("authorization:"),
                     "public profile request unexpectedly included Authorization header: {request}"
                 );
-                let body = "{\"data\":[]}";
+                let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
+                    "[]"
+                } else if request.contains("/api/v1/scores/")
+                    || request.contains("/api/v1/profile/")
+                {
+                    "{}"
+                } else {
+                    "{\"data\":[]}"
+                };
                 let response = format!(
                     "HTTP/1.1 200 OK\r\n\
                      content-type: application/json\r\n\
@@ -3884,6 +3892,8 @@ mod tests {
         });
 
         let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client.get_user_score("alice").await.unwrap();
+        client.get_user_badges("alice").await.unwrap();
         client.get_user_performance("alice", "30d").await.unwrap();
         client
             .get_user_strategies("alice", None, None)
@@ -3891,6 +3901,7 @@ mod tests {
             .unwrap();
         client.get_user_activity("alice", None).await.unwrap();
         client.get_user_profile_badges("alice").await.unwrap();
+        client.get_user_profile("alice").await.unwrap();
 
         server.await.unwrap();
     }
@@ -8438,16 +8449,29 @@ mod tests {
     #[test]
     fn test_journal_entry_deserializes_with_extra_fields() {
         let json = serde_json::json!({
-            "id": "j-1",
-            "orderId": "ord-1",
+            "id": "o1",
+            "marketId": "m1",
             "mood": "CONFIDENT",
-            "note": "felt good",
+            "note": "High conviction",
+            "side": "BUY",
+            "outcome": "YES",
+            "price": "0.55",
+            "size": "100",
+            "status": "CONFIRMED",
             "createdAt": "2026-05-01T00:00:00Z",
             "futureField": "ignored"
         });
         let entry: JournalEntry = serde_json::from_value(json).unwrap();
-        assert_eq!(entry.id.as_deref(), Some("j-1"));
+        assert_eq!(entry.id.as_deref(), Some("o1"));
+        assert_eq!(entry.market_id.as_deref(), Some("m1"));
         assert_eq!(entry.mood.as_deref(), Some("CONFIDENT"));
+        assert_eq!(entry.note.as_deref(), Some("High conviction"));
+        assert_eq!(entry.side.as_deref(), Some("BUY"));
+        assert_eq!(entry.outcome.as_deref(), Some("YES"));
+        assert_eq!(entry.price.as_deref(), Some("0.55"));
+        assert_eq!(entry.size.as_deref(), Some("100"));
+        assert_eq!(entry.status.as_deref(), Some("CONFIRMED"));
+        assert_eq!(entry.created_at.as_deref(), Some("2026-05-01T00:00:00Z"));
         assert_eq!(
             entry.extra.get("futureField").and_then(|v| v.as_str()),
             Some("ignored")
