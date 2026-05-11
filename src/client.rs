@@ -3901,6 +3901,57 @@ mod tests {
         server.await.unwrap();
     }
 
+    #[tokio::test]
+    async fn test_protected_user_endpoints_send_authorization_header() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            for _ in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = vec![0_u8; 4096];
+                let n = socket.read(&mut request).await.unwrap();
+                let request = String::from_utf8_lossy(&request[..n]);
+                assert!(
+                    request.to_ascii_lowercase().contains("authorization:"),
+                    "protected user endpoint request missing Authorization header: {request}"
+                );
+
+                let body = if request.contains("/badges") {
+                    "[]"
+                } else if request.contains("/scores/") {
+                    "{}"
+                } else if request.contains("/profile/") {
+                    "{}"
+                } else {
+                    "{}"
+                };
+
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                     content-type: application/json\r\n\
+                     content-length: {}\r\n\
+                     connection: close\r\n\
+                     \r\n\
+                     {}",
+                    body.len(),
+                    body
+                );
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+
+        let client =
+            PolyforgeClient::with_url("test-api-key", format!("http://{addr}")).unwrap();
+        client.get_user_score("alice").await.unwrap();
+        client.get_user_badges("alice").await.unwrap();
+        client.get_user_profile("alice").await.unwrap();
+
+        server.await.unwrap();
+    }
+
     #[test]
     fn test_api_error_construction() {
         let error = PolyforgeError::Api {
