@@ -8548,16 +8548,29 @@ mod tests {
     #[test]
     fn test_journal_entry_deserializes_with_extra_fields() {
         let json = serde_json::json!({
-            "id": "j-1",
-            "orderId": "ord-1",
+            "id": "o1",
+            "marketId": "m1",
             "mood": "CONFIDENT",
-            "note": "felt good",
+            "note": "High conviction",
+            "side": "BUY",
+            "outcome": "YES",
+            "price": "0.55",
+            "size": "100",
+            "status": "CONFIRMED",
             "createdAt": "2026-05-01T00:00:00Z",
             "futureField": "ignored"
         });
         let entry: JournalEntry = serde_json::from_value(json).unwrap();
-        assert_eq!(entry.id.as_deref(), Some("j-1"));
+        assert_eq!(entry.id.as_deref(), Some("o1"));
+        assert_eq!(entry.market_id.as_deref(), Some("m1"));
         assert_eq!(entry.mood.as_deref(), Some("CONFIDENT"));
+        assert_eq!(entry.note.as_deref(), Some("High conviction"));
+        assert_eq!(entry.side.as_deref(), Some("BUY"));
+        assert_eq!(entry.outcome.as_deref(), Some("YES"));
+        assert_eq!(entry.price.as_deref(), Some("0.55"));
+        assert_eq!(entry.size.as_deref(), Some("100"));
+        assert_eq!(entry.status.as_deref(), Some("CONFIRMED"));
+        assert_eq!(entry.created_at.as_deref(), Some("2026-05-01T00:00:00Z"));
         assert_eq!(
             entry.extra.get("futureField").and_then(|v| v.as_str()),
             Some("ignored")
