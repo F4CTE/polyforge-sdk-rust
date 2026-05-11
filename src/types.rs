@@ -1934,9 +1934,22 @@ pub struct GetPolymarketActivityParams {
 // Rewards
 // ---------------------------------------------------------------------------
 
+/// A market that distributes liquidity rewards.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarket {
+    #[serde(default)]
+    pub condition_id: Option<String>,
+    #[serde(default)]
+    pub rewards_daily: Option<String>,
+    #[serde(default)]
+    pub rewards_max_spread: Option<String>,
+    #[serde(default)]
+    pub rewards_min_size: Option<String>,
+    #[serde(default)]
+    pub start_date: Option<String>,
+    #[serde(default)]
+    pub end_date: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -1944,6 +1957,63 @@ pub struct RewardMarket {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewardMarketDetail {
+    #[serde(default)]
+    pub condition_id: Option<String>,
+    #[serde(default)]
+    pub rewards_daily: Option<String>,
+    #[serde(default)]
+    pub rewards_max_spread: Option<String>,
+    #[serde(default)]
+    pub rewards_min_size: Option<String>,
+    #[serde(default)]
+    pub start_date: Option<String>,
+    #[serde(default)]
+    pub end_date: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Detailed reward information for a market by platform market ID.
+///
+/// Distinct from [`RewardMarketDetail`]; returned by `GET /api/v1/rewards/market/{marketId}`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RewardsMarketDetail {
+    #[serde(default)]
+    pub condition_id: Option<String>,
+    #[serde(default)]
+    pub rate_per_day: Option<String>,
+    #[serde(default)]
+    pub total_rewards: Option<String>,
+    #[serde(default)]
+    pub remaining_reward_amount: Option<String>,
+    #[serde(default)]
+    pub max_spread: Option<String>,
+    #[serde(default)]
+    pub min_size: Option<String>,
+    #[serde(default)]
+    pub start_date: Option<String>,
+    #[serde(default)]
+    pub end_date: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// The authenticated user's sponsored rewards markets.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSponsoredMarkets {
+    #[serde(default)]
+    pub markets: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Polymarket sponsor page URL for a specific market.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RewardsSponsorUrl {
+    pub url: String,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -2002,8 +2072,10 @@ pub struct Rebates {
 /// Iterate over these via [`crate::client::StrategyEventStream::next`].
 ///
 /// Common event types: `CONNECTED`, `STRATEGY_STARTED`, `STRATEGY_STOPPED`,
-/// `STRATEGY_ERROR`, `ORDER_PLACED`, `ORDER_FILLED`, `ORDER_CANCELLED`,
-/// `BACKTEST_PROGRESS`, `BACKTEST_COMPLETED`, `BACKTEST_FAILED`.
+/// `STRATEGY_PAUSED`, `STRATEGY_RESUMED`, `STRATEGY_ERROR`, `ORDER_PLACED`,
+/// `ORDER_SUBMITTED`, `ORDER_FILLED`, `ORDER_PARTIAL`, `ORDER_CANCELLED`,
+/// `ORDER_FAILED`, `ORDER_ERROR`, `BACKTEST_PROGRESS`, `BACKTEST_COMPLETED`,
+/// `BACKTEST_FAILED`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyEvent {
     /// Event type identifier.
@@ -2639,6 +2711,52 @@ pub struct UpdatePasswordParams {
 }
 
 // ---------------------------------------------------------------------------
+// System Health (POLA-3327)
+// ---------------------------------------------------------------------------
+
+/// Public health payload returned by `GET /health`.
+///
+/// Contains only the public status; no operational internals are exposed.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemHealthPublic {
+    pub status: String,
+    #[serde(default)]
+    pub service: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub uptime: Option<u64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Authenticated health payload returned by `GET /api/v1/status`.
+///
+/// Extends the public health shape with operational metrics (DB, Redis, queue).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemHealthAuthenticated {
+    pub status: String,
+    #[serde(default)]
+    pub service: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub uptime: Option<u64>,
+    #[serde(default)]
+    pub db: Option<serde_json::Value>,
+    #[serde(default)]
+    pub redis: Option<serde_json::Value>,
+    #[serde(default)]
+    pub queue_depth: Option<u64>,
+    #[serde(default)]
+    pub services: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
 // Support Tickets (POLA-782)
 // ---------------------------------------------------------------------------
 
@@ -2764,6 +2882,36 @@ pub struct UpdateNotificationPreferencesParams {
     pub daily_summary: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub marketing: Option<bool>,
+}
+
+// ---------------------------------------------------------------------------
+// Venue Preferences (POLA-3330)
+// ---------------------------------------------------------------------------
+
+/// The authenticated user's venue/platform preferences.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UserPreferences {
+    #[serde(default)]
+    pub default_venue: Option<String>,
+    #[serde(default)]
+    pub enabled_venues: Option<Vec<String>>,
+    #[serde(default)]
+    pub single_platform_mode: Option<bool>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for updating venue/platform preferences. Only supplied fields are changed.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateUserPreferencesParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_venue: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled_venues: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub single_platform_mode: Option<bool>,
 }
 
 // ---------------------------------------------------------------------------
@@ -3328,6 +3476,63 @@ pub struct ComboLookupParams {
     pub collection_ticker: String,
     pub legs: Vec<ComboLeg>,
 }
+
+// ---------------------------------------------------------------------------
+// Actions Catalog (POLA-3329)
+// ---------------------------------------------------------------------------
+
+/// A parameter descriptor within an action definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionParameter {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub param_type: String,
+    pub required: bool,
+    #[serde(rename = "in", default)]
+    pub param_in: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(rename = "enum", default)]
+    pub enum_values: Option<Vec<String>>,
+    #[serde(default)]
+    pub default: Option<serde_json::Value>,
+    #[serde(default)]
+    pub max: Option<f64>,
+    #[serde(default)]
+    pub min: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A single action from the platform's API actions catalog.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionDefinition {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub method: String,
+    pub path: String,
+    pub scope: String,
+    pub category: String,
+    #[serde(default)]
+    pub parameters: Option<Vec<ActionParameter>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// The platform's public API actions catalog.
+///
+/// Returned by `GET /api/v1/actions` — a capability manifest for agent/tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionsSchema {
+    pub version: String,
+    pub actions: Vec<ActionDefinition>,
+}
+
+// ---------------------------------------------------------------------------
 
 /// Aggregated correlation matrix between top market categories.
 ///
