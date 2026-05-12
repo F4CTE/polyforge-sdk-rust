@@ -6842,11 +6842,13 @@ mod tests {
         let rm: RewardMarket = serde_json::from_str(json).unwrap();
         assert_eq!(rm.condition_id.as_deref(), Some("cond-1"));
         assert_eq!(rm.rewards_daily.as_deref(), Some("100"));
+        assert_eq!(rm.rewards_max_spread.as_deref(), Some("0.02"));
+        assert_eq!(rm.rewards_min_size.as_deref(), Some("50"));
+        assert_eq!(rm.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(rm.end_date.as_deref(), Some("2026-06-01"));
         assert_eq!(rm.extra["unknown"], true);
-        assert_eq!(rm.extra["rewardsMaxSpread"], "0.02");
-        assert_eq!(rm.extra["rewardsMinSize"], "50");
-        assert_eq!(rm.extra["startDate"], "2026-01-01");
-        assert_eq!(rm.extra["endDate"], "2026-06-01");
+        assert!(!rm.extra["conditionId"].is_string());
+        assert!(!rm.extra["rewardsMaxSpread"].is_string());
     }
 
     #[test]
@@ -6890,13 +6892,15 @@ mod tests {
     fn test_reward_market_detail_extra_backward_compat() {
         let json = r#"{"conditionId": "cond-1", "rewardsDaily": "100", "rewardsMaxSpread": "0.02", "rewardsMinSize": "50", "startDate": "2026-01-01", "endDate": "2026-06-01", "unknown": true}"#;
         let d: RewardMarketDetail = serde_json::from_str(json).unwrap();
-        assert_eq!(d.extra["conditionId"], "cond-1");
-        assert_eq!(d.extra["rewardsDaily"], "100");
-        assert_eq!(d.extra["rewardsMaxSpread"], "0.02");
-        assert_eq!(d.extra["rewardsMinSize"], "50");
-        assert_eq!(d.extra["startDate"], "2026-01-01");
-        assert_eq!(d.extra["endDate"], "2026-06-01");
+        assert_eq!(d.condition_id.as_deref(), Some("cond-1"));
+        assert_eq!(d.rewards_daily.as_deref(), Some("100"));
+        assert_eq!(d.rewards_max_spread.as_deref(), Some("0.02"));
+        assert_eq!(d.rewards_min_size.as_deref(), Some("50"));
+        assert_eq!(d.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(d.end_date.as_deref(), Some("2026-06-01"));
         assert_eq!(d.extra["unknown"], true);
+        assert!(!d.extra["conditionId"].is_string());
+        assert!(!d.extra["rewardsDaily"].is_string());
     }
 
     // -----------------------------------------------------------------------

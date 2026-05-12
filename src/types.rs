@@ -1959,33 +1959,45 @@ impl<'de> Deserialize<'de> for RewardMarket {
     where
         D: serde::Deserializer<'de>,
     {
-        let map: serde_json::Map<String, serde_json::Value> =
-            serde_json::Map::deserialize(deserializer)?;
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let mut map = match value {
+            serde_json::Value::Object(map) => map,
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "expected a JSON object for RewardMarket",
+                ))
+            }
+        };
 
-        let condition_id = map
-            .get("conditionId")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let rewards_daily = map
-            .get("rewardsDaily")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let rewards_max_spread = map
-            .get("rewardsMaxSpread")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let rewards_min_size = map
-            .get("rewardsMinSize")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let start_date = map
-            .get("startDate")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let end_date = map
-            .get("endDate")
-            .and_then(|v| v.as_str())
-            .map(String::from);
+        fn take_string<E: serde::de::Error>(
+            map: &mut serde_json::Map<String, serde_json::Value>,
+            key: &str,
+        ) -> Result<Option<String>, E> {
+            match map.remove(key) {
+                Some(serde_json::Value::String(s)) => Ok(Some(s)),
+                Some(serde_json::Value::Null) | None => Ok(None),
+                Some(other) => Err(serde::de::Error::custom(format!(
+                    "expected a string for field `{}`, found {}",
+                    key,
+                    if other.is_number() {
+                        "number"
+                    } else if other.is_boolean() {
+                        "boolean"
+                    } else if other.is_array() {
+                        "array"
+                    } else {
+                        "object"
+                    }
+                ))),
+            }
+        }
+
+        let condition_id = take_string(&mut map, "conditionId")?;
+        let rewards_daily = take_string(&mut map, "rewardsDaily")?;
+        let rewards_max_spread = take_string(&mut map, "rewardsMaxSpread")?;
+        let rewards_min_size = take_string(&mut map, "rewardsMinSize")?;
+        let start_date = take_string(&mut map, "startDate")?;
+        let end_date = take_string(&mut map, "endDate")?;
 
         Ok(RewardMarket {
             condition_id,
@@ -2023,33 +2035,45 @@ impl<'de> Deserialize<'de> for RewardMarketDetail {
     where
         D: serde::Deserializer<'de>,
     {
-        let map: serde_json::Map<String, serde_json::Value> =
-            serde_json::Map::deserialize(deserializer)?;
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let mut map = match value {
+            serde_json::Value::Object(map) => map,
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "expected a JSON object for RewardMarketDetail",
+                ))
+            }
+        };
 
-        let condition_id = map
-            .get("conditionId")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let rewards_daily = map
-            .get("rewardsDaily")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let rewards_max_spread = map
-            .get("rewardsMaxSpread")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let rewards_min_size = map
-            .get("rewardsMinSize")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let start_date = map
-            .get("startDate")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let end_date = map
-            .get("endDate")
-            .and_then(|v| v.as_str())
-            .map(String::from);
+        fn take_string<E: serde::de::Error>(
+            map: &mut serde_json::Map<String, serde_json::Value>,
+            key: &str,
+        ) -> Result<Option<String>, E> {
+            match map.remove(key) {
+                Some(serde_json::Value::String(s)) => Ok(Some(s)),
+                Some(serde_json::Value::Null) | None => Ok(None),
+                Some(other) => Err(serde::de::Error::custom(format!(
+                    "expected a string for field `{}`, found {}",
+                    key,
+                    if other.is_number() {
+                        "number"
+                    } else if other.is_boolean() {
+                        "boolean"
+                    } else if other.is_array() {
+                        "array"
+                    } else {
+                        "object"
+                    }
+                ))),
+            }
+        }
+
+        let condition_id = take_string(&mut map, "conditionId")?;
+        let rewards_daily = take_string(&mut map, "rewardsDaily")?;
+        let rewards_max_spread = take_string(&mut map, "rewardsMaxSpread")?;
+        let rewards_min_size = take_string(&mut map, "rewardsMinSize")?;
+        let start_date = take_string(&mut map, "startDate")?;
+        let end_date = take_string(&mut map, "endDate")?;
 
         Ok(RewardMarketDetail {
             condition_id,
