@@ -306,7 +306,7 @@ drift from the server.
 ```rust
 // GDPR personal-data export (JSON)
 let data = client.export_personal_data().await?;
-println!("Generated at: {}", data.generated_at);
+println!("Generated at: {}", data.generated_at.as_deref().unwrap_or("N/A"));
 println!("Account: {:?}", data.account);
 
 // GDPR personal-data export (CSV)
