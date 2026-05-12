@@ -7867,6 +7867,7 @@ mod tests {
         assert_eq!(Venue::Polymarket.as_str(), "POLYMARKET");
         assert_eq!(Venue::Kalshi.as_str(), "KALSHI");
         assert_eq!(Venue::PolymarketUs.as_str(), "POLYMARKET_US");
+        assert_eq!(Venue::Unknown.as_str(), "UNKNOWN");
     }
 
     #[test]
@@ -7882,6 +7883,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&Venue::PolymarketUs).unwrap(),
             r#""POLYMARKET_US""#
+        );
+        assert_eq!(
+            serde_json::to_string(&Venue::Unknown).unwrap(),
+            r#""UNKNOWN""#
         );
     }
 
@@ -7899,6 +7904,26 @@ mod tests {
             serde_json::from_str::<Venue>(r#""POLYMARKET_US""#).unwrap(),
             Venue::PolymarketUs
         );
+    }
+
+    #[test]
+    fn test_venue_unknown_deserializes() {
+        assert_eq!(
+            serde_json::from_str::<Venue>(r#""POLYMARKET_NEW""#).unwrap(),
+            Venue::Unknown
+        );
+        assert_eq!(
+            serde_json::from_str::<Venue>(r#""KRALSCHI""#).unwrap(),
+            Venue::Unknown
+        );
+    }
+
+    #[test]
+    fn test_venue_unknown_preserves_arb_position_deserialization() {
+        let json = r#"{"id":"ap-1","buyVenue":"POLYMARKET","sellVenue":"FUTURE_VENUE_v3"}"#;
+        let p: ArbPosition = serde_json::from_str(json).unwrap();
+        assert_eq!(p.buy_venue, Some(Venue::Polymarket));
+        assert_eq!(p.sell_venue, Some(Venue::Unknown));
     }
 
     #[test]
