@@ -88,7 +88,6 @@
 
 ### Fixed
 - **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, liquidity, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
-<<<<<<< HEAD
 - **`RewardMarket.extra` / `RewardMarketDetail.extra` backward compatibility** — custom `Deserialize` implementations now preserve ALL response fields (including named ones) inside `extra`, so downstream code that reads `extra["conditionId"]` or other previously-dynamic keys continues to work after the keys were promoted to first-class struct fields. 1 new test and 6 new assertions verify the backward-compatible shape.
 - **Admin-only arbitrage match mutations** — hide `create_arbitrage_match`,
   `verify_arbitrage_match`, `delete_arbitrage_match`, and
