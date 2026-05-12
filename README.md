@@ -187,6 +187,29 @@ client.get_market_sentiment("market-id").await?
 client.provide_liquidity(&ProvideLiquidityParams { token_id, spread, size }).await?
 ```
 
+### Rewards
+
+| Method | Description |
+|--------|-------------|
+| `list_rewards_markets()` | List all markets with active liquidity rewards → `Vec<RewardMarket>` |
+| `get_rewards_for_market(condition_id)` | Get reward details for a Polymarket market by condition ID |
+| `get_user_rewards()` | Get the authenticated user's rewards |
+| `get_user_rewards_total()` | Get the authenticated user's total accumulated rewards |
+| `get_user_rewards_percentages()` | Get the authenticated user's reward percentages |
+| `get_user_rewards_per_market()` | Get the authenticated user's rewards broken down by market |
+| `get_rebates()` | Get the authenticated user's trading fee rebates |
+| `get_market_rewards_detail(market_id)` | Get CLOB liquidity-reward config for a platform market by ID; returns `None` on 404 |
+| `get_user_sponsored_markets()` | List the authenticated user's sponsored rewards markets |
+| `get_rewards_sponsor_url(market_id)` | Get the Polymarket sponsor page URL for a market |
+
+```rust
+client.list_rewards_markets().await?;
+client.get_rewards_for_market("condition-id").await?;
+client.get_user_rewards().await?;
+client.get_user_sponsored_markets().await?;
+client.get_rewards_sponsor_url("market-id").await?;
+```
+
 ### Sports
 
 | Method | Description |
