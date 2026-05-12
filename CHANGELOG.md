@@ -68,6 +68,28 @@
   - `get_user_sponsored_markets()` → `GET /api/v1/rewards/user/sponsored-markets` → `UserSponsoredMarkets` — list the authenticated user's sponsored-rewards markets.
   - `get_rewards_sponsor_url(market_id)` → `GET /api/v1/rewards/sponsor-url/{marketId}` → `RewardsSponsorUrl` — get the Polymarket sponsor page URL for a specific market.
   - New types: `RewardsMarketDetail`, `UserSponsoredMarkets`, `RewardsSponsorUrl`. All use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility.
+- **Public user profile lookups (POLA-1844)** — five endpoints sourced from the weekly SDK audit:
+  - `get_user_performance(username, period)` → `Vec<UserPerformancePoint>` (PnL curve).
+  - `get_user_strategies(username, visibility, limit)` → `Vec<UserStrategySummary>` (server caps `limit` at 50).
+  - `get_user_activity(username, limit)` → `Vec<UserActivityEntry>` (resolved positions, server caps `limit` at 50).
+  - `get_user_profile_badges(username)` → `Vec<UserProfileBadge>`.
+  - `get_my_following(page, limit)` → `PaginatedResponse<FollowedUser>` (authenticated users only).
+
+  All four public-profile endpoints surface `PolyforgeError::Api { status: 404, code: "NOT_FOUND", .. }` when the username is unknown. The `username` path segment is URL-encoded via the existing `urlencoding::encode` helper. These methods skip the `Authorization` header when the client is constructed with an empty API key, keeping documented public endpoints usable without credentials while preserving authenticated behavior when a key is configured.
+
+  New types: `UserPerformancePoint`, `UserStrategySummary`, `UserActivityEntry`, `UserProfileBadge`, `FollowedUser`, plus an internal `UserDataEnvelope<T>` to unwrap the `{ "data": [...] }` envelope.
+- **Cross-venue arb execution / positions / risk endpoints (POLA-1852)** — 7 trading-impact-bearing methods that complete the `/api/v1/arbitrage/*` surface and bring the Rust SDK to parity with the Python SDK (POLA-1851):
+  - `execute_arbitrage(&ExecuteArbitrageParams, idempotency_key)` → `POST /api/v1/arbitrage/execute`. Sends the backend-required `Idempotency-Key`, validates UUID `match_id`, integer `size` ∈ `1..=10000` USDC, and `max_slippage_pct` ∈ `0..=5` client-side before the order hits the wire (mirrors `ExecuteArbDto` `class-validator` bounds).
+  - `list_arbitrage_positions(status, limit, offset)` → `GET /api/v1/arbitrage/positions`. Uses typed `ArbPositionStatus` and validates `limit` ∈ `1..=100`.
+  - `get_arbitrage_position(id)` → `GET /api/v1/arbitrage/positions/{id}`.
+  - `close_arbitrage_position(id, idempotency_key)` → `POST /api/v1/arbitrage/positions/{id}/close` with the backend-required `Idempotency-Key`.
+  - `get_arbitrage_risk_dashboard()` → `GET /api/v1/arbitrage/risk/dashboard`.
+  - `get_arbitrage_settlement_risks()` → `GET /api/v1/arbitrage/risk/settlement`.
+  - `refresh_arbitrage_pnl()` → `POST /api/v1/arbitrage/risk/refresh-pnl`.
+  New types: `ExecuteArbitrageParams`, `ArbPositionStatus`, `ArbExecutionLeg`, `ArbExecutionResult`, `ArbPosition`, `ArbPositionsResponse`, `ArbCloseResponse`, `ArbNetExposure`, `ArbRiskDashboard`, `ArbSettlementRisk`, `ArbPnlRefreshResult`. Decimal columns (`ArbExecutionLeg.price`, `buy_price`, `sell_price`, P&L, spread) are typed as `Option<String>` to preserve full precision from the backend Prisma `Decimal` serialization, matching the Python SDK shape.
+
+### ⚠️ Trading impact (severity: HIGH)
+- `execute_arbitrage()` and `close_arbitrage_position()` can place real offsetting orders. Callers must supply an idempotency key for safe retries; the SDK sends it as `Idempotency-Key` and fails fast on missing/invalid keys, malformed `match_id`, fractional or out-of-range `size`, invalid slippage, invalid position status filters, and oversized page limits before requests reach the trading API.
 
 ### Security
 - **Client-side financial parameter validation** — `place_order()`, `place_smart_order()`, and `provide_liquidity()` now reject NaN, Infinity, zero, and negative values for all financial parameters (size, price, total_size, spread, and optional price fields) before sending requests; prevents nonsensical orders from reaching the backend (closes #88)
@@ -106,29 +128,6 @@
 - `GET /sports/combos/:collectionTicker` currently ignores its path param
   server-side (forwards to `listComboCollections({page:1, limit:1})`). The SDK
   wraps the route as-is for fidelity; a server-side fix is tracked separately.
-- **Public user profile lookups (POLA-1844)** — five endpoints sourced from the weekly SDK audit:
-  - `get_user_performance(username, period)` → `Vec<UserPerformancePoint>` (PnL curve).
-  - `get_user_strategies(username, visibility, limit)` → `Vec<UserStrategySummary>` (server caps `limit` at 50).
-  - `get_user_activity(username, limit)` → `Vec<UserActivityEntry>` (resolved positions, server caps `limit` at 50).
-  - `get_user_profile_badges(username)` → `Vec<UserProfileBadge>`.
-  - `get_my_following(page, limit)` → `PaginatedResponse<FollowedUser>` (authenticated users only).
-
-  All four public-profile endpoints surface `PolyforgeError::Api { status: 404, code: "NOT_FOUND", .. }` when the username is unknown. The `username` path segment is URL-encoded via the existing `urlencoding::encode` helper. These methods skip the `Authorization` header when the client is constructed with an empty API key, keeping documented public endpoints usable without credentials while preserving authenticated behavior when a key is configured.
-
-  New types: `UserPerformancePoint`, `UserStrategySummary`, `UserActivityEntry`, `UserProfileBadge`, `FollowedUser`, plus an internal `UserDataEnvelope<T>` to unwrap the `{ "data": [...] }` envelope.
-- **Cross-venue arb execution / positions / risk endpoints (POLA-1852)** — 7 trading-impact-bearing methods that complete the `/api/v1/arbitrage/*` surface and bring the Rust SDK to parity with the Python SDK (POLA-1851):
-  - `execute_arbitrage(&ExecuteArbitrageParams, idempotency_key)` → `POST /api/v1/arbitrage/execute`. Sends the backend-required `Idempotency-Key`, validates UUID `match_id`, integer `size` ∈ `1..=10000` USDC, and `max_slippage_pct` ∈ `0..=5` client-side before the order hits the wire (mirrors `ExecuteArbDto` `class-validator` bounds).
-  - `list_arbitrage_positions(status, limit, offset)` → `GET /api/v1/arbitrage/positions`. Uses typed `ArbPositionStatus` and validates `limit` ∈ `1..=100`.
-  - `get_arbitrage_position(id)` → `GET /api/v1/arbitrage/positions/{id}`.
-  - `close_arbitrage_position(id, idempotency_key)` → `POST /api/v1/arbitrage/positions/{id}/close` with the backend-required `Idempotency-Key`.
-  - `get_arbitrage_risk_dashboard()` → `GET /api/v1/arbitrage/risk/dashboard`.
-  - `get_arbitrage_settlement_risks()` → `GET /api/v1/arbitrage/risk/settlement`.
-  - `refresh_arbitrage_pnl()` → `POST /api/v1/arbitrage/risk/refresh-pnl`.
-- New types: `ExecuteArbitrageParams`, `ArbPositionStatus`, `ArbExecutionLeg`, `ArbExecutionResult`, `ArbPosition`, `ArbPositionsResponse`, `ArbCloseResponse`, `ArbNetExposure`, `ArbRiskDashboard`, `ArbSettlementRisk`, `ArbPnlRefreshResult`. Decimal columns (`ArbExecutionLeg.price`, `buy_price`, `sell_price`, P&L, spread) are typed as `Option<String>` to preserve full precision from the backend Prisma `Decimal` serialization, matching the Python SDK shape.
-
-### ⚠️ Trading impact (severity: HIGH)
-- `execute_arbitrage()` and `close_arbitrage_position()` can place real offsetting orders. Callers must supply an idempotency key for safe retries; the SDK sends it as `Idempotency-Key` and fails fast on missing/invalid keys, malformed `match_id`, fractional or out-of-range `size`, invalid slippage, invalid position status filters, and oversized page limits before requests reach the trading API.
-
 
 ## [1.7.6] — 2026-04-25
 
