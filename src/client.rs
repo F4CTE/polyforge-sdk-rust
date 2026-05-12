@@ -1797,6 +1797,31 @@ impl PolyforgeClient {
         self.get("/api/v1/me/export").await
     }
 
+    /// Export your personal data in structured form (GDPR compliance).
+    ///
+    /// Returns a [`PersonalDataExport`] object organised into `account`,
+    /// `settings`, `security`, `trading`, `communications`, and `social`
+    /// sections.
+    ///
+    /// The server responds with a `Content-Disposition: attachment` header
+    /// so the result is suitable for file download.
+    ///
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = polyforge::PolyforgeClient::new("key")?;
+    /// let export = client.export_personal_data_typed().await?;
+    /// println!("Exported at {} (format {})", export.generated_at, export.format_version);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Api`] if the request fails (e.g., insufficient
+    /// scope).
+    pub async fn export_personal_data_typed(&self) -> Result<PersonalDataExport> {
+        self.get("/api/v1/me/export").await
+    }
+
     /// Export your personal data in CSV format (GDPR compliance).
     ///
     /// Returns CSV text with columns `section, index, data_json` for
@@ -8589,6 +8614,82 @@ mod tests {
         assert!(client
             .url("/api/v1/me/export?format=csv")
             .ends_with("/api/v1/me/export?format=csv"));
+    }
+
+    // -----------------------------------------------------------------------
+    // GDPR Personal Data Export
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_export_personal_data_typed_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        assert!(client
+            .url("/api/v1/me/export")
+            .ends_with("/api/v1/me/export"));
+    }
+
+    #[test]
+    fn test_personal_data_export_meta_deserializes() {
+        let json = r#"{"maxRecordsPerCollection":1000,"collectionsTruncated":{}}"#;
+        let meta: PersonalDataExportMeta = serde_json::from_str(json).unwrap();
+        assert_eq!(meta.max_records_per_collection, 1000);
+        assert_eq!(meta.collections_truncated, serde_json::json!({}));
+    }
+
+    #[test]
+    fn test_personal_data_export_meta_default_max_records() {
+        let json = r#"{"collectionsTruncated":[]}"#;
+        let meta: PersonalDataExportMeta = serde_json::from_str(json).unwrap();
+        assert_eq!(meta.max_records_per_collection, 1000);
+        assert_eq!(meta.collections_truncated, serde_json::json!([]));
+    }
+
+    #[test]
+    fn test_personal_data_export_deserializes_full() {
+        let json = r#"{
+            "generatedAt": "2026-05-11T00:00:00Z",
+            "formatVersion": "2026-05-privacy-export-v1",
+            "_meta": {"maxRecordsPerCollection": 1000, "collectionsTruncated": {}},
+            "account": {"username": "testuser"},
+            "settings": {},
+            "security": {},
+            "trading": {},
+            "communications": {},
+            "social": {}
+        }"#;
+        let export: PersonalDataExport = serde_json::from_str(json).unwrap();
+        assert_eq!(export.generated_at, "2026-05-11T00:00:00Z");
+        assert_eq!(export.format_version, "2026-05-privacy-export-v1");
+        assert!(export.meta.is_some());
+        let meta = export.meta.unwrap();
+        assert_eq!(meta.max_records_per_collection, 1000);
+        assert_eq!(export.account, serde_json::json!({"username": "testuser"}));
+        assert_eq!(export.settings, serde_json::json!({}));
+    }
+
+    #[test]
+    fn test_personal_data_export_section_defaults() {
+        let json = r#"{"generatedAt":"t","formatVersion":"v"}"#;
+        let export: PersonalDataExport = serde_json::from_str(json).unwrap();
+        assert_eq!(export.generated_at, "t");
+        assert_eq!(export.format_version, "v");
+        assert!(export.meta.is_none());
+        assert_eq!(export.account, serde_json::Value::Null);
+        assert_eq!(export.social, serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_personal_data_export_missing_generated_at_fails() {
+        let json = r#"{"formatVersion":"v"}"#;
+        let result: std::result::Result<PersonalDataExport, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_personal_data_export_missing_format_version_fails() {
+        let json = r#"{"generatedAt":"t"}"#;
+        let result: std::result::Result<PersonalDataExport, _> = serde_json::from_str(json);
+        assert!(result.is_err());
     }
 
     #[test]

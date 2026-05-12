@@ -18,6 +18,12 @@
   `SportsComboLookupParams`. Weakly-typed payloads use `serde_json::Value` to
   mirror the controller's `Record<string, unknown>` / `unknown[]` fidelity instead
   of inventing strict shapes.
+- **GDPR personal data export** — `export_personal_data()` returns `serde_json::Value`
+  for backward compatibility. The new `export_personal_data_typed()` method returns a
+  typed [`PersonalDataExport`] organised into `account`, `settings`, `security`,
+  `trading`, `communications`, and `social` sections. `export_personal_data_csv()`
+  continues to return the raw CSV string. New types: `PersonalDataExport`,
+  `PersonalDataExportMeta`. (closes #215)
 - **UpdateSettingsProfileParams.twitter_handle** — add optional `twitter_handle: Option<String>` field. Serializes as `twitterHandle` (camelCase) to match the platform's `UpdateProfileDto` and reach feature parity with `polyforge-sdk-python` and `polyforge-mcp`. (closes #185)
 - **Misc public utility endpoints (POLA-1858)** — 18 read/write methods that close the SDK gap matrix from POLA-1845 and bring the Rust SDK to parity with the platform's miscellaneous user/markets/fees/analytics surface:
   - `get_accuracy_overview()` → `GET /api/v1/accuracy` — companion to `get_accuracy()` (`/accuracy/me`); both return the same `AccuracyScore` shape.
