@@ -12,6 +12,11 @@
   - `idempotency_key_header()` validation tightened from non-empty to 8–128 characters.
 
 ### Added
+- **GDPR personal data export** — `export_personal_data()` now returns a typed [`PersonalDataExport`] instead of
+  `serde_json::Value`. The response is organised into `account`, `settings`, `security`,
+  `trading`, `communications`, and `social` sections. `export_personal_data_csv()`
+  continues to return the raw CSV string. New types: `PersonalDataExport`,
+  `PersonalDataExportMeta`. (closes #215)
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
   - `list_sports_categories()` → typed `Vec<SportsCategory>`
   - `list_sports_markets(params)` → `PaginatedResponse<serde_json::Value>`
