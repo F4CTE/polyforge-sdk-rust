@@ -3798,12 +3798,14 @@ fn default_max_records() -> u64 {
 ///
 /// Contains all user data across the platform grouped into sections.
 /// Webhook URLs are redacted to hostname only.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+///
+/// Use [`PolyforgeClient::export_personal_data_typed`] for a strongly-typed
+/// return while [`PolyforgeClient::export_personal_data`] continues to return
+/// `serde_json::Value` for backward compatibility.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonalDataExport {
-    #[serde(default)]
     pub generated_at: String,
-    #[serde(default)]
     pub format_version: String,
     #[serde(rename = "_meta", default)]
     pub meta: Option<PersonalDataExportMeta>,

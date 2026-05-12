@@ -1806,6 +1806,21 @@ impl PolyforgeClient {
 
     /// Export your personal data in JSON format (GDPR compliance).
     ///
+    /// Returns the raw JSON `serde_json::Value` for backward compatibility.
+    /// Prefer [`export_personal_data_typed`](Self::export_personal_data_typed)
+    /// for a strongly-typed return.
+    ///
+    /// The response is delivered as a file download (Content-Disposition: attachment).
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Api`] if the request fails (e.g., insufficient
+    /// scope).
+    pub async fn export_personal_data(&self) -> Result<serde_json::Value> {
+        self.get("/api/v1/me/export").await
+    }
+
+    /// Export your personal data in structured form (GDPR compliance).
+    ///
     /// Returns a [`PersonalDataExport`] object organised into `account`,
     /// `settings`, `security`, `trading`, `communications`, and `social`
     /// sections.
@@ -1813,10 +1828,19 @@ impl PolyforgeClient {
     /// The server responds with a `Content-Disposition: attachment` header
     /// so the result is suitable for file download.
     ///
+    /// ```no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = polyforge::PolyforgeClient::new("key")?;
+    /// let export = client.export_personal_data_typed().await?;
+    /// println!("Exported at {} (format {})", export.generated_at, export.format_version);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
     /// # Errors
     /// Returns [`PolyforgeError::Api`] if the request fails (e.g., insufficient
     /// scope).
-    pub async fn export_personal_data(&self) -> Result<PersonalDataExport> {
+    pub async fn export_personal_data_typed(&self) -> Result<PersonalDataExport> {
         self.get("/api/v1/me/export").await
     }
 
@@ -8702,8 +8726,33 @@ mod tests {
         assert!(export.meta.is_none());
     }
 
+    #[test]
+    fn test_personal_data_export_missing_generated_at_fails() {
+        let json = r#"{"formatVersion":"v"}"#;
+        let result: std::result::Result<PersonalDataExport, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_personal_data_export_missing_format_version_fails() {
+        let json = r#"{"generatedAt":"t"}"#;
+        let result: std::result::Result<PersonalDataExport, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_export_personal_data_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        assert!(client
+            .url("/api/v1/me/export")
+            .ends_with("/api/v1/me/export"));
+        assert!(client
+            .url("/api/v1/me/export?format=csv")
+            .ends_with("/api/v1/me/export?format=csv"));
+    }
+
     #[tokio::test]
-    async fn test_export_personal_data_json_returns_typed_struct() {
+    async fn test_export_personal_data_typed_returns_struct() {
         let response_json = r#"{
             "generatedAt": "2026-05-11T00:00:00Z",
             "formatVersion": "v1",
@@ -8716,7 +8765,7 @@ mod tests {
             "social": {}
         }"#;
         let request = capture_request(response_json, |client| async move {
-            let export = client.export_personal_data().await?;
+            let export = client.export_personal_data_typed().await?;
             assert_eq!(export.generated_at, "2026-05-11T00:00:00Z");
             assert_eq!(export.format_version, "v1");
             assert!(export.meta.is_some());
