@@ -3851,16 +3851,20 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..4 {
+            for i in 0..5 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
                 let request = String::from_utf8_lossy(&request[..n]);
                 assert!(
                     !request.to_ascii_lowercase().contains("authorization:"),
-                    "public profile request unexpectedly included Authorization header: {request}"
+                    "public endpoint request unexpectedly included Authorization header: {request}"
                 );
-                let body = "{\"data\":[]}";
+                let body = if i == 0 {
+                    "{\"version\":\"1.0\",\"actions\":[]}"
+                } else {
+                    "{\"data\":[]}"
+                };
                 let response = format!(
                     "HTTP/1.1 200 OK\r\n\
                      content-type: application/json\r\n\
@@ -3876,6 +3880,7 @@ mod tests {
         });
 
         let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client.get_actions().await.unwrap();
         client.get_user_performance("alice", "30d").await.unwrap();
         client
             .get_user_strategies("alice", None, None)
