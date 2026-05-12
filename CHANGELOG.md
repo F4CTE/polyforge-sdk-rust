@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **3 newer Rewards endpoints (POLA-3683)** — `get_market_rewards_detail(market_id)` (`GET /api/v1/rewards/market/{marketId}`, returns `Option<RewardsMarketDetail>` — `None` for 404), `get_user_sponsored_markets()` (`GET /api/v1/rewards/user/sponsored-markets`), and `get_rewards_sponsor_url(market_id)` (`GET /api/v1/rewards/sponsor-url/{marketId}`). New types: `RewardsMarketDetail`, `UserSponsoredMarkets`, `RewardsSponsorUrl`.
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
   - `list_sports_categories()` → typed `Vec<SportsCategory>`
   - `list_sports_markets(params)` → `PaginatedResponse<serde_json::Value>`
