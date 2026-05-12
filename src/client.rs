@@ -6899,6 +6899,79 @@ mod tests {
         assert_eq!(d.extra["unknown"], true);
     }
 
+    #[test]
+    fn test_reward_market_serialize_no_duplicate_keys() {
+        let json = r#"{"conditionId":"cond-1","rewardsDaily":"100","rewardsMaxSpread":"0.02","rewardsMinSize":"50","startDate":"2026-01-01","endDate":"2026-06-01","unknown":true}"#;
+        let rm: RewardMarket = serde_json::from_str(json).unwrap();
+        let out = serde_json::to_string(&rm).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let obj = parsed.as_object().unwrap();
+        // No duplicate keys: each key appears exactly once
+        assert_eq!(obj["conditionId"], "cond-1");
+        assert_eq!(obj["rewardsDaily"], "100");
+        assert_eq!(obj["rewardsMaxSpread"], "0.02");
+        assert_eq!(obj["rewardsMinSize"], "50");
+        assert_eq!(obj["startDate"], "2026-01-01");
+        assert_eq!(obj["endDate"], "2026-06-01");
+        assert_eq!(obj["unknown"], true);
+    }
+
+    #[test]
+    fn test_reward_market_detail_serialize_no_duplicate_keys() {
+        let json = r#"{"conditionId":"cond-1","rewardsDaily":"100","rewardsMaxSpread":"0.02","rewardsMinSize":"50","startDate":"2026-01-01","endDate":"2026-06-01","unknown":true}"#;
+        let d: RewardMarketDetail = serde_json::from_str(json).unwrap();
+        let out = serde_json::to_string(&d).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let obj = parsed.as_object().unwrap();
+        assert_eq!(obj["conditionId"], "cond-1");
+        assert_eq!(obj["rewardsDaily"], "100");
+        assert_eq!(obj["rewardsMaxSpread"], "0.02");
+        assert_eq!(obj["rewardsMinSize"], "50");
+        assert_eq!(obj["startDate"], "2026-01-01");
+        assert_eq!(obj["endDate"], "2026-06-01");
+        assert_eq!(obj["unknown"], true);
+    }
+
+    #[test]
+    fn test_reward_market_serialize_roundtrip() {
+        let json = r#"{"conditionId":"cond-1","rewardsDaily":"100","startDate":"2026-01-01","endDate":"2026-06-01","extraField":"survives"}"#;
+        let rm: RewardMarket = serde_json::from_str(json).unwrap();
+        // Round-trip: serialize → deserialize → typed fields + extra survive
+        let out = serde_json::to_string(&rm).unwrap();
+        let rm2: RewardMarket = serde_json::from_str(&out).unwrap();
+        assert_eq!(rm2.condition_id.as_deref(), Some("cond-1"));
+        assert_eq!(rm2.rewards_daily.as_deref(), Some("100"));
+        assert_eq!(rm2.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(rm2.end_date.as_deref(), Some("2026-06-01"));
+        assert_eq!(rm2.extra["extraField"], "survives");
+    }
+
+    #[test]
+    fn test_reward_market_detail_serialize_roundtrip() {
+        let json = r#"{"conditionId":"cond-1","rewardsDaily":"100","startDate":"2026-01-01","endDate":"2026-06-01","extraField":"survives"}"#;
+        let d: RewardMarketDetail = serde_json::from_str(json).unwrap();
+        let out = serde_json::to_string(&d).unwrap();
+        let d2: RewardMarketDetail = serde_json::from_str(&out).unwrap();
+        assert_eq!(d2.condition_id.as_deref(), Some("cond-1"));
+        assert_eq!(d2.rewards_daily.as_deref(), Some("100"));
+        assert_eq!(d2.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(d2.end_date.as_deref(), Some("2026-06-01"));
+        assert_eq!(d2.extra["extraField"], "survives");
+    }
+
+    #[test]
+    fn test_reward_market_serialize_empty_extra_no_spurious_keys() {
+        let json = r#"{"conditionId":"cond-1","rewardsDaily":"100"}"#;
+        let rm: RewardMarket = serde_json::from_str(json).unwrap();
+        let out = serde_json::to_string(&rm).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let obj = parsed.as_object().unwrap();
+        // Only the two typed fields, no extra blanks
+        assert_eq!(obj.len(), 2);
+        assert_eq!(obj["conditionId"], "cond-1");
+        assert_eq!(obj["rewardsDaily"], "100");
+    }
+
     // -----------------------------------------------------------------------
     // Cross-Venue Arbitrage — type tests
     // -----------------------------------------------------------------------

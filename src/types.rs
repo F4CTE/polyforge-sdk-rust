@@ -1935,23 +1935,60 @@ pub struct GetPolymarketActivityParams {
 // ---------------------------------------------------------------------------
 
 /// A market that distributes liquidity rewards.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone)]
 pub struct RewardMarket {
-    #[serde(default)]
     pub condition_id: Option<String>,
-    #[serde(default)]
     pub rewards_daily: Option<String>,
-    #[serde(default)]
     pub rewards_max_spread: Option<String>,
-    #[serde(default)]
     pub rewards_min_size: Option<String>,
-    #[serde(default)]
     pub start_date: Option<String>,
-    #[serde(default)]
     pub end_date: Option<String>,
-    #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+const REWARD_MARKET_PROMOTED: &[&str] = &[
+    "conditionId",
+    "rewardsDaily",
+    "rewardsMaxSpread",
+    "rewardsMinSize",
+    "startDate",
+    "endDate",
+];
+
+impl Serialize for RewardMarket {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(None)?;
+        if let Some(ref v) = self.condition_id {
+            map.serialize_entry("conditionId", v)?;
+        }
+        if let Some(ref v) = self.rewards_daily {
+            map.serialize_entry("rewardsDaily", v)?;
+        }
+        if let Some(ref v) = self.rewards_max_spread {
+            map.serialize_entry("rewardsMaxSpread", v)?;
+        }
+        if let Some(ref v) = self.rewards_min_size {
+            map.serialize_entry("rewardsMinSize", v)?;
+        }
+        if let Some(ref v) = self.start_date {
+            map.serialize_entry("startDate", v)?;
+        }
+        if let Some(ref v) = self.end_date {
+            map.serialize_entry("endDate", v)?;
+        }
+        if let Some(obj) = self.extra.as_object() {
+            for (k, v) in obj {
+                if !REWARD_MARKET_PROMOTED.contains(&k.as_str()) {
+                    map.serialize_entry(k, v)?;
+                }
+            }
+        }
+        map.end()
+    }
 }
 
 impl<'de> Deserialize<'de> for RewardMarket {
@@ -1967,14 +2004,7 @@ impl<'de> Deserialize<'de> for RewardMarket {
             ));
         }
 
-        for key in &[
-            "conditionId",
-            "rewardsDaily",
-            "rewardsMaxSpread",
-            "rewardsMinSize",
-            "startDate",
-            "endDate",
-        ] {
+        for key in REWARD_MARKET_PROMOTED {
             if let Some(v) = raw.get(key) {
                 if !v.is_string() && !v.is_null() {
                     return Err(serde::de::Error::custom(format!(
@@ -2000,23 +2030,51 @@ impl<'de> Deserialize<'de> for RewardMarket {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone)]
 pub struct RewardMarketDetail {
-    #[serde(default)]
     pub condition_id: Option<String>,
-    #[serde(default)]
     pub rewards_daily: Option<String>,
-    #[serde(default)]
     pub rewards_max_spread: Option<String>,
-    #[serde(default)]
     pub rewards_min_size: Option<String>,
-    #[serde(default)]
     pub start_date: Option<String>,
-    #[serde(default)]
     pub end_date: Option<String>,
-    #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+impl Serialize for RewardMarketDetail {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(None)?;
+        if let Some(ref v) = self.condition_id {
+            map.serialize_entry("conditionId", v)?;
+        }
+        if let Some(ref v) = self.rewards_daily {
+            map.serialize_entry("rewardsDaily", v)?;
+        }
+        if let Some(ref v) = self.rewards_max_spread {
+            map.serialize_entry("rewardsMaxSpread", v)?;
+        }
+        if let Some(ref v) = self.rewards_min_size {
+            map.serialize_entry("rewardsMinSize", v)?;
+        }
+        if let Some(ref v) = self.start_date {
+            map.serialize_entry("startDate", v)?;
+        }
+        if let Some(ref v) = self.end_date {
+            map.serialize_entry("endDate", v)?;
+        }
+        if let Some(obj) = self.extra.as_object() {
+            for (k, v) in obj {
+                if !REWARD_MARKET_PROMOTED.contains(&k.as_str()) {
+                    map.serialize_entry(k, v)?;
+                }
+            }
+        }
+        map.end()
+    }
 }
 
 impl<'de> Deserialize<'de> for RewardMarketDetail {
@@ -2032,14 +2090,7 @@ impl<'de> Deserialize<'de> for RewardMarketDetail {
             ));
         }
 
-        for key in &[
-            "conditionId",
-            "rewardsDaily",
-            "rewardsMaxSpread",
-            "rewardsMinSize",
-            "startDate",
-            "endDate",
-        ] {
+        for key in REWARD_MARKET_PROMOTED {
             if let Some(v) = raw.get(key) {
                 if !v.is_string() && !v.is_null() {
                     return Err(serde::de::Error::custom(format!(
