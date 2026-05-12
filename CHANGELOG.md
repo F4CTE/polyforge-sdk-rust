@@ -52,7 +52,6 @@
 
 ### Security
 - **Client-side financial parameter validation** — `place_order()`, `place_smart_order()`, and `provide_liquidity()` now reject NaN, Infinity, zero, and negative values for all financial parameters (size, price, total_size, spread, and optional price fields) before sending requests; prevents nonsensical orders from reaching the backend (closes #88)
-
 - **Default URL updated to production** — changed `DEFAULT_BASE_URL` from `https://localhost:3002` to `https://api.polyforge.app` to match Python and TypeScript SDKs; localhost with HTTPS causes immediate TLS failures for new users and encourages insecure workarounds (closes #87, regression of #71)
 - **SSE buffer overflow protection** — `StrategyEventStream` now enforces a 1 MiB (`MAX_SSE_BUFFER_SIZE`) cap on its internal line buffer; if the server sends data without a newline beyond this limit the stream returns `PolyforgeError::Api` with code `SSE_BUFFER_OVERFLOW` instead of growing unboundedly toward OOM (closes #52)
 - **Cargo.lock committed for reproducible builds** — removed `Cargo.lock` from `.gitignore` and committed the lockfile so that `cargo audit` can run, builds are reproducible, and supply-chain attacks are detectable via dependency pinning (closes #42)
@@ -78,9 +77,6 @@
 - **BREAKING** `handle_response()`: handle 204 No Content by returning `serde_json::Value::Null` instead of crashing on empty body — `delete_strategy()` now returns `Result<()>` (closes #70)
 
 ### Notes
-- The POLA-1844 public profile lookup methods (`get_user_performance`, `get_user_strategies`, `get_user_activity`, `get_user_profile_badges`) skip the `Authorization` header when the client is constructed with an empty API key, keeping documented public endpoints usable without credentials while preserving authenticated behavior when a key is configured. Added multi-chunk coverage for the 1-MiB error body
-  cap and documented that exactly 1 MiB is allowed while the first byte over the
-  limit is rejected.
 - Cross-SDK naming aliases: `get_notifications()` is now a deprecated alias for
   `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the
   canonical `MyReferralsResponse` type.
@@ -94,7 +90,7 @@
   - `get_user_profile_badges(username)` → `Vec<UserProfileBadge>`.
   - `get_my_following(page, limit)` → `PaginatedResponse<FollowedUser>` (authenticated users only).
 
-  All four public-profile endpoints surface `PolyforgeError::Api { status: 404, code: "NOT_FOUND", .. }` when the username is unknown. The `username` path segment is URL-encoded via the existing `urlencoding::encode` helper.
+  All four public-profile endpoints surface `PolyforgeError::Api { status: 404, code: "NOT_FOUND", .. }` when the username is unknown. The `username` path segment is URL-encoded via the existing `urlencoding::encode` helper. These methods skip the `Authorization` header when the client is constructed with an empty API key, keeping documented public endpoints usable without credentials while preserving authenticated behavior when a key is configured.
 
   New types: `UserPerformancePoint`, `UserStrategySummary`, `UserActivityEntry`, `UserProfileBadge`, `FollowedUser`, plus an internal `UserDataEnvelope<T>` to unwrap the `{ "data": [...] }` envelope.
 - **Cross-venue arb execution / positions / risk endpoints (POLA-1852)** — 7 trading-impact-bearing methods that complete the `/api/v1/arbitrage/*` surface and bring the Rust SDK to parity with the Python SDK (POLA-1851):
