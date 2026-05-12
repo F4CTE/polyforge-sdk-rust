@@ -17,6 +17,7 @@
 ### Added
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
 - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
+- **`Venue` enum** — typed `Venue` enum with `Polymarket`, `Kalshi`, `PolymarketUs`, and `Unknown` variants, replacing `Option<String>` on `ArbExecutionLeg.venue`, `ArbPosition.buy_venue`, and `ArbPosition.sell_venue`. New `polymarket_us: f64` field on `ArbNetExposure`. Uses `#[serde(rename_all = "SCREAMING_SNAKE_CASE")]` for wire compatibility and `#[serde(other)]` for forward-compatible deserialization of unknown venue strings. Closes feature parity gap with `sdk-ts`. (closes #212)
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
   - `list_sports_categories()` → typed `Vec<SportsCategory>`
   - `list_sports_markets(params)` → `PaginatedResponse<serde_json::Value>`
