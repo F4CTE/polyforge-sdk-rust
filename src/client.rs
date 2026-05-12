@@ -1147,7 +1147,7 @@ impl PolyforgeClient {
     /// mirrors sdk-ts's `getActions()` / sdk-python's `get_actions()` for
     /// `GET /api/v1/actions`.
     pub async fn get_actions(&self) -> Result<ActionsSchema> {
-        self.get("/api/v1/actions").await
+        self.get_with_optional_auth("/api/v1/actions").await
     }
 
     // -----------------------------------------------------------------------
@@ -1311,13 +1311,13 @@ impl PolyforgeClient {
 
     /// Get the score for a specific user.
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
-        self.get(&format!("/api/v1/scores/{}", encode(user_id)))
+        self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
     /// Get the badges awarded to a specific user.
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
-        self.get(&format!("/api/v1/scores/{}/badges", encode(user_id)))
+        self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
     }
 
@@ -2734,17 +2734,16 @@ impl PolyforgeClient {
 
     /// List the authenticated user's sponsored rewards markets.
     pub async fn get_user_sponsored_markets(&self) -> Result<UserSponsoredMarkets> {
-        self.get("/api/v1/rewards/user/sponsored-markets")
-            .await
+        self.get("/api/v1/rewards/user/sponsored-markets").await
     }
 
     /// Get the Polymarket sponsor page URL for a specific market.
-    pub async fn get_rewards_sponsor_url(
-        &self,
-        market_id: &str,
-    ) -> Result<RewardsSponsorUrl> {
-        self.get(&format!("/api/v1/rewards/sponsor-url/{}", encode(market_id)))
-            .await
+    pub async fn get_rewards_sponsor_url(&self, market_id: &str) -> Result<RewardsSponsorUrl> {
+        self.get(&format!(
+            "/api/v1/rewards/sponsor-url/{}",
+            encode(market_id)
+        ))
+        .await
     }
 
     // -----------------------------------------------------------------------
@@ -3173,7 +3172,7 @@ impl PolyforgeClient {
     /// Get a public user profile by username.
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
-        self.get(&path).await
+        self.get_with_optional_auth(&path).await
     }
 
     /// Follow a user by username.

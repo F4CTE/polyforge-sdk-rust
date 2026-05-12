@@ -3493,6 +3493,7 @@ pub struct ActionParameter {
     pub name: String,
     #[serde(rename = "type")]
     pub param_type: String,
+    #[serde(default)]
     pub required: bool,
     #[serde(rename = "in", default)]
     pub param_in: Option<String>,
