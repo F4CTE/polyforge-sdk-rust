@@ -7807,7 +7807,7 @@ mod tests {
     fn test_arb_risk_dashboard_deserializes() {
         let json = r#"{
             "openPositions":3,"pendingPositions":1,"totalDeployed":1500.0,
-            "netExposure":{"polymarket":750.0,"kalshi":-750.0},
+            "netExposure":{"polymarket":750.0,"kalshi":-750.0,"polymarketUs":-500.0},
             "totalRealizedPnl":12.5,"totalUnrealizedPnl":-3.25,"avgSpreadPct":0.05,
             "positionsByStatus":{"OPEN":3,"PENDING":1}
         }"#;
@@ -7816,10 +7816,29 @@ mod tests {
         assert_eq!(d.pending_positions, 1);
         assert_eq!(d.net_exposure.polymarket, 750.0);
         assert_eq!(d.net_exposure.kalshi, -750.0);
+        assert_eq!(d.net_exposure.polymarket_us, -500.0);
         assert_eq!(
             d.positions_by_status.get(&ArbPositionStatus::Open),
             Some(&3)
         );
+    }
+
+    #[test]
+    fn test_arb_net_exposure_deserializes_polymarket_us() {
+        let json = r#"{"polymarket":100.0,"kalshi":-200.0,"polymarketUs":-50.0}"#;
+        let e: ArbNetExposure = serde_json::from_str(json).unwrap();
+        assert_eq!(e.polymarket, 100.0);
+        assert_eq!(e.kalshi, -200.0);
+        assert_eq!(e.polymarket_us, -50.0);
+    }
+
+    #[test]
+    fn test_arb_net_exposure_polymarket_us_defaults_to_zero() {
+        let json = r#"{"polymarket":300.0}"#;
+        let e: ArbNetExposure = serde_json::from_str(json).unwrap();
+        assert_eq!(e.polymarket, 300.0);
+        assert_eq!(e.kalshi, 0.0);
+        assert_eq!(e.polymarket_us, 0.0);
     }
 
     #[test]

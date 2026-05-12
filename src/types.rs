@@ -2743,6 +2743,8 @@ pub struct ArbNetExposure {
     pub polymarket: f64,
     #[serde(default)]
     pub kalshi: f64,
+    #[serde(default)]
+    pub polymarket_us: f64,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
