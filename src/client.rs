@@ -5454,14 +5454,25 @@ mod tests {
 
     #[test]
     fn test_redeem_position_params_position_id_omitted_when_none() {
-        // #213: positionId should be omitted when None
+        // #213: positionId should be omitted when None — marketId-only redemption
+        let params = RedeemPositionParams {
+            position_id: None,
+            market_id: Some("mkt-456".into()),
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert!(json.get("positionId").is_none());
+        assert_eq!(json["marketId"], "mkt-456");
+    }
+
+    #[test]
+    fn test_redeem_position_params_neither_field_is_empty_body() {
+        // #213: omitting both fields produces an empty JSON object
         let params = RedeemPositionParams {
             position_id: None,
             market_id: None,
         };
         let json = serde_json::to_value(&params).unwrap();
-        assert!(json.get("positionId").is_none());
-        assert!(json.get("marketId").is_none());
+        assert!(json.as_object().unwrap().is_empty());
     }
 
     #[test]
