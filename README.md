@@ -131,6 +131,46 @@ liquidity, position, smart-order, and conditional-order mutations.
 
 ### Arbitrage
 
+Cross-venue arbitrage between Polymarket and Kalshi.  Key points:
+
+- **Sweep-close only** — arbitrage positions are always closed in full; partial closes are not supported.
+- **Idempotency-Key required** — `execute_arbitrage` and `close_arbitrage_position` both require a caller-supplied idempotency key (8–128 characters).  The SDK sends it as the `Idempotency-Key` header and the backend enforces at-most-once semantics per key.
+- **Rate limit** — the backend enforces 5 req/min/user on execute and close; exceeding it returns HTTP 429.
+- **UUID match_id** — `match_id` must be a valid RFC 4122 UUID; non-UUID input is rejected with HTTP 400.
+
+```rust
+use polyforge::{PolyforgeClient, ExecuteArbitrageParams};
+use uuid::Uuid;
+
+#[tokio::main]
+async fn main() -> polyforge::Result<()> {
+    let client = PolyforgeClient::new("your-api-key");
+
+    // Execute an arbitrage trade
+    let idempotency_key = Uuid::new_v4().to_string();
+    let result = client
+        .execute_arbitrage(
+            &ExecuteArbitrageParams {
+                match_id: "550e8400-e29b-41d4-a716-446655440000".into(),
+                size: 100,
+                max_slippage_pct: Some(0.5),
+            },
+            &idempotency_key,
+        )
+        .await?;
+    println!("Opened position: {}", result.arb_position_id);
+
+    // Later: sweep-close the position
+    let close_key = Uuid::new_v4().to_string();
+    let close_result = client
+        .close_arbitrage_position(&result.arb_position_id, &close_key)
+        .await?;
+    println!("Close status: {}", close_result.status);
+
+    Ok(())
+}
+```
+
 | Method | Description |
 |--------|-------------|
 | `list_arbitrage_opportunities(min_spread)` | List cross-venue Polymarket/Kalshi opportunities |
@@ -138,7 +178,7 @@ liquidity, position, smart-order, and conditional-order mutations.
 | `execute_arbitrage(params, idempotency_key)` | Execute a real cross-venue arbitrage trade; sends `Idempotency-Key` and validates UUID `match_id`, integer `size` 1..=10000, and optional slippage 0..=5 |
 | `list_arbitrage_positions(status, limit, offset)` | List arbitrage positions with typed `ArbPositionStatus` and `limit` 1..=100 |
 | `get_arbitrage_position(position_id)` | Fetch one arbitrage position |
-| `close_arbitrage_position(position_id, idempotency_key)` | Close an open arbitrage position with real reverse orders and `Idempotency-Key` |
+| `close_arbitrage_position(position_id, idempotency_key)` | Sweep-close an open arbitrage position with real reverse orders and `Idempotency-Key` |
 | `get_arbitrage_risk_dashboard()` | Get aggregate arbitrage exposure and P&L |
 | `get_arbitrage_settlement_risks()` | List settlement-date and resolution-criteria risks |
 | `refresh_arbitrage_pnl()` | Recompute unrealized arbitrage P&L |
