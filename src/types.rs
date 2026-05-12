@@ -3916,12 +3916,19 @@ pub struct ComboLookupParams {
 // ---------------------------------------------------------------------------
 
 /// A parameter descriptor within an action definition.
+///
+/// Best-effort schema mirror of the platform action catalog (`GET /api/v1/actions`).
+/// Fields absent from the JSON payload (including `required`) default to their type
+/// zero-value via `#[serde(default)]` so that partial action schemas deserialize
+/// without error.  See `ActionDefinition` for the container.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionParameter {
     pub name: String,
     #[serde(rename = "type")]
     pub param_type: String,
+    /// Whether the parameter is required. Defaults to `false` when the key is
+    /// absent from the JSON payload (`#[serde(default)]`).
     #[serde(default)]
     pub required: bool,
     #[serde(rename = "in", default)]
