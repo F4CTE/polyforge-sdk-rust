@@ -47,6 +47,9 @@
   - `get_health_authenticated()` → `GET /api/v1/status` — returns `SystemHealthAuthenticated` with full operational metrics (DB, Redis, queue depth, services) alongside the public health fields. Always sends `Authorization: Bearer <key>`.
    - New types: `SystemHealthPublic`, `SystemHealthAuthenticated`. Both use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility with backend shape evolution. 4 new integration tests verify URL paths, auth headers, no-key dispatch, and response deserialization through the full request pipeline. All 378 unit tests and 5 doc tests pass, clippy is clean.
 
+### Changed
+- **Auth behavior for public endpoints** — `get_user_score()`, `get_user_badges()`, `get_user_profile()`, and `get_actions()` now use `get_with_optional_auth()`. When the client is constructed with an empty API key these methods skip the `Authorization` header, matching the platform's public-route contract. Previously these methods always attached `Authorization: Bearer <key>`, causing 401 errors when no key was available.
+
 ### Security
 - **Client-side financial parameter validation** — `place_order()`, `place_smart_order()`, and `provide_liquidity()` now reject NaN, Infinity, zero, and negative values for all financial parameters (size, price, total_size, spread, and optional price fields) before sending requests; prevents nonsensical orders from reaching the backend (closes #88)
 
@@ -72,6 +75,7 @@
   compatibility, but ordinary public API keys still receive `403 Forbidden`.
 - **NotificationSettings / UpdateNotificationSettingsParams** — rewrite both structs to mirror the platform's `UpdateNotificationsDto`. Removes fictional fields (`pushEnabled`, `orderFills`, `strategyErrors`, `whaleAlerts`, `marketResolutions`, `dailySummary`) that the platform rejected with 400 under `forbidNonWhitelisted: true`, and adds the real DTO fields (`telegramEnabled`, `discordEnabled`, `onOrderFilled`, `onStrategyError`, `onBacktestComplete`, `onDailyLossLimit`, `onMarketResolved`, `onSomeoneForked`, `onSomeoneFollowed`, `onSomeoneLiked`, `onSomeoneCommented`). The `extra` flatten bucket is preserved on the read struct so server-only fields (`userId`, `updatedAt`, `eventPrefs`, `emailDigest`, `notificationFreq`, `minFillNotifyUsdc`, `onTicketReply`) round-trip. Added a wire-format key-set test. (closes #184)
 - **BREAKING** `PlaceSmartOrderParams`: revert `interval_seconds`/`"intervalSeconds"` back to `interval_minutes`/`"intervalMinutes"` — the #66 fix was based on incorrect platform contract info; platform DTO uses `intervalMinutes` (closes #80)
+- **BREAKING** `handle_response()`: handle 204 No Content by returning `serde_json::Value::Null` instead of crashing on empty body — `delete_strategy()` now returns `Result<()>` (closes #70)
 
 ### Notes
 - The POLA-1844 public profile lookup methods (`get_user_performance`, `get_user_strategies`, `get_user_activity`, `get_user_profile_badges`) skip the `Authorization` header when the client is constructed with an empty API key, keeping documented public endpoints usable without credentials while preserving authenticated behavior when a key is configured. Added multi-chunk coverage for the 1-MiB error body
