@@ -49,6 +49,11 @@
 
 ### Changed
 - **Auth behavior for public endpoints** — `get_user_score()`, `get_user_badges()`, `get_user_profile()`, and `get_actions()` now use `get_with_optional_auth()`. When the client is constructed with an empty API key these methods skip the `Authorization` header, matching the platform's public-route contract. Previously these methods always attached `Authorization: Bearer <key>`, causing 401 errors when no key was available.
+- **Venue preferences (POLA-3330)** — two new methods on `PolyforgeClient` for managing cross-venue platform preferences, bringing the Rust SDK to parity with `polyforge-sdk-ts` (`getMyPreferences`) and `polyforge-sdk-python` (`get_venue_preferences`):
+  - `get_my_preferences()` → `GET /api/v1/users/me/venue-preferences` — returns `UserPreferences` with `default_venue`, `enabled_venues`, and `single_platform_mode`.
+  - `update_my_preferences(&UpdateUserPreferencesParams)` → `PATCH /api/v1/users/me/venue-preferences` — partial update with `skip_serializing_if = "Option::is_none"` so only supplied fields are changed (JSON Merge Patch semantics).
+  - New types: `UserPreferences` (all fields `Option`-wrapped with `#[serde(default)]` for forward-compatibility), `UpdateUserPreferencesParams` (all three fields optional with `skip_serializing_if`).
+  - 3 unit tests covering deserialization, empty defaults, and partial-update serialization.
 
 ### Security
 - **Client-side financial parameter validation** — `place_order()`, `place_smart_order()`, and `provide_liquidity()` now reject NaN, Infinity, zero, and negative values for all financial parameters (size, price, total_size, spread, and optional price fields) before sending requests; prevents nonsensical orders from reaching the backend (closes #88)
