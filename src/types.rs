@@ -1960,13 +1960,34 @@ impl<'de> Deserialize<'de> for RewardMarket {
         D: serde::Deserializer<'de>,
     {
         let raw: serde_json::Value = serde_json::Value::deserialize(deserializer)?;
-        let extra = raw.clone();
-        let obj = raw.as_object();
+
+        if !raw.is_object() {
+            return Err(serde::de::Error::custom(
+                "expected a JSON object for RewardMarket",
+            ));
+        }
+
+        for key in &[
+            "conditionId",
+            "rewardsDaily",
+            "rewardsMaxSpread",
+            "rewardsMinSize",
+            "startDate",
+            "endDate",
+        ] {
+            if let Some(v) = raw.get(key) {
+                if !v.is_string() && !v.is_null() {
+                    return Err(serde::de::Error::custom(format!(
+                        "expected string for field `{key}` in RewardMarket"
+                    )));
+                }
+            }
+        }
+
         let get_str = |key: &str| -> Option<String> {
-            obj.and_then(|o| o.get(key))
-                .and_then(|v| v.as_str())
-                .map(String::from)
+            raw.get(key).and_then(|v| v.as_str()).map(String::from)
         };
+
         Ok(RewardMarket {
             condition_id: get_str("conditionId"),
             rewards_daily: get_str("rewardsDaily"),
@@ -1974,7 +1995,7 @@ impl<'de> Deserialize<'de> for RewardMarket {
             rewards_min_size: get_str("rewardsMinSize"),
             start_date: get_str("startDate"),
             end_date: get_str("endDate"),
-            extra,
+            extra: raw,
         })
     }
 }
@@ -2004,13 +2025,34 @@ impl<'de> Deserialize<'de> for RewardMarketDetail {
         D: serde::Deserializer<'de>,
     {
         let raw: serde_json::Value = serde_json::Value::deserialize(deserializer)?;
-        let extra = raw.clone();
-        let obj = raw.as_object();
+
+        if !raw.is_object() {
+            return Err(serde::de::Error::custom(
+                "expected a JSON object for RewardMarketDetail",
+            ));
+        }
+
+        for key in &[
+            "conditionId",
+            "rewardsDaily",
+            "rewardsMaxSpread",
+            "rewardsMinSize",
+            "startDate",
+            "endDate",
+        ] {
+            if let Some(v) = raw.get(key) {
+                if !v.is_string() && !v.is_null() {
+                    return Err(serde::de::Error::custom(format!(
+                        "expected string for field `{key}` in RewardMarketDetail"
+                    )));
+                }
+            }
+        }
+
         let get_str = |key: &str| -> Option<String> {
-            obj.and_then(|o| o.get(key))
-                .and_then(|v| v.as_str())
-                .map(String::from)
+            raw.get(key).and_then(|v| v.as_str()).map(String::from)
         };
+
         Ok(RewardMarketDetail {
             condition_id: get_str("conditionId"),
             rewards_daily: get_str("rewardsDaily"),
@@ -2018,7 +2060,7 @@ impl<'de> Deserialize<'de> for RewardMarketDetail {
             rewards_min_size: get_str("rewardsMinSize"),
             start_date: get_str("startDate"),
             end_date: get_str("endDate"),
-            extra,
+            extra: raw,
         })
     }
 }
