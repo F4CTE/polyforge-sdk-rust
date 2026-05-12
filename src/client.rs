@@ -6719,6 +6719,32 @@ mod tests {
     }
 
     #[test]
+    fn test_venue_enum_deserializes_all_variants() {
+        // POLA-3892: All 3 Venue variants must deserialize
+        assert_eq!(
+            serde_json::from_str::<Venue>(r#""POLYMARKET""#).unwrap(),
+            Venue::Polymarket
+        );
+        assert_eq!(
+            serde_json::from_str::<Venue>(r#""KALSHI""#).unwrap(),
+            Venue::Kalshi
+        );
+        assert_eq!(
+            serde_json::from_str::<Venue>(r#""POLYMARKET_US""#).unwrap(),
+            Venue::PolymarketUs
+        );
+        // round-trip serialize
+        for (v, expected) in [
+            (Venue::Polymarket, "POLYMARKET"),
+            (Venue::Kalshi, "KALSHI"),
+            (Venue::PolymarketUs, "POLYMARKET_US"),
+        ] {
+            assert_eq!(serde_json::to_value(v).unwrap(), serde_json::Value::String(expected.to_string()));
+            assert_eq!(v.as_str(), expected);
+        }
+    }
+
+    #[test]
     fn test_cross_venue_comparison_deserializes() {
         let json = r#"{"matchId":"match-1","polymarketPrice":"0.6","kalshiPrice":"0.55","spread":"0.05","arbitragePct":"8.3"}"#;
         let cmp: CrossVenueComparison = serde_json::from_str(json).unwrap();
@@ -7174,7 +7200,7 @@ mod tests {
         assert_eq!(r.entry_spread_pct, Some(0.07));
         assert_eq!(r.status, Some(ArbPositionStatus::Pending));
         let buy = r.buy_leg.as_ref().unwrap();
-        assert_eq!(buy.venue.as_deref(), Some("POLYMARKET"));
+        assert_eq!(buy.venue, Some(Venue::Polymarket));
         assert_eq!(buy.token_id.as_deref(), Some("tok-y"));
         assert_eq!(buy.price.as_deref(), Some("0.550000000000000000"));
     }
@@ -7233,7 +7259,7 @@ mod tests {
     fn test_arb_risk_dashboard_deserializes() {
         let json = r#"{
             "openPositions":3,"pendingPositions":1,"totalDeployed":1500.0,
-            "netExposure":{"polymarket":750.0,"kalshi":-750.0},
+            "netExposure":{"polymarket":750.0,"kalshi":-750.0,"polymarketUs":150.0},
             "totalRealizedPnl":12.5,"totalUnrealizedPnl":-3.25,"avgSpreadPct":0.05,
             "positionsByStatus":{"OPEN":3,"PENDING":1}
         }"#;
@@ -7242,6 +7268,7 @@ mod tests {
         assert_eq!(d.pending_positions, 1);
         assert_eq!(d.net_exposure.polymarket, 750.0);
         assert_eq!(d.net_exposure.kalshi, -750.0);
+        assert_eq!(d.net_exposure.polymarket_us, 150.0);
         assert_eq!(
             d.positions_by_status.get(&ArbPositionStatus::Open),
             Some(&3)

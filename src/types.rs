@@ -2092,6 +2092,25 @@ pub struct StrategyEvent {
 // Cross-Venue Arbitrage (POLA-782)
 // ---------------------------------------------------------------------------
 
+/// A prediction-market venue (exchange).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Venue {
+    Polymarket,
+    Kalshi,
+    PolymarketUs,
+}
+
+impl Venue {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Polymarket => "POLYMARKET",
+            Self::Kalshi => "KALSHI",
+            Self::PolymarketUs => "POLYMARKET_US",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CrossVenueArbitrageOpportunity {
@@ -2315,7 +2334,7 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct ArbExecutionLeg {
     #[serde(default)]
-    pub venue: Option<String>,
+    pub venue: Option<Venue>,
     #[serde(default)]
     pub intent_id: Option<String>,
     #[serde(default)]
@@ -2360,7 +2379,7 @@ pub struct ArbPosition {
     pub status: Option<ArbPositionStatus>,
 
     #[serde(default)]
-    pub buy_venue: Option<String>,
+    pub buy_venue: Option<Venue>,
     #[serde(default)]
     pub buy_order_id: Option<String>,
     #[serde(default)]
@@ -2375,7 +2394,7 @@ pub struct ArbPosition {
     pub buy_fill_size: Option<String>,
 
     #[serde(default)]
-    pub sell_venue: Option<String>,
+    pub sell_venue: Option<Venue>,
     #[serde(default)]
     pub sell_order_id: Option<String>,
     #[serde(default)]
@@ -2443,6 +2462,8 @@ pub struct ArbNetExposure {
     pub polymarket: f64,
     #[serde(default)]
     pub kalshi: f64,
+    #[serde(default)]
+    pub polymarket_us: f64,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
