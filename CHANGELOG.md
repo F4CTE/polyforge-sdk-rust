@@ -46,6 +46,11 @@
   - `get_health()` → `GET /health` — returns `SystemHealthPublic` with public status fields (`status`, `service?`, `version?`, `uptime?`). Uses `get_with_optional_auth()` so the endpoint works without an API key while still returning richer data when authenticated.
   - `get_health_authenticated()` → `GET /api/v1/status` — returns `SystemHealthAuthenticated` with full operational metrics (DB, Redis, queue depth, services) alongside the public health fields. Always sends `Authorization: Bearer <key>`.
    - New types: `SystemHealthPublic`, `SystemHealthAuthenticated`. Both use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility with backend shape evolution. 4 new integration tests verify URL paths, auth headers, no-key dispatch, and response deserialization through the full request pipeline. All 378 unit tests and 5 doc tests pass, clippy is clean.
+- **3 newer Rewards endpoints (POLA-3683)** — 3 new `PolyforgeClient` methods closing the gap to the platform's `/api/v1/rewards/*` surface and bringing parity with `polyforge-sdk-ts`:
+  - `get_market_rewards_detail(market_id)` → `GET /api/v1/rewards/market/{marketId}` → `Option<RewardsMarketDetail>` — returns CLOB liquidity-reward configuration for a platform market (returns `None` on 404 when the market has no active rewards).
+  - `get_user_sponsored_markets()` → `GET /api/v1/rewards/user/sponsored-markets` → `UserSponsoredMarkets` — list the authenticated user's sponsored-rewards markets.
+  - `get_rewards_sponsor_url(market_id)` → `GET /api/v1/rewards/sponsor-url/{marketId}` → `RewardsSponsorUrl` — get the Polymarket sponsor page URL for a specific market.
+  - New types: `RewardsMarketDetail`, `UserSponsoredMarkets`, `RewardsSponsorUrl`. All use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility.
 
 ### Changed
 - **Auth behavior for public endpoints** — `get_user_score()`, `get_user_badges()`, `get_user_profile()`, and `get_actions()` now use `get_with_optional_auth()`. When the client is constructed with an empty API key these methods skip the `Authorization` header, matching the platform's public-route contract. Previously these methods always attached `Authorization: Bearer <key>`, causing 401 errors when no key was available.
