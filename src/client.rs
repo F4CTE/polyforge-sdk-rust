@@ -1433,13 +1433,13 @@ impl PolyforgeClient {
 
     /// Get the score for a specific user. Requires authentication.
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
-        self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
+        self.get(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
     /// Get the badges awarded to a specific user. Requires authentication.
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
-        self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
+        self.get(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
     }
 
@@ -3368,7 +3368,7 @@ impl PolyforgeClient {
     /// Get a user profile by username. Requires authentication.
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
-        self.get_with_optional_auth(&path).await
+        self.get(&path).await
     }
 
     /// Follow a user by username.
@@ -4046,7 +4046,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..10 {
+            for _ in 0..5 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
@@ -4057,8 +4057,6 @@ mod tests {
                 );
                 let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
                     r#"[]"#
-                } else if request.contains("/api/v1/scores/") {
-                    r#"{"overall":0.5,"rank":1,"profitability":0.6,"consistency":0.7,"riskManagement":0.8,"volume":0.9,"percentile":0.95}"#
                 } else if request.contains("/api/v1/profile/") {
                     r#"{"id":"user-1","username":"alice","displayName":"Alice","bio":"hello","avatarUrl":"https://example.com/avatar.png","joinedAt":"2024-01-01T00:00:00Z","followerCount":0,"followingCount":0,"strategyCount":0,"tradeCount":0,"score":null,"stats":{"volume":"100","pnl":"50","trades":10,"winRate":"0.75","bestMarket":"market-1","favoriteCategory":"sports"}}"#
                 } else if request.contains("/api/v1/actions") {
@@ -4081,8 +4079,6 @@ mod tests {
         });
 
         let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
-        client.get_user_score("alice").await.unwrap();
-        client.get_user_badges("alice").await.unwrap();
         client.get_user_performance("alice", "30d").await.unwrap();
         client
             .get_user_strategies("alice", None, None)
@@ -4090,9 +4086,6 @@ mod tests {
             .unwrap();
         client.get_user_activity("alice", None).await.unwrap();
         client.get_user_profile_badges("alice").await.unwrap();
-        client.get_user_score("user-123").await.unwrap();
-        client.get_user_badges("user-123").await.unwrap();
-        client.get_user_profile("alice").await.unwrap();
         client.get_actions().await.unwrap();
 
         server.await.unwrap();
