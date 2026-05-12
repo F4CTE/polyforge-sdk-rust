@@ -144,7 +144,7 @@ use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> polyforge::Result<()> {
-    let client = PolyforgeClient::new("your-api-key");
+    let client = PolyforgeClient::new("your-api-key")?;
 
     // Execute an arbitrage trade
     let idempotency_key = Uuid::new_v4().to_string();
@@ -158,14 +158,15 @@ async fn main() -> polyforge::Result<()> {
             &idempotency_key,
         )
         .await?;
-    println!("Opened position: {}", result.arb_position_id);
+    println!("Opened position: {:?}", result.arb_position_id);
 
     // Later: sweep-close the position
     let close_key = Uuid::new_v4().to_string();
+    let pos_id = result.arb_position_id.as_deref().unwrap_or_default();
     let close_result = client
-        .close_arbitrage_position(&result.arb_position_id, &close_key)
+        .close_arbitrage_position(pos_id, &close_key)
         .await?;
-    println!("Close status: {}", close_result.status);
+    println!("Close status: {:?}", close_result.status);
 
     Ok(())
 }
