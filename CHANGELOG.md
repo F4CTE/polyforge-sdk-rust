@@ -10,6 +10,7 @@
   - Sweep semantics documented verbatim from the backend: GTC orders at 0.001 SELL / 0.999 BUY behave as a market-equivalent sweep, not a resting limit order. Slippage is bounded only by venue depth at call time.
   - README arbitrage section expanded with a complete execute-and-close code example showing `Idempotency-Key` usage.
   - `idempotency_key_header()` validation tightened from non-empty to 8–128 characters.
+- **Auth behavior for public endpoints** — `get_user_score()`, `get_user_badges()`, `get_user_profile()`, and `get_actions()` now use `get_with_optional_auth()`. When the client is constructed with an empty API key these methods skip the `Authorization` header, matching the platform's public-route contract. Previously these methods always attached `Authorization: Bearer <key>`, causing 401 errors when no key was available.
 
 ### Added
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
@@ -62,9 +63,11 @@
   - `update_my_preferences(&UpdateUserPreferencesParams)` → `PATCH /api/v1/users/me/venue-preferences` — partial update with `skip_serializing_if = "Option::is_none"` so only supplied fields are changed (JSON Merge Patch semantics).
   - New types: `UserPreferences` (all fields `Option`-wrapped with `#[serde(default)]` for forward-compatibility), `UpdateUserPreferencesParams` (all three fields optional with `skip_serializing_if`).
   - 3 unit tests covering deserialization, empty defaults, and partial-update serialization.
-
-### Changed
-- **Auth behavior for public endpoints** — `get_user_score()`, `get_user_badges()`, `get_user_profile()`, and `get_actions()` now use `get_with_optional_auth()`. When the client is constructed with an empty API key these methods skip the `Authorization` header, matching the platform's public-route contract. Previously these methods always attached `Authorization: Bearer <key>`, causing 401 errors when no key was available.
+- **3 newer Rewards endpoints (POLA-3683)** — 3 new `PolyforgeClient` methods closing the gap to the platform's `/api/v1/rewards/*` surface and bringing parity with `polyforge-sdk-ts`:
+  - `get_market_rewards_detail(market_id)` → `GET /api/v1/rewards/market/{marketId}` → `Option<RewardsMarketDetail>` — returns CLOB liquidity-reward configuration for a platform market (returns `None` on 404 when the market has no active rewards).
+  - `get_user_sponsored_markets()` → `GET /api/v1/rewards/user/sponsored-markets` → `UserSponsoredMarkets` — list the authenticated user's sponsored-rewards markets.
+  - `get_rewards_sponsor_url(market_id)` → `GET /api/v1/rewards/sponsor-url/{marketId}` → `RewardsSponsorUrl` — get the Polymarket sponsor page URL for a specific market.
+  - New types: `RewardsMarketDetail`, `UserSponsoredMarkets`, `RewardsSponsorUrl`. All use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility.
 
 ### Security
 - **Client-side financial parameter validation** — `place_order()`, `place_smart_order()`, and `provide_liquidity()` now reject NaN, Infinity, zero, and negative values for all financial parameters (size, price, total_size, spread, and optional price fields) before sending requests; prevents nonsensical orders from reaching the backend (closes #88)
@@ -80,18 +83,6 @@
 - **Disable automatic redirects** — set `redirect(Policy::none())` on the HTTP client to prevent the Bearer token from being forwarded to third-party hosts via 3xx redirects (closes #25)
 - **Webhook secret skip_serializing** — added `#[serde(skip_serializing)]` to `Webhook.secret` field to prevent the HMAC signing secret from leaking via `serde_json::to_string()` or any serialization path; regression of #8 where only `Debug` was fixed but `Serialize` was missed (closes #43)
 
-- **3 newer Rewards endpoints (POLA-3683)** — 3 new `PolyforgeClient` methods closing the gap to the platform's `/api/v1/rewards/*` surface and bringing parity with `polyforge-sdk-ts`:
-  - `get_market_rewards_detail(market_id)` → `GET /api/v1/rewards/market/{marketId}` → `Option<RewardsMarketDetail>` — returns CLOB liquidity-reward configuration for a platform market (returns `None` on 404 when the market has no active rewards).
-  - `get_user_sponsored_markets()` → `GET /api/v1/rewards/user/sponsored-markets` → `UserSponsoredMarkets` — list the authenticated user's sponsored-rewards markets.
-  - `get_rewards_sponsor_url(market_id)` → `GET /api/v1/rewards/sponsor-url/{marketId}` → `RewardsSponsorUrl` — get the Polymarket sponsor page URL for a specific market.
-  - New types: `RewardsMarketDetail`, `UserSponsoredMarkets`, `RewardsSponsorUrl`. All use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility.
-
-- **GDPR personal-data export (POLA-215)** — two new methods on `PolyforgeClient` for `GET /api/v1/me/export`:
-  - `export_personal_data()` — returns typed `PersonalDataExport` with structured JSON payload (generated timestamp, format version, optional `_meta` with `collections_truncated` / `max_records_per_collection`, and forward-compatible `account` / `settings` / `security` / `trading` / `communications` / `social` sections plus `#[serde(flatten)] extra`).
-  - `export_personal_data_csv()` — returns the raw CSV text (`?format=csv`).
-  - Internal `MAX_GDPR_EXPORT_SIZE` constant of 500 MiB prevents silent truncation of large GDPR responses — the standard 1 MiB error-body cap is relaxed for this endpoint only.
-  - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
-  - 4 new unit tests cover `PersonalDataExport` JSON deserialization (full, minimal, forward-compat extra fields) and end-to-end URL-path verification for both JSON and CSV formats. (closes #215)
 
 ### Fixed
 - **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, liquidity, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
