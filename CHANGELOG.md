@@ -77,6 +77,7 @@
   `sync_arbitrage_matches` from the public Rustdoc surface and deprecate them
   with an explicit admin-only note. The wrappers remain temporarily for source
   compatibility, but ordinary public API keys still receive `403 Forbidden`.
+- **RedeemPositionParams.position_id** — make `position_id` optional (`Option<String>`) so callers can redeem by `market_id` only, matching the platform `RedeemPositionDto` which accepts either `positionId` or `marketId`. Added client-side validation that rejects when both fields are `None`. (closes #213)
 - **NotificationSettings / UpdateNotificationSettingsParams** — rewrite both structs to mirror the platform's `UpdateNotificationsDto`. Removes fictional fields (`pushEnabled`, `orderFills`, `strategyErrors`, `whaleAlerts`, `marketResolutions`, `dailySummary`) that the platform rejected with 400 under `forbidNonWhitelisted: true`, and adds the real DTO fields (`telegramEnabled`, `discordEnabled`, `onOrderFilled`, `onStrategyError`, `onBacktestComplete`, `onDailyLossLimit`, `onMarketResolved`, `onSomeoneForked`, `onSomeoneFollowed`, `onSomeoneLiked`, `onSomeoneCommented`). The `extra` flatten bucket is preserved on the read struct so server-only fields (`userId`, `updatedAt`, `eventPrefs`, `emailDigest`, `notificationFreq`, `minFillNotifyUsdc`, `onTicketReply`) round-trip. Added a wire-format key-set test. (closes #184)
 - **BREAKING** `PlaceSmartOrderParams`: revert `interval_seconds`/`"intervalSeconds"` back to `interval_minutes`/`"intervalMinutes"` — the #66 fix was based on incorrect platform contract info; platform DTO uses `intervalMinutes` (closes #80)
 - **BREAKING** `handle_response()`: handle 204 No Content by returning `serde_json::Value::Null` instead of crashing on empty body — `delete_strategy()` now returns `Result<()>` (closes #70)
@@ -110,6 +111,7 @@
 
 ### ⚠️ Trading impact (severity: HIGH)
 - `execute_arbitrage()` and `close_arbitrage_position()` can place real offsetting orders. Callers must supply an idempotency key for safe retries; the SDK sends it as `Idempotency-Key` and fails fast on missing/invalid keys, malformed `match_id`, fractional or out-of-range `size`, invalid slippage, invalid position status filters, and oversized page limits before requests reach the trading API.
+
 
 ## [1.7.6] — 2026-04-25
 
