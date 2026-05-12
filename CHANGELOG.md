@@ -42,7 +42,7 @@
 
   New types: `JournalEntry`, `ListJournalParams`, `Notification`, `PaginationParams`, `ReferralStats`, `ReferralsInfo`, `PreviewSide`, `OrderPreviewParams`, `VenueFeeEstimate`, `MarketMatchRef`, `OrderPreviewResponse`, `PolymarketFeeSchedule`, `KalshiFeeSchedule`, `FeeSchedules`, `MarketAlertOutcome`, `MarketAlertCondition`, `MarketAlert`, `MarketAlertsResponse`, `CreateMarketAlertParams`, `MarketHistoryPeriod`, `MarketSentimentVote`, `MarketSentimentReport`, `OrderJournalMood`, `UpdateOrderJournalParams`, `ComboCollection`, `ListComboCollectionsParams`, `ComboLeg`, `ComboLookupParams`, `CategoryCorrelation`. Response types use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility with backend shape evolution.
 
-  32 new unit tests cover URL paths, query/body camelCase serialization, validation bounds (size/price/non-finite inputs), enum casing, envelope handling, nullable sentiment votes, and JSON deserialization shapes. `cargo build`, `cargo clippy -- -D warnings`, and `cargo test` (321 unit tests plus 4 doc tests passing) are clean.
+   32 new unit tests cover URL paths, query/body camelCase serialization, validation bounds (size/price/non-finite inputs), enum casing, envelope handling, nullable sentiment votes, and JSON deserialization shapes. `cargo build`, `cargo clippy -- -D warnings`, and `cargo test` (321 unit tests plus 4 doc tests passing) are clean.
 - **System health check (POLA-3671)** — two new `PolyforgeClient` methods for the platform health/status endpoints:
   - `get_health()` → `GET /health` — returns `SystemHealthPublic` with public status fields (`status`, `service?`, `version?`, `uptime?`). Uses `get_with_optional_auth()` so the endpoint works without an API key while still returning richer data when authenticated.
   - `get_health_authenticated()` → `GET /api/v1/status` — returns `SystemHealthAuthenticated` with full operational metrics (DB, Redis, queue depth, services) alongside the public health fields. Always sends `Authorization: Bearer <key>`.
@@ -51,14 +51,33 @@
 ### Changed
 - **Auth behavior for public endpoints** — `get_user_score()`, `get_user_badges()`, `get_user_profile()`, and `get_actions()` now use `get_with_optional_auth()`. When the client is constructed with an empty API key these methods skip the `Authorization` header, matching the platform's public-route contract. Previously these methods always attached `Authorization: Bearer <key>`, causing 401 errors when no key was available.
 
+### Security
+- **Client-side financial parameter validation** — `place_order()`, `place_smart_order()`, and `provide_liquidity()` now reject NaN, Infinity, zero, and negative values for all financial parameters (size, price, total_size, spread, and optional price fields) before sending requests; prevents nonsensical orders from reaching the backend (closes #88)
+- **Default URL updated to production** — changed `DEFAULT_BASE_URL` from `https://localhost:3002` to `https://api.polyforge.app` to match Python and TypeScript SDKs; localhost with HTTPS causes immediate TLS failures for new users and encourages insecure workarounds (closes #87, regression of #71)
+- **SSE buffer overflow protection** — `StrategyEventStream` now enforces a 1 MiB (`MAX_SSE_BUFFER_SIZE`) cap on its internal line buffer; if the server sends data without a newline beyond this limit the stream returns `PolyforgeError::Api` with code `SSE_BUFFER_OVERFLOW` instead of growing unboundedly toward OOM (closes #52)
+- **Cargo.lock committed for reproducible builds** — removed `Cargo.lock` from `.gitignore` and committed the lockfile so that `cargo audit` can run, builds are reproducible, and supply-chain attacks are detectable via dependency pinning (closes #42)
+- **DNS rebinding SSRF mitigation** — `validate_webhook_url()` now resolves domain names via `tokio::net::lookup_host()` and checks all resolved IPs against the private/loopback blocklist, preventing SSRF bypass via attacker-controlled DNS records; also adds CGNAT range (100.64.0.0/10, RFC 6598) to the blocklist; documents that this is a client-side best-effort check and the server must independently validate (closes #63, closes #41)
+- **Default URL from env var** — `new()` now reads `POLYFORGE_API_URL` env var before falling back to `DEFAULT_BASE_URL` (`https://api.polyforge.app`), preventing silent credential exposure when deployed without explicit URL configuration; extended `is_local` to cover `0.0.0.0`, `127.0.0.x` range, and `localhost.localdomain` (closes #71)
+- **CI**: switch from self-hosted runner to `ubuntu-latest` for all events and add `permissions: contents: read` to restrict GITHUB_TOKEN scope — mitigates supply chain risk from external PRs running on self-hosted infra (closes #72)
+- **Clippy CI gate enforced** — removed `continue-on-error: true` from Clippy step so lint warnings (including security-relevant ones) now block CI; fixed `map_or` → `is_some_and` clippy warning (closes #79)
+- **README documents HTTPS default** — corrected `http://` to `https://` in API reference table to match the actual `DEFAULT_BASE_URL` in code (closes #78)
+- **HTTP request timeouts** — added `timeout(30s)` and `connect_timeout(10s)` to `reqwest::Client::builder()` to prevent indefinite hangs on unresponsive servers (closes #24)
+- **Disable automatic redirects** — set `redirect(Policy::none())` on the HTTP client to prevent the Bearer token from being forwarded to third-party hosts via 3xx redirects (closes #25)
+- **Webhook secret skip_serializing** — added `#[serde(skip_serializing)]` to `Webhook.secret` field to prevent the HMAC signing secret from leaking via `serde_json::to_string()` or any serialization path; regression of #8 where only `Debug` was fixed but `Serialize` was missed (closes #43)
+
 ### Fixed
 - **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, liquidity, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
 - **`RewardMarket.extra` / `RewardMarketDetail.extra` backward compatibility** — custom `Deserialize` implementations now preserve ALL response fields (including named ones) inside `extra`, so downstream code that reads `extra["conditionId"]` or other previously-dynamic keys continues to work after the keys were promoted to first-class struct fields. 1 new test and 6 new assertions verify the backward-compatible shape.
+- **Admin-only arbitrage match mutations** — hide `create_arbitrage_match`,
+  `verify_arbitrage_match`, `delete_arbitrage_match`, and
+  `sync_arbitrage_matches` from the public Rustdoc surface and deprecate them
+  with an explicit admin-only note. The wrappers remain temporarily for source
+  compatibility, but ordinary public API keys still receive `403 Forbidden`.
+- **NotificationSettings / UpdateNotificationSettingsParams** — rewrite both structs to mirror the platform's `UpdateNotificationsDto`. Removes fictional fields (`pushEnabled`, `orderFills`, `strategyErrors`, `whaleAlerts`, `marketResolutions`, `dailySummary`) that the platform rejected with 400 under `forbidNonWhitelisted: true`, and adds the real DTO fields (`telegramEnabled`, `discordEnabled`, `onOrderFilled`, `onStrategyError`, `onBacktestComplete`, `onDailyLossLimit`, `onMarketResolved`, `onSomeoneForked`, `onSomeoneFollowed`, `onSomeoneLiked`, `onSomeoneCommented`). The `extra` flatten bucket is preserved on the read struct so server-only fields (`userId`, `updatedAt`, `eventPrefs`, `emailDigest`, `notificationFreq`, `minFillNotifyUsdc`, `onTicketReply`) round-trip. Added a wire-format key-set test. (closes #184)
+- **BREAKING** `PlaceSmartOrderParams`: revert `interval_seconds`/`"intervalSeconds"` back to `interval_minutes`/`"intervalMinutes"` — the #66 fix was based on incorrect platform contract info; platform DTO uses `intervalMinutes` (closes #80)
+- **BREAKING** `handle_response()`: handle 204 No Content by returning `serde_json::Value::Null` instead of crashing on empty body — `delete_strategy()` now returns `Result<()>` (closes #70)
 
 ### Notes
-- The POLA-1844 public profile lookup methods (`get_user_performance`, `get_user_strategies`, `get_user_activity`, `get_user_profile_badges`) skip the `Authorization` header when the client is constructed with an empty API key, keeping documented public endpoints usable without credentials while preserving authenticated behavior when a key is configured. Added multi-chunk coverage for the 1-MiB error body
-  cap and documented that exactly 1 MiB is allowed while the first byte over the
-  limit is rejected.
 - Cross-SDK naming aliases: `get_notifications()` is now a deprecated alias for
   `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the
   canonical `MyReferralsResponse` type.
@@ -72,7 +91,7 @@
   - `get_user_profile_badges(username)` → `Vec<UserProfileBadge>`.
   - `get_my_following(page, limit)` → `PaginatedResponse<FollowedUser>` (authenticated users only).
 
-  All four public-profile endpoints surface `PolyforgeError::Api { status: 404, code: "NOT_FOUND", .. }` when the username is unknown. The `username` path segment is URL-encoded via the existing `urlencoding::encode` helper.
+  All four public-profile endpoints surface `PolyforgeError::Api { status: 404, code: "NOT_FOUND", .. }` when the username is unknown. The `username` path segment is URL-encoded via the existing `urlencoding::encode` helper. These methods skip the `Authorization` header when the client is constructed with an empty API key, keeping documented public endpoints usable without credentials while preserving authenticated behavior when a key is configured.
 
   New types: `UserPerformancePoint`, `UserStrategySummary`, `UserActivityEntry`, `UserProfileBadge`, `FollowedUser`, plus an internal `UserDataEnvelope<T>` to unwrap the `{ "data": [...] }` envelope.
 - **Cross-venue arb execution / positions / risk endpoints (POLA-1852)** — 7 trading-impact-bearing methods that complete the `/api/v1/arbitrage/*` surface and bring the Rust SDK to parity with the Python SDK (POLA-1851):
@@ -87,19 +106,6 @@
 
 ### ⚠️ Trading impact (severity: HIGH)
 - `execute_arbitrage()` and `close_arbitrage_position()` can place real offsetting orders. Callers must supply an idempotency key for safe retries; the SDK sends it as `Idempotency-Key` and fails fast on missing/invalid keys, malformed `match_id`, fractional or out-of-range `size`, invalid slippage, invalid position status filters, and oversized page limits before requests reach the trading API.
-
-### Notes
-- `GET /sports/combos/:collectionTicker` currently ignores its path param
-  server-side (forwards to `listComboCollections({page:1, limit:1})`). The SDK
-  wraps the route as-is for fidelity; a server-side fix is tracked separately.
-
-### Fixed
-- **Admin-only arbitrage match mutations** — hide `create_arbitrage_match`,
-  `verify_arbitrage_match`, `delete_arbitrage_match`, and
-  `sync_arbitrage_matches` from the public Rustdoc surface and deprecate them
-  with an explicit admin-only note. The wrappers remain temporarily for source
-  compatibility, but ordinary public API keys still receive `403 Forbidden`.
-- **NotificationSettings / UpdateNotificationSettingsParams** — rewrite both structs to mirror the platform's `UpdateNotificationsDto`. Removes fictional fields (`pushEnabled`, `orderFills`, `strategyErrors`, `whaleAlerts`, `marketResolutions`, `dailySummary`) that the platform rejected with 400 under `forbidNonWhitelisted: true`, and adds the real DTO fields (`telegramEnabled`, `discordEnabled`, `onOrderFilled`, `onStrategyError`, `onBacktestComplete`, `onDailyLossLimit`, `onMarketResolved`, `onSomeoneForked`, `onSomeoneFollowed`, `onSomeoneLiked`, `onSomeoneCommented`). The `extra` flatten bucket is preserved on the read struct so server-only fields (`userId`, `updatedAt`, `eventPrefs`, `emailDigest`, `notificationFreq`, `minFillNotifyUsdc`, `onTicketReply`) round-trip. Added a wire-format key-set test. (closes #184)
 
 ## [1.7.6] — 2026-04-25
 
@@ -275,33 +281,6 @@
 - **BREAKING** `create_strategy_from_description()`: send `{ "description" }` instead of `{ "query" }` to match platform `CreateFromDescriptionDto` — AI strategy creation was returning HTTP 400 (closes #90, regression of #44)
 - **BREAKING** `WebhookEvent`: change serde rename values from dot.notation (`order.filled`) to SCREAMING_SNAKE_CASE (`ORDER_FILLED`) to match platform `CreateWebhookDto` validation — webhook creation was returning HTTP 400 (closes #91, regression of #47)
 - **BREAKING** `TradingMode`: change serde rename from uppercase (`LIVE`/`PAPER`) to lowercase (`live`/`paper`) to match platform `StartStrategyDto` — strategy start was returning HTTP 400 (closes #92, regression of #46)
-
-## [Unreleased]
-
-### Security
-- **Client-side financial parameter validation** — `place_order()`, `place_smart_order()`, and `provide_liquidity()` now reject NaN, Infinity, zero, and negative values for all financial parameters (size, price, total_size, spread, and optional price fields) before sending requests; prevents nonsensical orders from reaching the backend (closes #88)
-
-
-- **Default URL updated to production** — changed `DEFAULT_BASE_URL` from `https://localhost:3002` to `https://api.polyforge.app` to match Python and TypeScript SDKs; localhost with HTTPS causes immediate TLS failures for new users and encourages insecure workarounds (closes #87, regression of #71)
-- **SSE buffer overflow protection** — `StrategyEventStream` now enforces a 1 MiB (`MAX_SSE_BUFFER_SIZE`) cap on its internal line buffer; if the server sends data without a newline beyond this limit the stream returns `PolyforgeError::Api` with code `SSE_BUFFER_OVERFLOW` instead of growing unboundedly toward OOM (closes #52)
-- **Cargo.lock committed for reproducible builds** — removed `Cargo.lock` from `.gitignore` and committed the lockfile so that `cargo audit` can run, builds are reproducible, and supply-chain attacks are detectable via dependency pinning (closes #42)
-- **DNS rebinding SSRF mitigation** — `validate_webhook_url()` now resolves domain names via `tokio::net::lookup_host()` and checks all resolved IPs against the private/loopback blocklist, preventing SSRF bypass via attacker-controlled DNS records; also adds CGNAT range (100.64.0.0/10, RFC 6598) to the blocklist; documents that this is a client-side best-effort check and the server must independently validate (closes #63, closes #41)
-- **Default URL from env var** — `new()` now reads `POLYFORGE_API_URL` env var before falling back to `https://localhost:3002`, preventing silent credential exposure when deployed without explicit URL configuration; extended `is_local` to cover `0.0.0.0`, `127.0.0.x` range, and `localhost.localdomain` (closes #71)
-- **CI**: switch from self-hosted runner to `ubuntu-latest` for all events and add `permissions: contents: read` to restrict GITHUB_TOKEN scope — mitigates supply chain risk from external PRs running on self-hosted infra (closes #72)
-- **Clippy CI gate enforced** — removed `continue-on-error: true` from Clippy step so lint warnings (including security-relevant ones) now block CI; fixed `map_or` → `is_some_and` clippy warning (closes #79)
-- **README documents HTTPS default** — corrected `http://` to `https://` in API reference table to match the actual `DEFAULT_BASE_URL` in code (closes #78)
-- **HTTP request timeouts** — added `timeout(30s)` and `connect_timeout(10s)` to `reqwest::Client::builder()` to prevent indefinite hangs on unresponsive servers (closes #24)
-- **Disable automatic redirects** — set `redirect(Policy::none())` on the HTTP client to prevent the Bearer token from being forwarded to third-party hosts via 3xx redirects (closes #25)
-- **Webhook secret skip_serializing** — added `#[serde(skip_serializing)]` to `Webhook.secret` field to prevent the HMAC signing secret from leaking via `serde_json::to_string()` or any serialization path; regression of #8 where only `Debug` was fixed but `Serialize` was missed (closes #43)
-
-### Fixed
-- **BREAKING** `PlaceSmartOrderParams`: revert `interval_seconds`/`"intervalSeconds"` back to `interval_minutes`/`"intervalMinutes"` — the #66 fix was based on incorrect platform contract info; platform DTO uses `intervalMinutes` (closes #80)
-- **Issue #50**: `ai_query()` now sends `{ "question": ... }` instead of `{ "query": ... }` to match the platform's `AiQueryDto` contract — every call was previously rejected or silently ignored by the backend
-- **Issue #46**: `TradingMode` enum now serializes to `"LIVE"` / `"PAPER"` (uppercase) instead of `"live"` / `"paper"` — `start_strategy()` was receiving a 422 from the backend due to failed enum validation
-- **Issue #47**: `WebhookEvent` variants now serialize to dot-notation strings (`"order.filled"`, `"strategy.error"`, `"whale.trade"`, `"news.signal"`, `"backtest.complete"`, `"daily.loss.limit"`, `"market.resolved"`, `"price.alert"`) instead of `SCREAMING_SNAKE_CASE` — webhooks registered via the SDK were using invalid event type strings
-- **Issue #44**: `create_strategy_from_description()` now sends `{ "query": ... }` instead of `{ "description": ... }` to match the platform's `from-description` endpoint contract — the AI pipeline was receiving no input and returning empty/default strategies
-- **BREAKING** `handle_response()`: handle 204 No Content by returning `serde_json::Value::Null` instead of crashing on empty body — `delete_strategy()` now returns `Result<()>` (closes #70)
-- **BREAKING** `PlaceSmartOrderParams`: rename `interval_minutes` / `"intervalMinutes"` to `interval_seconds` / `"intervalSeconds"` to match platform contract — TWAP/DCA orders were executing 60x too fast (closes #66)
 
 ## [1.5.0] — 2026-04-03
 
