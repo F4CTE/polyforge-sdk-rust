@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+- **Arbitrage docstrings** — updated cross-venue arb docstrings to reflect backend hardening (POLA-1911, POLA-1958):
+  - `Idempotency-Key` is now **required** on `execute_arbitrage` and `close_arbitrage_position` (8–128 characters, validated client-side).
+  - Rate limit of **5 req/min/user** on execute and close endpoints; exceeding it returns HTTP 429.
+  - `match_id` is validated as a UUID by both the SDK and the backend; non-UUID input returns HTTP 400.
+  - Sweep semantics documented verbatim from the backend: GTC orders at 0.001 SELL / 0.999 BUY behave as a market-equivalent sweep, not a resting limit order. Slippage is bounded only by venue depth at call time.
+  - README arbitrage section expanded with a complete execute-and-close code example showing `Idempotency-Key` usage.
+  - `idempotency_key_header()` validation tightened from non-empty to 8–128 characters.
+
 ### Added
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
   - `list_sports_categories()` → typed `Vec<SportsCategory>`

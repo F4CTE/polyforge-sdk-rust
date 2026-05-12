@@ -178,7 +178,7 @@ pub enum TradingMode {
     Paper,
 }
 
-/// Parameters for [`PolyforgeClient::start_strategy`].
+/// Parameters for [`crate::PolyforgeClient::start_strategy`].
 ///
 /// Platform contract (POST `/api/v1/strategies/{id}/start`):
 /// `{ "mode": "live"|"paper" }`.
@@ -497,12 +497,32 @@ pub struct ListOrdersParams {
     pub to: Option<String>,
 }
 
-/// Parameters for closing a position.
+/// Parameters for closing a prediction-market position.
+///
+/// `size` controls the close mode:
+/// - `None` (default) — **sweep**: close the entire position at market price
+///   by placing a market sell order for the full held quantity.
+/// - `Some("100")` — **partial close**: sell only that number of shares,
+///   leaving the remainder of the position open.
+///
+/// # Sweep semantics
+///
+/// GTC orders are priced at `0.001` SELL / `0.999` BUY and behave as a
+/// **market-equivalent sweep, not a resting limit order**.  Slippage is
+/// bounded only by venue depth at call time, not by the on-paper price.
+/// The fill price is whatever the order book offers at the time of
+/// execution.
+///
+/// For cross-venue arbitrage positions use the dedicated
+/// `POST /api/v1/arbitrage/positions/:id/close` endpoint
+/// (see [`crate::PolyforgeClient::close_arbitrage_position`]); arbitrage closes
+/// are always full sweeps — partial closes are not supported for arb positions.
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ClosePositionParams {
     #[serde(rename = "tokenId")]
     pub token_id: String,
-    /// Size as a number string (e.g. `"100"`). Platform validates with `@IsNumberString()`.
+    /// Size to close as a number string (e.g. `"100"`).  Omit to sweep the
+    /// entire position.  Platform validates with `@IsNumberString()`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<String>,
 }
@@ -2402,11 +2422,22 @@ pub struct CreateArbitrageAlertParams {
 
 /// Parameters for `POST /api/v1/arbitrage/execute`.
 ///
-/// `match_id` must be a UUID, `size` must be an integer USDC amount in the
-/// `1..=10000` range, and `max_slippage_pct`, if set, must be in `0..=5`.
-/// These mirror the server-side `class-validator` bounds in
-/// `ExecuteArbDto`. Use [`PolyforgeClient::execute_arbitrage`] which validates
-/// before any real-money order hits the wire.
+/// `match_id` must be a valid UUID (RFC 4122).  The backend validates this
+/// server-side and **returns HTTP 400** for non-UUID input.  The SDK also
+/// performs a client-side validation before any real-money order hits the
+/// wire.
+///
+/// `size` must be an integer USDC amount in the `1..=10000` range, and
+/// `max_slippage_pct`, if set, must be in `0..=5`.  These mirror the
+/// server-side `class-validator` bounds in `ExecuteArbDto`.  Use
+/// [`crate::PolyforgeClient::execute_arbitrage`] which validates before
+/// any real-money order hits the wire.
+///
+/// The backend requires an `Idempotency-Key` header (8–128 characters) on
+/// every request; the SDK sends the caller-supplied `idempotency_key`
+/// argument as that header.  See
+/// [`crate::PolyforgeClient::execute_arbitrage`] for rate-limit and error
+/// code details.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecuteArbitrageParams {
@@ -2417,6 +2448,10 @@ pub struct ExecuteArbitrageParams {
 }
 
 /// Lifecycle status for a cross-venue arbitrage position.
+///
+/// Flow: `PENDING` → `OPEN` → `CLOSING` → `CLOSED` (normal path)
+/// or `PENDING` → `OPEN` → `CLOSING` → `FAILED` (close failure).
+/// `PARTIAL` may appear transiently when only one leg has filled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ArbPositionStatus {
@@ -2474,6 +2509,17 @@ pub struct ArbExecutionLeg {
 }
 
 /// Server response for `POST /api/v1/arbitrage/execute`.
+///
+/// On success this opens a new [`ArbPosition`] in `OPEN` state.  The position
+/// consists of two offsetting legs (buy on one venue, sell on the other) and
+/// can later be exited only via a **full sweep-close** using
+/// `POST /api/v1/arbitrage/positions/:id/close`
+/// (see [`crate::PolyforgeClient::close_arbitrage_position`]).  Partial closes
+/// are not supported for arbitrage positions.
+///
+/// Both legs carry optional `intent_id` and `price` fields; fill confirmation
+/// may arrive asynchronously and is available on the full [`ArbPosition`]
+/// record after the orders execute.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ArbExecutionResult {
@@ -2492,6 +2538,12 @@ pub struct ArbExecutionResult {
 }
 
 /// A cross-venue arbitrage position (mirrors the Prisma `ArbPosition` row).
+///
+/// Created via `POST /api/v1/arbitrage/execute` and closed via a **full
+/// sweep-close** (`POST /api/v1/arbitrage/positions/:id/close`).  The
+/// lifecycle is tracked in [`status`](Self::status): positions start in
+/// `OPEN`, transition through `CLOSING` during the sweep, and settle in
+/// `CLOSED` or `FAILED`.
 ///
 /// Decimal columns (`buyPrice`, `buySize`, P&L fields, etc.) arrive as JSON
 /// strings — kept as `Option<String>` for lossless precision.
@@ -2571,6 +2623,19 @@ pub struct ArbPositionsResponse {
 }
 
 /// Server response for `POST /api/v1/arbitrage/positions/:id/close`.
+///
+/// Returned after a **full sweep-close** of a cross-venue arbitrage position.
+/// Both legs (buy and sell) are reversed with market orders placed on the
+/// respective venues.  The close is always a complete sweep — no partial
+/// close is supported for arbitrage positions.
+///
+/// `status` reflects the terminal outcome of the sweep:
+/// - `CLOSED` — both reversing market orders were successfully placed.
+/// - `FAILED` — one or both reverse orders could not be placed (e.g.
+///   insufficient liquidity, venue connectivity issue).
+///
+/// Once closed, call [`crate::PolyforgeClient::get_arbitrage_position`] to
+/// fetch the full position record including fill prices and realised P&L.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ArbCloseResponse {

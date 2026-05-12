@@ -396,10 +396,11 @@ impl PolyforgeClient {
     }
 
     fn idempotency_key_header(idempotency_key: &str) -> Result<HeaderValue> {
-        if idempotency_key.trim().is_empty() {
-            return Err(PolyforgeError::Validation(
-                "idempotency_key must not be empty".into(),
-            ));
+        if idempotency_key.len() < 8 || idempotency_key.len() > 128 {
+            return Err(PolyforgeError::Validation(format!(
+                "idempotency_key must be 8–128 characters, got {}",
+                idempotency_key.len()
+            )));
         }
         HeaderValue::from_str(idempotency_key).map_err(|_| {
             PolyforgeError::Validation(
@@ -1707,7 +1708,25 @@ impl PolyforgeClient {
             .await
     }
 
-    /// Close an open position (sell all shares at market price).
+    /// Close an open prediction-market position (partial or sweep).
+    ///
+    /// When `params.size` is `None` (the default), this is a **sweep** — the
+    /// entire position is sold at market price via a market sell order.  When
+    /// `size` is set to a number-string like `"100"`, only that portion is
+    /// closed (partial close) and the remainder of the position stays open.
+    ///
+    /// # Sweep semantics
+    ///
+    /// GTC orders are priced at `0.001` SELL / `0.999` BUY and behave as a
+    /// **market-equivalent sweep, not a resting limit order**.  Slippage is
+    /// bounded only by venue depth at call time, not by the on-paper price.
+    /// The fill price is whatever the order book offers at the time of
+    /// execution.
+    ///
+    /// **For cross-venue arbitrage positions**, use
+    /// [`close_arbitrage_position`](Self::close_arbitrage_position) instead —
+    /// arbitrage closes are always full sweeps that place reversing market
+    /// orders on both venues simultaneously; partial closes are not supported.
     ///
     /// The SDK automatically sends an `Idempotency-Key` header required by the
     /// platform for trading writes.
@@ -3020,13 +3039,29 @@ impl PolyforgeClient {
     /// Execute a cross-venue arbitrage trade — places **real** offsetting
     /// orders on Polymarket and Kalshi for a matched market pair.
     ///
-    /// `idempotency_key` is sent as the `Idempotency-Key` header required by
-    /// the backend for this real-order endpoint; reuse the same key for safe
-    /// caller-managed retries of the same intended execution.
+    /// Opens a new [`ArbPosition`] that starts in `OPEN` state.  The position
+    /// is composed of two legs (buy on one venue, sell on the other).  To exit
+    /// the position later, call
+    /// [`close_arbitrage_position`](Self::close_arbitrage_position) which
+    /// performs a **full sweep-close** by placing reversing market orders on
+    /// both venues.  There is no partial-close for arb positions — the only
+    /// exit path is a complete sweep.
+    ///
+    /// `idempotency_key` is sent as the `Idempotency-Key` header and is
+    /// **required** by the backend for this endpoint.  The key must be 8–128
+    /// characters.  Reuse the same key for safe caller-managed retries of the
+    /// same intended execution; the backend guarantees at-most-once semantics
+    /// per key.
+    ///
+    /// `match_id` must be a valid UUID (RFC 4122).  The backend validates
+    /// this server-side and **returns HTTP 400** for non-UUID input.
     ///
     /// `size` must be in `1..=10000` USDC; `max_slippage_pct`, if set, must be
     /// in `0..=5`. Both are validated client-side before any order is sent.
     /// Server defaults `max_slippage_pct` to 0.5 when omitted.
+    ///
+    /// The backend enforces a rate limit of **5 requests per minute per user**
+    /// on this endpoint; exceeding it returns **HTTP 429**.
     ///
     /// Surfaces backend error codes verbatim (`VENUES_NOT_CONNECTED`,
     /// `MATCH_NOT_FOUND`, `COMPARISON_UNAVAILABLE`, `SPREAD_TOO_LOW`,
@@ -3094,12 +3129,30 @@ impl PolyforgeClient {
         self.get(&path).await
     }
 
-    /// Close an open arbitrage position — places **real** reverse orders on
-    /// both venues.
+    /// Sweep-close an open cross-venue arbitrage position — places **real**
+    /// reversing market orders on **both venues** (Polymarket and Kalshi) to
+    /// close the **entire** position at the best available market prices.
     ///
-    /// `idempotency_key` is sent as the `Idempotency-Key` header required by
-    /// the backend for this real-order endpoint; reuse the same key for safe
-    /// caller-managed retries of the same intended close.
+    /// This is always a full sweep — there is no partial-close concept for
+    /// arbitrage positions.  Unlike [`close_position`](Self::close_position),
+    /// which supports partial closes for regular prediction-market positions,
+    /// this endpoint always reverses both legs in full.
+    ///
+    /// The backend transitions the position through `CLOSING` → `CLOSED` (or
+    /// `FAILED` if a reverse order cannot be placed on one or both venues).
+    /// On success the returned [`ArbCloseResponse`] carries the terminal
+    /// `CLOSED` status.  Once closed, realised P&L is available on the
+    /// full [`ArbPosition`] record fetched via
+    /// [`get_arbitrage_position`](Self::get_arbitrage_position).
+    ///
+    /// `idempotency_key` is sent as the `Idempotency-Key` header and is
+    /// **required** by the backend for this endpoint.  The key must be 8–128
+    /// characters.  Reuse the same key for safe caller-managed retries of the
+    /// same intended close; the backend guarantees at-most-once semantics per
+    /// key.
+    ///
+    /// The backend enforces a rate limit of **5 requests per minute per user**
+    /// on this endpoint; exceeding it returns **HTTP 429**.
     ///
     /// Surfaces backend error codes verbatim (`ARB_POSITION_NOT_FOUND`,
     /// `INVALID_STATUS`).
