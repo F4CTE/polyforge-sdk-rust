@@ -41,7 +41,15 @@
 
   New types: `JournalEntry`, `ListJournalParams`, `Notification`, `PaginationParams`, `ReferralStats`, `ReferralsInfo`, `PreviewSide`, `OrderPreviewParams`, `VenueFeeEstimate`, `MarketMatchRef`, `OrderPreviewResponse`, `PolymarketFeeSchedule`, `KalshiFeeSchedule`, `FeeSchedules`, `MarketAlertOutcome`, `MarketAlertCondition`, `MarketAlert`, `MarketAlertsResponse`, `CreateMarketAlertParams`, `MarketHistoryPeriod`, `MarketSentimentVote`, `MarketSentimentReport`, `OrderJournalMood`, `UpdateOrderJournalParams`, `ComboCollection`, `ListComboCollectionsParams`, `ComboLeg`, `ComboLookupParams`, `CategoryCorrelation`. Response types use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility with backend shape evolution.
 
-  32 new unit tests cover URL paths, query/body camelCase serialization, validation bounds (size/price/non-finite inputs), enum casing, envelope handling, nullable sentiment votes, and JSON deserialization shapes. `cargo build`, `cargo clippy -- -D warnings`, and `cargo test` (321 unit tests plus 4 doc tests passing) are clean.
+   32 new unit tests cover URL paths, query/body camelCase serialization, validation bounds (size/price/non-finite inputs), enum casing, envelope handling, nullable sentiment votes, and JSON deserialization shapes. `cargo build`, `cargo clippy -- -D warnings`, and `cargo test` (321 unit tests plus 4 doc tests passing) are clean.
+- **Newer Rewards endpoints (POLA-3683)** — 3 endpoints that complete the `/api/v1/rewards/*` surface, extending the original #152 Rewards API family:
+  - `get_market_rewards_detail(market_id)` → `Option<RewardsMarketDetail>` — CLOB liquidity-reward details by platform market ID; returns `Ok(None)` when the market has no active rewards configuration (404).
+  - `get_user_sponsored_markets()` → `UserSponsoredMarkets` — the authenticated user's sponsored rewards markets.
+  - `get_rewards_sponsor_url(market_id)` → `RewardsSponsorUrl` — the Polymarket sponsor page URL for a specific market.
+- New types: `RewardsMarketDetail` (with `rate_per_day`, `total_rewards`, `remaining_reward_amount`, `max_spread`, `min_size` fields), `UserSponsoredMarkets`, `RewardsSponsorUrl`.
+- **Actions catalog** — `get_actions()` → `ActionsSchema` — public actions catalog listing all actions with their parameters, constraints, defaults, categories, and cost metadata. Uses optional auth (`get_with_optional_auth`) so the method works without an API key.
+- New types: `ActionsSchema`, `ActionDefinition`, `ActionParameter`.
+- **RewardMarket / RewardMarketDetail typed fields** — replaced the `serde_json::Value` extras with typed `Option<String>` fields matching the platform schema (`condition_id`, `rewards_daily`, `rewards_max_spread`, `rewards_min_size`, `start_date`, `end_date`). Both structs now use `#[non_exhaustive]` to preserve forward-compatibility.
 
 ### Changed
 - **`get_user_score`, `get_user_badges`, `get_user_profile` now require authentication.** These methods previously used optional auth but the platform requires a valid JWT for `GET /api/v1/scores/{userId}`, `GET /api/v1/scores/{userId}/badges`, and `GET /api/v1/profile/{username}`. They now use mandatory auth to match the platform's auth requirements. (closes #211)

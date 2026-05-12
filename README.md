@@ -129,6 +129,21 @@ liquidity, position, smart-order, and conditional-order mutations.
 | `place_order(params)` | Place a direct buy/sell order |
 | `cancel_order(order_id)` | Cancel a pending or live order |
 
+### Rewards
+
+| Method | Description |
+|--------|-------------|
+| `list_rewards_markets()` | List markets with active liquidity rewards |
+| `get_rewards_for_market(condition_id)` | Get reward details by condition ID |
+| `get_market_rewards_detail(market_id)` | Get reward details by platform market ID; returns `None` on 404 |
+| `get_user_rewards()` | Get the authenticated user's rewards |
+| `get_user_rewards_total()` | Get the authenticated user's total accumulated rewards |
+| `get_user_rewards_percentages()` | Get reward percentages per market |
+| `get_user_rewards_per_market()` | Get rewards broken down by market |
+| `get_rebates()` | Get the authenticated user's trading fee rebates |
+| `get_user_sponsored_markets()` | List the authenticated user's sponsored rewards markets |
+| `get_rewards_sponsor_url(market_id)` | Get the Polymarket sponsor page URL for a market |
+
 ### Arbitrage
 
 | Method | Description |
