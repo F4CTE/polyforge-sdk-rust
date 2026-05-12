@@ -2269,6 +2269,15 @@ pub struct ExecuteArbitrageParams {
     pub max_slippage_pct: Option<f64>,
 }
 
+/// Supported prediction market venues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Venue {
+    Polymarket,
+    Kalshi,
+    PolymarketUs,
+}
+
 /// Lifecycle status for a cross-venue arbitrage position.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -2315,7 +2324,7 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct ArbExecutionLeg {
     #[serde(default)]
-    pub venue: Option<String>,
+    pub venue: Option<Venue>,
     #[serde(default)]
     pub intent_id: Option<String>,
     #[serde(default)]
@@ -2360,7 +2369,7 @@ pub struct ArbPosition {
     pub status: Option<ArbPositionStatus>,
 
     #[serde(default)]
-    pub buy_venue: Option<String>,
+    pub buy_venue: Option<Venue>,
     #[serde(default)]
     pub buy_order_id: Option<String>,
     #[serde(default)]
@@ -2375,7 +2384,7 @@ pub struct ArbPosition {
     pub buy_fill_size: Option<String>,
 
     #[serde(default)]
-    pub sell_venue: Option<String>,
+    pub sell_venue: Option<Venue>,
     #[serde(default)]
     pub sell_order_id: Option<String>,
     #[serde(default)]

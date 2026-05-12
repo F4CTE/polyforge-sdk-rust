@@ -7174,7 +7174,7 @@ mod tests {
         assert_eq!(r.entry_spread_pct, Some(0.07));
         assert_eq!(r.status, Some(ArbPositionStatus::Pending));
         let buy = r.buy_leg.as_ref().unwrap();
-        assert_eq!(buy.venue.as_deref(), Some("POLYMARKET"));
+        assert_eq!(buy.venue, Some(Venue::Polymarket));
         assert_eq!(buy.token_id.as_deref(), Some("tok-y"));
         assert_eq!(buy.price.as_deref(), Some("0.550000000000000000"));
     }

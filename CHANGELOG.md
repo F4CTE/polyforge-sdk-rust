@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **`Venue` enum** — typed `Venue` enum with `Polymarket`, `Kalshi`, and `PolymarketUs` variants, replacing `Option<String>` on `ArbExecutionLeg.venue`, `ArbPosition.buy_venue`, and `ArbPosition.sell_venue`. Uses `#[serde(rename_all = "SCREAMING_SNAKE_CASE")]` for wire compatibility with `POLYMARKET`, `KALSHI`, and `POLYMARKET_US` values. Closes feature parity gap with `sdk-ts` where `Venue` is a string literal union type. (closes #212)
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
   - `list_sports_categories()` → typed `Vec<SportsCategory>`
   - `list_sports_markets(params)` → `PaginatedResponse<serde_json::Value>`
