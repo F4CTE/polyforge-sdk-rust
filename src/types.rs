@@ -59,6 +59,49 @@ pub struct Token {
     pub outcome: Option<String>,
     #[serde(default)]
     pub price: Option<f64>,
+}
+
+// ---------------------------------------------------------------------------
+// GDPR Personal Data Export (POLA-3846)
+// ---------------------------------------------------------------------------
+
+/// Metadata for a personal data export payload.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalDataExportMeta {
+    #[serde(default)]
+    pub max_records_per_collection: Option<u64>,
+    #[serde(default)]
+    pub collections_truncated: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// GDPR personal data export response from `GET /api/v1/me/export`.
+///
+/// Contains all user data across the platform grouped into sections.
+/// Webhook URLs are redacted to hostname only.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalDataExport {
+    #[serde(default)]
+    pub generated_at: Option<String>,
+    #[serde(default)]
+    pub format_version: Option<String>,
+    #[serde(rename = "_meta", default)]
+    pub meta: Option<PersonalDataExportMeta>,
+    #[serde(default)]
+    pub account: serde_json::Value,
+    #[serde(default)]
+    pub settings: serde_json::Value,
+    #[serde(default)]
+    pub security: serde_json::Value,
+    #[serde(default)]
+    pub trading: serde_json::Value,
+    #[serde(default)]
+    pub communications: serde_json::Value,
+    #[serde(default)]
+    pub social: serde_json::Value,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }

@@ -1806,14 +1806,16 @@ impl PolyforgeClient {
 
     /// Export your personal data in JSON format (GDPR compliance).
     ///
-    /// Returns a comprehensive JSON object with your account details,
-    /// trading history, settings, and all platform activity.
-    /// The response is delivered as a file download (Content-Disposition: attachment).
+    /// Returns a structured [`PersonalDataExport`] with your account details,
+    /// trading history, settings, and all platform activity grouped into
+    /// `account`, `settings`, `security`, `trading`, `communications`, and
+    /// `social` sections.  The response is delivered as a file download
+    /// (Content-Disposition: attachment).
     ///
     /// # Errors
     /// Returns [`PolyforgeError::Api`] if the request fails (e.g., insufficient
     /// scope).
-    pub async fn export_personal_data(&self) -> Result<serde_json::Value> {
+    pub async fn export_personal_data(&self) -> Result<PersonalDataExport> {
         self.get("/api/v1/me/export").await
     }
 
@@ -8643,6 +8645,61 @@ mod tests {
         assert!(client
             .url("/api/v1/me/export?format=csv")
             .ends_with("/api/v1/me/export?format=csv"));
+    }
+
+    #[test]
+    fn test_personal_data_export_deserializes() {
+        let json = serde_json::json!({
+            "generatedAt": "2026-05-10T00:00:00.000Z",
+            "formatVersion": "2026-05-privacy-export-v1",
+            "_meta": {
+                "maxRecordsPerCollection": 1000,
+                "collectionsTruncated": { "orders": 1000, "positions": 850 }
+            },
+            "account": { "email": "user@example.com", "username": "trader1" },
+            "settings": { "notificationPreferences": {} },
+            "security": { "apiKeys": [], "loginHistory": [] },
+            "trading": { "strategies": [], "orders": [] },
+            "communications": { "notificationHistory": [], "tickets": [] },
+            "social": { "follows": [], "priceAlerts": [] }
+        });
+        let export: PersonalDataExport = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            export.generated_at.as_deref(),
+            Some("2026-05-10T00:00:00.000Z")
+        );
+        assert_eq!(
+            export.format_version.as_deref(),
+            Some("2026-05-privacy-export-v1")
+        );
+        let meta = export.meta.as_ref().unwrap();
+        assert_eq!(meta.max_records_per_collection, Some(1000));
+        let truncated = meta.collections_truncated.as_ref().unwrap();
+        assert_eq!(truncated["orders"], 1000);
+        assert_eq!(truncated["positions"], 850);
+        assert_eq!(export.account["email"], "user@example.com");
+        assert_eq!(export.account["username"], "trader1");
+    }
+
+    #[test]
+    fn test_personal_data_export_deserializes_minimal() {
+        let json = serde_json::json!({
+            "generatedAt": "2026-05-10T00:00:00.000Z",
+            "formatVersion": "v1",
+            "_meta": {},
+            "account": {},
+            "settings": {},
+            "security": {},
+            "trading": {},
+            "communications": {},
+            "social": {}
+        });
+        let export: PersonalDataExport = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            export.generated_at.as_deref(),
+            Some("2026-05-10T00:00:00.000Z")
+        );
+        assert!(export.meta.is_some());
     }
 
     #[test]
