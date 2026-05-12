@@ -7746,7 +7746,7 @@ mod tests {
         assert_eq!(r.entry_spread_pct, Some(0.07));
         assert_eq!(r.status, Some(ArbPositionStatus::Pending));
         let buy = r.buy_leg.as_ref().unwrap();
-        assert_eq!(buy.venue.as_deref(), Some("POLYMARKET"));
+        assert_eq!(buy.venue, Some(Venue::Polymarket));
         assert_eq!(buy.token_id.as_deref(), Some("tok-y"));
         assert_eq!(buy.price.as_deref(), Some("0.550000000000000000"));
     }
@@ -7779,6 +7779,8 @@ mod tests {
         let p: ArbPosition = serde_json::from_str(json).unwrap();
         assert_eq!(p.id, "ap-1");
         assert_eq!(p.status, Some(ArbPositionStatus::Open));
+        assert_eq!(p.buy_venue, Some(Venue::Polymarket));
+        assert_eq!(p.sell_venue, Some(Venue::Kalshi));
         assert_eq!(p.buy_price.as_deref(), Some("0.55"));
         assert_eq!(p.entry_spread_pct.as_deref(), Some("0.07"));
         assert_eq!(p.unrealized_pnl.as_deref(), Some("2.50"));
@@ -7839,6 +7841,61 @@ mod tests {
         let json = r#"{"updated":7}"#;
         let r: ArbPnlRefreshResult = serde_json::from_str(json).unwrap();
         assert_eq!(r.updated, 7);
+    }
+
+    #[test]
+    fn test_venue_as_str() {
+        assert_eq!(Venue::Polymarket.as_str(), "POLYMARKET");
+        assert_eq!(Venue::Kalshi.as_str(), "KALSHI");
+        assert_eq!(Venue::PolymarketUs.as_str(), "POLYMARKET_US");
+    }
+
+    #[test]
+    fn test_venue_serializes() {
+        assert_eq!(
+            serde_json::to_string(&Venue::Polymarket).unwrap(),
+            r#""POLYMARKET""#
+        );
+        assert_eq!(
+            serde_json::to_string(&Venue::Kalshi).unwrap(),
+            r#""KALSHI""#
+        );
+        assert_eq!(
+            serde_json::to_string(&Venue::PolymarketUs).unwrap(),
+            r#""POLYMARKET_US""#
+        );
+    }
+
+    #[test]
+    fn test_venue_deserializes() {
+        assert_eq!(
+            serde_json::from_str::<Venue>(r#""POLYMARKET""#).unwrap(),
+            Venue::Polymarket
+        );
+        assert_eq!(
+            serde_json::from_str::<Venue>(r#""KALSHI""#).unwrap(),
+            Venue::Kalshi
+        );
+        assert_eq!(
+            serde_json::from_str::<Venue>(r#""POLYMARKET_US""#).unwrap(),
+            Venue::PolymarketUs
+        );
+    }
+
+    #[test]
+    fn test_arb_execution_leg_deserializes_polymarket_us() {
+        let json = r#"{"venue":"POLYMARKET_US","intentId":"pm-us-1"}"#;
+        let leg: ArbExecutionLeg = serde_json::from_str(json).unwrap();
+        assert_eq!(leg.venue, Some(Venue::PolymarketUs));
+        assert_eq!(leg.intent_id.as_deref(), Some("pm-us-1"));
+    }
+
+    #[test]
+    fn test_arb_position_deserializes_polymarket_us() {
+        let json = r#"{"id":"ap-1","buyVenue":"POLYMARKET","sellVenue":"POLYMARKET_US"}"#;
+        let p: ArbPosition = serde_json::from_str(json).unwrap();
+        assert_eq!(p.buy_venue, Some(Venue::Polymarket));
+        assert_eq!(p.sell_venue, Some(Venue::PolymarketUs));
     }
 
     // -----------------------------------------------------------------------
