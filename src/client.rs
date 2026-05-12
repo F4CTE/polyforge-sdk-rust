@@ -452,6 +452,11 @@ impl PolyforgeClient {
             .await
     }
 
+    async fn get_no_auth<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let resp = self.http.get(self.url(path)).send().await?;
+        self.handle_response(resp).await
+    }
+
     async fn get_with_optional_auth<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
@@ -764,7 +769,7 @@ impl PolyforgeClient {
     ///
     /// Returns only public status; operational internals are not exposed.
     pub async fn get_health(&self) -> Result<SystemHealthPublic> {
-        self.get_with_optional_auth("/health").await
+        self.get_no_auth("/health").await
     }
 
     /// Get the authenticated health/status payload.
@@ -1426,13 +1431,13 @@ impl PolyforgeClient {
         self.get("/api/v1/scores/me/badges").await
     }
 
-    /// Get the score for a specific user.
+    /// Get the score for a specific user. Requires authentication.
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
         self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
-    /// Get the badges awarded to a specific user.
+    /// Get the badges awarded to a specific user. Requires authentication.
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
         self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
@@ -2883,6 +2888,7 @@ impl PolyforgeClient {
             .send()
             .await?;
         if resp.status().as_u16() == 404 {
+            let _ = resp.bytes().await;
             return Ok(None);
         }
         self.handle_response(resp).await.map(Some)
@@ -3359,7 +3365,7 @@ impl PolyforgeClient {
         .await
     }
 
-    /// Get a public user profile by username.
+    /// Get a user profile by username. Requires authentication.
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
         self.get_with_optional_auth(&path).await
@@ -4179,6 +4185,52 @@ mod tests {
         client.get_user_badges("alice").await.unwrap();
         client.get_user_profile("alice").await.unwrap();
         client.get_actions().await.unwrap();
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_user_score_and_profile_endpoints_send_auth() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            for i in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = vec![0_u8; 4096];
+                let n = socket.read(&mut request).await.unwrap();
+                let request = String::from_utf8_lossy(&request[..n]);
+                assert!(
+                    request.to_ascii_lowercase().contains("authorization:"),
+                    "user profile request missing Authorization header (request {}): {request}",
+                    i
+                );
+                let body = match i {
+                    0 => "{}",
+                    1 => "[]",
+                    2 => "{}",
+                    _ => unreachable!(),
+                };
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                     content-type: application/json\r\n\
+                     content-length: {}\r\n\
+                     connection: close\r\n\
+                     \r\n\
+                     {}",
+                    body.len(),
+                    body
+                );
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+
+        let client = PolyforgeClient::with_url("test-key", format!("http://{addr}")).unwrap();
+        client.get_user_score("alice").await.unwrap();
+        client.get_user_badges("alice").await.unwrap();
+        client.get_user_profile("alice").await.unwrap();
 
         server.await.unwrap();
     }
@@ -8407,8 +8459,8 @@ mod tests {
             request.lines().next().unwrap_or("")
         );
         assert!(
-            captured_header(&request, "Authorization").is_some_and(|v| v.starts_with("Bearer ")),
-            "Authorization header must be present with Bearer token"
+            captured_header(&request, "Authorization").is_none(),
+            "Authorization header must NOT be present for unauthenticated health check"
         );
     }
 
@@ -8485,7 +8537,6 @@ mod tests {
         client.get_health().await.unwrap();
         server.await.unwrap();
     }
-
     // -----------------------------------------------------------------------
     // System Health — type tests
     // -----------------------------------------------------------------------
