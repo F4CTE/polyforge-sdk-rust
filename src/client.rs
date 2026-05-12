@@ -448,7 +448,8 @@ impl PolyforgeClient {
             .header(AUTHORIZATION, self.auth_header()?)
             .send()
             .await?;
-        self.handle_response_with_max(resp, Some(max_body_size)).await
+        self.handle_response_with_max(resp, Some(max_body_size))
+            .await
     }
 
     async fn get_with_optional_auth<T: serde::de::DeserializeOwned>(
@@ -494,8 +495,7 @@ impl PolyforgeClient {
             .await?;
         let status = resp.status().as_u16();
         if !resp.status().is_success() {
-            let body =
-                Self::read_error_body_with_max(resp, status, Some(max_body_size)).await?;
+            let body = Self::read_error_body_with_max(resp, status, Some(max_body_size)).await?;
             return Err(Self::api_error_from_body(status, body));
         }
         let bytes = Self::read_bytes_capped(resp, status, max_body_size).await?;
@@ -643,10 +643,7 @@ impl PolyforgeClient {
     }
 
     /// Read an error response body, allowing bodies exactly 1 MiB and rejecting the first byte over.
-    async fn read_error_body(
-        resp: reqwest::Response,
-        status: u16,
-    ) -> Result<serde_json::Value> {
+    async fn read_error_body(resp: reqwest::Response, status: u16) -> Result<serde_json::Value> {
         Self::read_error_body_with_max(resp, status, None).await
     }
 
@@ -729,9 +726,7 @@ impl PolyforgeClient {
         PolyforgeError::Api {
             status,
             code: "RESPONSE_BODY_TOO_LARGE".to_string(),
-            message: format!(
-                "Error response body too large ({size} bytes, limit {limit})"
-            ),
+            message: format!("Error response body too large ({size} bytes, limit {limit})"),
             request_id: None,
             suggestion: None,
         }
@@ -1956,11 +1951,8 @@ impl PolyforgeClient {
     /// # Errors
     /// Returns [`PolyforgeError::Api`] if the request fails.
     pub async fn export_personal_data_csv(&self) -> Result<String> {
-        self.get_text_with_max_body_size(
-            "/api/v1/me/export?format=csv",
-            MAX_GDPR_EXPORT_SIZE,
-        )
-        .await
+        self.get_text_with_max_body_size("/api/v1/me/export?format=csv", MAX_GDPR_EXPORT_SIZE)
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -9404,10 +9396,7 @@ mod tests {
             }
         });
         let export: PersonalDataExport = serde_json::from_value(json).unwrap();
-        assert_eq!(
-            export.generated_at.as_deref(),
-            Some("2026-05-12T10:30:00Z")
-        );
+        assert_eq!(export.generated_at.as_deref(), Some("2026-05-12T10:30:00Z"));
         assert_eq!(export.format_version.as_deref(), Some("2.0"));
         let meta = export.meta.unwrap();
         assert!(meta.collections_truncated.is_some());
@@ -9435,9 +9424,7 @@ mod tests {
     async fn test_export_personal_data_uses_max_body_size_endpoint() {
         let resp = capture_request(
             r#"{"generatedAt":"t","formatVersion":"1"}"#,
-            |client| async move {
-                client.export_personal_data().await.map(|_| ())
-            },
+            |client| async move { client.export_personal_data().await.map(|_| ()) },
         )
         .await;
         assert!(resp.contains("GET /api/v1/me/export HTTP/1.1"));
@@ -9458,19 +9445,15 @@ mod tests {
     async fn test_handle_response_with_max_rejects_oversized_success_body() {
         let body = http::Response::builder()
             .status(200)
-            .header(
-                "content-length",
-                (MAX_GDPR_EXPORT_SIZE + 1).to_string(),
-            )
+            .header("content-length", (MAX_GDPR_EXPORT_SIZE + 1).to_string())
             .body("")
             .unwrap();
         let resp = reqwest::Response::from(body);
 
         let client = PolyforgeClient::with_url("test-key", "http://localhost:3002").unwrap();
-        let result: std::result::Result<serde_json::Value, _> =
-            client
-                .handle_response_with_max(resp, Some(MAX_GDPR_EXPORT_SIZE))
-                .await;
+        let result: std::result::Result<serde_json::Value, _> = client
+            .handle_response_with_max(resp, Some(MAX_GDPR_EXPORT_SIZE))
+            .await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -9497,10 +9480,9 @@ mod tests {
         let resp = reqwest::Response::from(body);
 
         let client = PolyforgeClient::with_url("test-key", "http://localhost:3002").unwrap();
-        let result: std::result::Result<serde_json::Value, _> =
-            client
-                .handle_response_with_max(resp, Some(MAX_GDPR_EXPORT_SIZE))
-                .await;
+        let result: std::result::Result<serde_json::Value, _> = client
+            .handle_response_with_max(resp, Some(MAX_GDPR_EXPORT_SIZE))
+            .await;
 
         assert!(result.is_ok());
         let v = result.unwrap();
@@ -9518,10 +9500,9 @@ mod tests {
         let resp = reqwest::Response::from(body);
 
         let client = PolyforgeClient::with_url("test-key", "http://localhost:3002").unwrap();
-        let result: std::result::Result<serde_json::Value, _> =
-            client
-                .handle_response_with_max(resp, Some(MAX_GDPR_EXPORT_SIZE))
-                .await;
+        let result: std::result::Result<serde_json::Value, _> = client
+            .handle_response_with_max(resp, Some(MAX_GDPR_EXPORT_SIZE))
+            .await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -9538,17 +9519,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_response_with_max_handles_204() {
-        let body = http::Response::builder()
-            .status(204)
-            .body("")
-            .unwrap();
+        let body = http::Response::builder().status(204).body("").unwrap();
         let resp = reqwest::Response::from(body);
 
         let client = PolyforgeClient::with_url("test-key", "http://localhost:3002").unwrap();
-        let result: std::result::Result<serde_json::Value, _> =
-            client
-                .handle_response_with_max(resp, Some(MAX_GDPR_EXPORT_SIZE))
-                .await;
+        let result: std::result::Result<serde_json::Value, _> = client
+            .handle_response_with_max(resp, Some(MAX_GDPR_EXPORT_SIZE))
+            .await;
 
         assert!(result.is_ok());
     }
