@@ -86,6 +86,13 @@
   - `get_rewards_sponsor_url(market_id)` → `GET /api/v1/rewards/sponsor-url/{marketId}` → `RewardsSponsorUrl` — get the Polymarket sponsor page URL for a specific market.
   - New types: `RewardsMarketDetail`, `UserSponsoredMarkets`, `RewardsSponsorUrl`. All use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility.
 
+- **GDPR personal-data export (POLA-215)** — two new methods on `PolyforgeClient` for `GET /api/v1/me/export`:
+  - `export_personal_data()` — returns typed `PersonalDataExport` with structured JSON payload (generated timestamp, format version, optional `_meta` with `collections_truncated` / `max_records_per_collection`, and forward-compatible `account` / `settings` / `security` / `trading` / `communications` / `social` sections plus `#[serde(flatten)] extra`).
+  - `export_personal_data_csv()` — returns the raw CSV text (`?format=csv`).
+  - Internal `MAX_GDPR_EXPORT_SIZE` constant of 500 MiB prevents silent truncation of large GDPR responses — the standard 1 MiB error-body cap is relaxed for this endpoint only.
+  - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
+  - 4 new unit tests cover `PersonalDataExport` JSON deserialization (full, minimal, forward-compat extra fields) and end-to-end URL-path verification for both JSON and CSV formats. (closes #215)
+
 ### Fixed
 - **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, liquidity, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
 - **`RewardMarket.extra` / `RewardMarketDetail.extra` backward compatibility** — custom `Deserialize` implementations now preserve ALL response fields (including named ones) inside `extra`, so downstream code that reads `extra["conditionId"]` or other previously-dynamic keys continues to work after the keys were promoted to first-class struct fields. 1 new test and 6 new assertions verify the backward-compatible shape.

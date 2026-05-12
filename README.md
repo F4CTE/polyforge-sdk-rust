@@ -294,6 +294,26 @@ upstream controller types them as `Record<string, unknown>` / `unknown[]` —
 the SDK mirrors that fidelity instead of inventing strict shapes that could
 drift from the server.
 
+### Account & Data Export
+
+| Method | Description |
+|--------|-------------|
+| `export_personal_data()` | Download GDPR personal-data export as typed `PersonalDataExport` JSON (requires JWT/API-key with `READ` scope) |
+| `export_personal_data_csv()` | Download GDPR personal-data export as raw CSV text |
+| `export_orders_csv()` | Download order history as CSV text |
+| `export_portfolio_csv()` | Download portfolio positions as CSV text |
+
+```rust
+// GDPR personal-data export (JSON)
+let data = client.export_personal_data().await?;
+println!("Generated at: {}", data.generated_at);
+println!("Account: {:?}", data.account);
+
+// GDPR personal-data export (CSV)
+let csv = client.export_personal_data_csv().await?;
+std::fs::write("polyforge-export.csv", csv)?;
+```
+
 ## Error Handling
 
 All methods return `polyforge::Result<T>`. Errors are represented by `PolyforgeError`:
