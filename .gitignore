@@ -4,3 +4,6 @@ target/
 
 # Graphify knowledge graph artifacts
 graphify-out/
+
+# Playwright MCP browser artifacts
+.playwright-mcp/
