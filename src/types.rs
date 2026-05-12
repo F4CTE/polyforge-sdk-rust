@@ -2523,6 +2523,8 @@ pub enum Venue {
     Kalshi,
     #[serde(rename = "POLYMARKET_US")]
     PolymarketUs,
+    #[serde(other)]
+    Unknown,
 }
 
 impl Venue {
@@ -2531,6 +2533,7 @@ impl Venue {
             Self::Polymarket => "POLYMARKET",
             Self::Kalshi => "KALSHI",
             Self::PolymarketUs => "POLYMARKET_US",
+            Self::Unknown => "UNKNOWN",
         }
     }
 }
