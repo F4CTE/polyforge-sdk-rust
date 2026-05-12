@@ -3865,7 +3865,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..8 {
+            for _ in 0..10 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
@@ -3900,6 +3900,8 @@ mod tests {
         });
 
         let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client.get_user_score("alice").await.unwrap();
+        client.get_user_badges("alice").await.unwrap();
         client.get_user_performance("alice", "30d").await.unwrap();
         client
             .get_user_strategies("alice", None, None)
@@ -3975,9 +3977,7 @@ mod tests {
 
                 let body = if request.contains("/badges") {
                     "[]"
-                } else if request.contains("/scores/") {
-                    "{}"
-                } else if request.contains("/profile/") {
+                } else if request.contains("/scores/") || request.contains("/profile/") {
                     "{}"
                 } else if request.contains("/actions") {
                     r#"{"version":"1.0","actions":[]}"#
@@ -3999,8 +3999,7 @@ mod tests {
             }
         });
 
-        let client =
-            PolyforgeClient::with_url("test-api-key", format!("http://{addr}")).unwrap();
+        let client = PolyforgeClient::with_url("test-api-key", format!("http://{addr}")).unwrap();
         client.get_user_score("alice").await.unwrap();
         client.get_user_badges("alice").await.unwrap();
         client.get_user_profile("alice").await.unwrap();
@@ -6844,6 +6843,10 @@ mod tests {
         assert_eq!(rm.condition_id.as_deref(), Some("cond-1"));
         assert_eq!(rm.rewards_daily.as_deref(), Some("100"));
         assert_eq!(rm.extra["unknown"], true);
+        assert_eq!(rm.extra["rewardsMaxSpread"], "0.02");
+        assert_eq!(rm.extra["rewardsMinSize"], "50");
+        assert_eq!(rm.extra["startDate"], "2026-01-01");
+        assert_eq!(rm.extra["endDate"], "2026-06-01");
     }
 
     #[test]
@@ -6881,6 +6884,92 @@ mod tests {
         let json = r#"{"url":"https://polymarket.com/rewards/0xabc"}"#;
         let s: RewardsSponsorUrl = serde_json::from_str(json).unwrap();
         assert_eq!(s.url, "https://polymarket.com/rewards/0xabc");
+    }
+
+    #[test]
+    fn test_reward_market_detail_extra_backward_compat() {
+        let json = r#"{"conditionId": "cond-1", "rewardsDaily": "100", "rewardsMaxSpread": "0.02", "rewardsMinSize": "50", "startDate": "2026-01-01", "endDate": "2026-06-01", "unknown": true}"#;
+        let d: RewardMarketDetail = serde_json::from_str(json).unwrap();
+        assert_eq!(d.extra["conditionId"], "cond-1");
+        assert_eq!(d.extra["rewardsDaily"], "100");
+        assert_eq!(d.extra["rewardsMaxSpread"], "0.02");
+        assert_eq!(d.extra["rewardsMinSize"], "50");
+        assert_eq!(d.extra["startDate"], "2026-01-01");
+        assert_eq!(d.extra["endDate"], "2026-06-01");
+        assert_eq!(d.extra["unknown"], true);
+    }
+
+    #[test]
+    fn test_reward_market_serialize_no_duplicate_keys() {
+        let json = r#"{"conditionId":"cond-1","rewardsDaily":"100","rewardsMaxSpread":"0.02","rewardsMinSize":"50","startDate":"2026-01-01","endDate":"2026-06-01","unknown":true}"#;
+        let rm: RewardMarket = serde_json::from_str(json).unwrap();
+        let out = serde_json::to_string(&rm).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let obj = parsed.as_object().unwrap();
+        // No duplicate keys: each key appears exactly once
+        assert_eq!(obj["conditionId"], "cond-1");
+        assert_eq!(obj["rewardsDaily"], "100");
+        assert_eq!(obj["rewardsMaxSpread"], "0.02");
+        assert_eq!(obj["rewardsMinSize"], "50");
+        assert_eq!(obj["startDate"], "2026-01-01");
+        assert_eq!(obj["endDate"], "2026-06-01");
+        assert_eq!(obj["unknown"], true);
+    }
+
+    #[test]
+    fn test_reward_market_detail_serialize_no_duplicate_keys() {
+        let json = r#"{"conditionId":"cond-1","rewardsDaily":"100","rewardsMaxSpread":"0.02","rewardsMinSize":"50","startDate":"2026-01-01","endDate":"2026-06-01","unknown":true}"#;
+        let d: RewardMarketDetail = serde_json::from_str(json).unwrap();
+        let out = serde_json::to_string(&d).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let obj = parsed.as_object().unwrap();
+        assert_eq!(obj["conditionId"], "cond-1");
+        assert_eq!(obj["rewardsDaily"], "100");
+        assert_eq!(obj["rewardsMaxSpread"], "0.02");
+        assert_eq!(obj["rewardsMinSize"], "50");
+        assert_eq!(obj["startDate"], "2026-01-01");
+        assert_eq!(obj["endDate"], "2026-06-01");
+        assert_eq!(obj["unknown"], true);
+    }
+
+    #[test]
+    fn test_reward_market_serialize_roundtrip() {
+        let json = r#"{"conditionId":"cond-1","rewardsDaily":"100","startDate":"2026-01-01","endDate":"2026-06-01","extraField":"survives"}"#;
+        let rm: RewardMarket = serde_json::from_str(json).unwrap();
+        // Round-trip: serialize → deserialize → typed fields + extra survive
+        let out = serde_json::to_string(&rm).unwrap();
+        let rm2: RewardMarket = serde_json::from_str(&out).unwrap();
+        assert_eq!(rm2.condition_id.as_deref(), Some("cond-1"));
+        assert_eq!(rm2.rewards_daily.as_deref(), Some("100"));
+        assert_eq!(rm2.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(rm2.end_date.as_deref(), Some("2026-06-01"));
+        assert_eq!(rm2.extra["extraField"], "survives");
+    }
+
+    #[test]
+    fn test_reward_market_detail_serialize_roundtrip() {
+        let json = r#"{"conditionId":"cond-1","rewardsDaily":"100","startDate":"2026-01-01","endDate":"2026-06-01","extraField":"survives"}"#;
+        let d: RewardMarketDetail = serde_json::from_str(json).unwrap();
+        let out = serde_json::to_string(&d).unwrap();
+        let d2: RewardMarketDetail = serde_json::from_str(&out).unwrap();
+        assert_eq!(d2.condition_id.as_deref(), Some("cond-1"));
+        assert_eq!(d2.rewards_daily.as_deref(), Some("100"));
+        assert_eq!(d2.start_date.as_deref(), Some("2026-01-01"));
+        assert_eq!(d2.end_date.as_deref(), Some("2026-06-01"));
+        assert_eq!(d2.extra["extraField"], "survives");
+    }
+
+    #[test]
+    fn test_reward_market_serialize_empty_extra_no_spurious_keys() {
+        let json = r#"{"conditionId":"cond-1","rewardsDaily":"100"}"#;
+        let rm: RewardMarket = serde_json::from_str(json).unwrap();
+        let out = serde_json::to_string(&rm).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let obj = parsed.as_object().unwrap();
+        // Only the two typed fields, no extra blanks
+        assert_eq!(obj.len(), 2);
+        assert_eq!(obj["conditionId"], "cond-1");
+        assert_eq!(obj["rewardsDaily"], "100");
     }
 
     // -----------------------------------------------------------------------
@@ -7864,6 +7953,141 @@ mod tests {
         assert_eq!(param.name, "marketId");
         assert_eq!(param.param_type, "string");
         assert!(!param.required);
+    }
+
+    #[tokio::test]
+    async fn test_get_actions_dispatch_without_api_key() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = vec![0_u8; 4096];
+            let n = socket.read(&mut request).await.unwrap();
+            let request = String::from_utf8_lossy(&request[..n]);
+            assert!(
+                !request.to_ascii_lowercase().contains("authorization:"),
+                "get_actions request unexpectedly included Authorization header: {request}"
+            );
+            assert!(
+                request.contains("GET /api/v1/actions HTTP/1.1"),
+                "request must hit GET /api/v1/actions; got: {}",
+                request.lines().next().unwrap_or("")
+            );
+            let body = r#"{"version":"1.0","actions":[]}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\n\
+                 content-type: application/json\r\n\
+                 content-length: {}\r\n\
+                 connection: close\r\n\
+                 \r\n\
+                 {}",
+                body.len(),
+                body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client.get_actions().await.unwrap();
+        server.await.unwrap();
+    }
+
+    // -----------------------------------------------------------------------
+    // System Health — HTTP request-capture tests (POLA-3671)
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_get_health_path_and_auth() {
+        let request = capture_request(r#"{"status":"ok"}"#, |client| async move {
+            client.get_health().await.map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("GET /health HTTP/1.1"),
+            "request must hit GET /health; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        assert!(
+            captured_header(&request, "Authorization").is_some_and(|v| v.starts_with("Bearer ")),
+            "Authorization header must be present with Bearer token"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_health_authenticated_path_and_auth() {
+        let request = capture_request(r#"{"status":"operational"}"#, |client| async move {
+            client.get_health_authenticated().await.map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("GET /api/v1/status HTTP/1.1"),
+            "request must hit GET /api/v1/status; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        let auth = captured_header(&request, "Authorization")
+            .expect("get_health_authenticated must include Authorization header");
+        assert!(
+            auth.starts_with("Bearer "),
+            "Authorization must be Bearer token"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_health_authenticated_deserializes_response() {
+        let response_json = r#"{"status":"operational","db":{"connections":5,"status":"connected"},"redis":{"memoryUsageMb":128,"status":"connected"},"queueDepth":42}"#;
+        let request = capture_request(response_json, |client| async move {
+            let health = client.get_health_authenticated().await?;
+            assert_eq!(health.status, "operational");
+            assert_eq!(health.queue_depth, Some(42));
+            assert!(health.db.is_some());
+            assert!(health.redis.is_some());
+            Ok(())
+        })
+        .await;
+        assert!(request.contains("GET /api/v1/status HTTP/1.1"));
+    }
+
+    #[tokio::test]
+    async fn test_get_health_dispatch_without_api_key() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = vec![0_u8; 4096];
+            let n = socket.read(&mut request).await.unwrap();
+            let request = String::from_utf8_lossy(&request[..n]);
+            assert!(
+                !request.to_ascii_lowercase().contains("authorization:"),
+                "get_health request unexpectedly included Authorization header: {request}"
+            );
+            assert!(
+                request.contains("GET /health HTTP/1.1"),
+                "request must hit GET /health; got: {}",
+                request.lines().next().unwrap_or("")
+            );
+            let body = r#"{"status":"ok"}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\n\
+                 content-type: application/json\r\n\
+                 content-length: {}\r\n\
+                 connection: close\r\n\
+                 \r\n\
+                 {}",
+                body.len(),
+                body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client.get_health().await.unwrap();
+        server.await.unwrap();
     }
 
     // -----------------------------------------------------------------------
