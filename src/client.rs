@@ -396,10 +396,11 @@ impl PolyforgeClient {
     }
 
     fn idempotency_key_header(idempotency_key: &str) -> Result<HeaderValue> {
-        if idempotency_key.len() < 8 || idempotency_key.len() > 128 {
+        if idempotency_key.trim().len() < 8 || idempotency_key.len() > 128 {
             return Err(PolyforgeError::Validation(format!(
-                "idempotency_key must be 8–128 characters, got {}",
-                idempotency_key.len()
+                "idempotency_key must be 8–128 non-whitespace characters, got {} ({} after trim)",
+                idempotency_key.len(),
+                idempotency_key.trim().len()
             )));
         }
         HeaderValue::from_str(idempotency_key).map_err(|_| {
