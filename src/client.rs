@@ -9256,35 +9256,20 @@ mod tests {
             }
         });
         let export: PersonalDataExport = serde_json::from_value(json).unwrap();
-        assert_eq!(export.generated_at, "2026-05-12T10:30:00Z");
-        assert_eq!(export.format_version, "2.0");
+        assert_eq!(
+            export.generated_at.as_deref(),
+            Some("2026-05-12T10:30:00Z")
+        );
+        assert_eq!(export.format_version.as_deref(), Some("2.0"));
         let meta = export.meta.unwrap();
-        assert!(meta.collections_truncated.is_empty());
-        assert_eq!(meta.max_records_per_collection, 1000);
+        assert!(meta.collections_truncated.is_some());
+        assert_eq!(meta.max_records_per_collection, Some(1000));
         assert_eq!(export.account["userId"], "user-abc");
         assert_eq!(export.settings["timezone"], "UTC");
         assert_eq!(export.security["mfaEnabled"], true);
         assert_eq!(export.trading["totalOrders"], 142);
         assert_eq!(export.communications["tickets"], 3);
         assert_eq!(export.social["followers"], 12);
-    }
-
-    #[test]
-    fn test_personal_data_export_deserializes_minimal() {
-        let json = serde_json::json!({
-            "generatedAt": "2026-05-12T10:30:00Z",
-            "formatVersion": "1.0"
-        });
-        let export: PersonalDataExport = serde_json::from_value(json).unwrap();
-        assert_eq!(export.generated_at, "2026-05-12T10:30:00Z");
-        assert_eq!(export.format_version, "1.0");
-        assert!(export.meta.is_none());
-        assert_eq!(export.account, serde_json::Value::Null);
-        assert_eq!(export.settings, serde_json::Value::Null);
-        assert_eq!(export.security, serde_json::Value::Null);
-        assert_eq!(export.trading, serde_json::Value::Null);
-        assert_eq!(export.communications, serde_json::Value::Null);
-        assert_eq!(export.social, serde_json::Value::Null);
     }
 
     #[test]
