@@ -46,6 +46,11 @@
   - `get_health()` → `GET /health` — returns `SystemHealthPublic` with public status fields (`status`, `service?`, `version?`, `uptime?`). Uses `get_with_optional_auth()` so the endpoint works without an API key while still returning richer data when authenticated.
   - `get_health_authenticated()` → `GET /api/v1/status` — returns `SystemHealthAuthenticated` with full operational metrics (DB, Redis, queue depth, services) alongside the public health fields. Always sends `Authorization: Bearer <key>`.
    - New types: `SystemHealthPublic`, `SystemHealthAuthenticated`. Both use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility with backend shape evolution. 4 new integration tests verify URL paths, auth headers, no-key dispatch, and response deserialization through the full request pipeline. All 378 unit tests and 5 doc tests pass, clippy is clean.
+- **Venue preferences (POLA-3330)** — two new methods on `PolyforgeClient` for managing cross-venue platform preferences, bringing the Rust SDK to parity with `polyforge-sdk-ts` (`getMyPreferences`) and `polyforge-sdk-python` (`get_venue_preferences`):
+  - `get_my_preferences()` → `GET /api/v1/users/me/venue-preferences` — returns `UserPreferences` with `default_venue`, `enabled_venues`, and `single_platform_mode`.
+  - `update_my_preferences(&UpdateUserPreferencesParams)` → `PATCH /api/v1/users/me/venue-preferences` — partial update with `skip_serializing_if = "Option::is_none"` so only supplied fields are changed (JSON Merge Patch semantics).
+  - New types: `UserPreferences` (all fields `Option`-wrapped with `#[serde(default)]` for forward-compatibility), `UpdateUserPreferencesParams` (all three fields optional with `skip_serializing_if`).
+  - 3 unit tests covering deserialization, empty defaults, and partial-update serialization.
 
 ### Changed
 - **Auth behavior for public endpoints** — `get_user_score()`, `get_user_badges()`, `get_user_profile()`, and `get_actions()` now use `get_with_optional_auth()`. When the client is constructed with an empty API key these methods skip the `Authorization` header, matching the platform's public-route contract. Previously these methods always attached `Authorization: Bearer <key>`, causing 401 errors when no key was available.
