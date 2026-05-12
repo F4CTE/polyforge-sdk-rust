@@ -139,7 +139,7 @@ Cross-venue arbitrage between Polymarket and Kalshi.  Key points:
 - **UUID match_id** — `match_id` must be a valid RFC 4122 UUID; non-UUID input is rejected with HTTP 400.
 
 ```rust
-use polyforge::{PolyforgeClient, ExecuteArbitrageParams};
+use polyforge::{PolyforgeClient, PolyforgeError, ExecuteArbitrageParams};
 use uuid::Uuid;
 
 #[tokio::main]
@@ -161,8 +161,12 @@ async fn main() -> polyforge::Result<()> {
     println!("Opened position: {:?}", result.arb_position_id);
 
     // Later: sweep-close the position
+    let pos_id = result.arb_position_id.as_deref().ok_or_else(|| {
+        PolyforgeError::Validation(
+            "execute_arbitrage response missing arb_position_id".into(),
+        )
+    })?;
     let close_key = Uuid::new_v4().to_string();
-    let pos_id = result.arb_position_id.as_deref().unwrap_or_default();
     let close_result = client
         .close_arbitrage_position(pos_id, &close_key)
         .await?;
