@@ -3457,6 +3457,48 @@ pub struct MyReferralsResponse {
 #[deprecated(note = "use MyReferralsResponse instead")]
 pub use self::MyReferralsResponse as ReferralsInfo;
 
+// ── GDPR Personal Data Export ──────────────────────────────────────────────────
+
+/// Metadata attached to a GDPR personal-data export payload.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalDataExportMeta {
+    #[serde(default)]
+    pub collections_truncated: Vec<String>,
+    #[serde(default)]
+    pub max_records_per_collection: u32,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Top-level JSON response for `GET /api/v1/me/export`.
+///
+/// Returns a comprehensive snapshot of the authenticated user's account details,
+/// trading history, settings, communications, social activity, and security
+/// profile for GDPR compliance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalDataExport {
+    pub generated_at: String,
+    pub format_version: String,
+    #[serde(default, rename = "_meta")]
+    pub meta: Option<PersonalDataExportMeta>,
+    #[serde(default)]
+    pub account: serde_json::Value,
+    #[serde(default)]
+    pub settings: serde_json::Value,
+    #[serde(default)]
+    pub security: serde_json::Value,
+    #[serde(default)]
+    pub trading: serde_json::Value,
+    #[serde(default)]
+    pub communications: serde_json::Value,
+    #[serde(default)]
+    pub social: serde_json::Value,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
 /// Side of an order preview request — `BUY` or `SELL`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PreviewSide {

@@ -27,6 +27,12 @@ const MAX_SSE_BUFFER_SIZE: usize = 1_048_576; // 1 MiB
 /// entirely in memory.  This constant caps the readable size so that an
 /// oversized error response is rejected early instead of causing OOM.
 const MAX_RESPONSE_BODY_SIZE: usize = 1_048_576; // 1 MiB
+
+/// Maximum size of a GDPR personal-data export response body that the SDK will
+/// read (500 MiB).  GDPR exports can legitimately be very large and must not be
+/// silently truncated.
+const MAX_GDPR_EXPORT_SIZE: usize = 500 * 1024 * 1024; // 500 MiB
+
 const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
 
 /// An open SSE connection to a strategy's execution event stream.
@@ -431,6 +437,20 @@ impl PolyforgeClient {
         self.handle_response(resp).await
     }
 
+    async fn get_with_max_body_size<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        max_body_size: usize,
+    ) -> Result<T> {
+        let resp = self
+            .http
+            .get(self.url(path))
+            .header(AUTHORIZATION, self.auth_header()?)
+            .send()
+            .await?;
+        self.handle_response_with_max(resp, Some(max_body_size)).await
+    }
+
     async fn get_with_optional_auth<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
@@ -454,6 +474,28 @@ impl PolyforgeClient {
         let status = resp.status().as_u16();
         if !resp.status().is_success() {
             let body = Self::read_error_body(resp, status).await?;
+            return Err(Self::api_error_from_body(status, body));
+        }
+        Ok(resp.text().await?)
+    }
+
+    /// Send a GET and return the body as plain text with a configurable
+    /// error body size limit (for large CSV responses like GDPR exports).
+    async fn get_text_with_max_body_size(
+        &self,
+        path: &str,
+        max_body_size: usize,
+    ) -> Result<String> {
+        let resp = self
+            .http
+            .get(self.url(path))
+            .header(AUTHORIZATION, self.auth_header()?)
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        if !resp.status().is_success() {
+            let body =
+                Self::read_error_body_with_max(resp, status, Some(max_body_size)).await?;
             return Err(Self::api_error_from_body(status, body));
         }
         Ok(resp.text().await?)
@@ -567,9 +609,17 @@ impl PolyforgeClient {
         &self,
         resp: reqwest::Response,
     ) -> Result<T> {
+        self.handle_response_with_max(resp, None).await
+    }
+
+    async fn handle_response_with_max<T: serde::de::DeserializeOwned>(
+        &self,
+        resp: reqwest::Response,
+        max_body_size: Option<usize>,
+    ) -> Result<T> {
         let status = resp.status().as_u16();
         if !resp.status().is_success() {
-            let body = Self::read_error_body(resp, status).await?;
+            let body = Self::read_error_body_with_max(resp, status, max_body_size).await?;
             return Err(Self::api_error_from_body(status, body));
         }
         if status == 204 {
@@ -581,25 +631,42 @@ impl PolyforgeClient {
 
     /// Read an error response body, allowing bodies exactly 1 MiB and rejecting the first byte over.
     async fn read_error_body(
-        mut resp: reqwest::Response,
+        resp: reqwest::Response,
         status: u16,
     ) -> Result<serde_json::Value> {
+        Self::read_error_body_with_max(resp, status, None).await
+    }
+
+    /// Read an error response body with a configurable size limit.
+    async fn read_error_body_with_max(
+        mut resp: reqwest::Response,
+        status: u16,
+        max_body_size: Option<usize>,
+    ) -> Result<serde_json::Value> {
+        let limit = max_body_size.unwrap_or(MAX_RESPONSE_BODY_SIZE);
+
         let content_length = resp
             .headers()
             .get(reqwest::header::CONTENT_LENGTH)
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.parse::<u64>().ok());
         if let Some(cl) = content_length {
-            if cl > MAX_RESPONSE_BODY_SIZE as u64 {
-                return Err(Self::response_body_too_large_error(status, cl));
+            if cl > limit as u64 {
+                return Err(Self::response_body_too_large_error_with_limit(
+                    status, cl, limit,
+                ));
             }
         }
 
         let mut body = Vec::new();
         while let Some(chunk) = resp.chunk().await? {
             let next_len = body.len().saturating_add(chunk.len());
-            if next_len > MAX_RESPONSE_BODY_SIZE {
-                return Err(Self::response_body_too_large_error(status, next_len as u64));
+            if next_len > limit {
+                return Err(Self::response_body_too_large_error_with_limit(
+                    status,
+                    next_len as u64,
+                    limit,
+                ));
             }
             body.extend_from_slice(&chunk);
         }
@@ -607,12 +674,16 @@ impl PolyforgeClient {
         Ok(serde_json::from_slice(&body).unwrap_or_default())
     }
 
-    fn response_body_too_large_error(status: u16, size: u64) -> PolyforgeError {
+    fn response_body_too_large_error_with_limit(
+        status: u16,
+        size: u64,
+        limit: usize,
+    ) -> PolyforgeError {
         PolyforgeError::Api {
             status,
             code: "RESPONSE_BODY_TOO_LARGE".to_string(),
             message: format!(
-                "Error response body too large ({size} bytes, limit {MAX_RESPONSE_BODY_SIZE})"
+                "Error response body too large ({size} bytes, limit {limit})"
             ),
             request_id: None,
             suggestion: None,
@@ -1816,7 +1887,8 @@ impl PolyforgeClient {
     /// Returns [`PolyforgeError::Api`] if the request fails (e.g., insufficient
     /// scope).
     pub async fn export_personal_data(&self) -> Result<PersonalDataExport> {
-        self.get("/api/v1/me/export").await
+        self.get_with_max_body_size("/api/v1/me/export", MAX_GDPR_EXPORT_SIZE)
+            .await
     }
 
     /// Export your personal data in CSV format (GDPR compliance).
@@ -1837,7 +1909,11 @@ impl PolyforgeClient {
     /// # Errors
     /// Returns [`PolyforgeError::Api`] if the request fails.
     pub async fn export_personal_data_csv(&self) -> Result<String> {
-        self.get_text("/api/v1/me/export?format=csv").await
+        self.get_text_with_max_body_size(
+            "/api/v1/me/export?format=csv",
+            MAX_GDPR_EXPORT_SIZE,
+        )
+        .await
     }
 
     // -----------------------------------------------------------------------
@@ -9137,5 +9213,109 @@ mod tests {
         assert_eq!(cc.categories.len(), 2);
         assert_eq!(cc.matrix.len(), 2);
         assert!((cc.matrix[0][0] - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_max_gdpr_export_size_constant_is_500mib() {
+        assert_eq!(MAX_GDPR_EXPORT_SIZE, 500 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_personal_data_export_deserializes_full() {
+        let json = serde_json::json!({
+            "generatedAt": "2026-05-12T10:30:00Z",
+            "formatVersion": "2.0",
+            "_meta": {
+                "collectionsTruncated": [],
+                "maxRecordsPerCollection": 1000
+            },
+            "account": {
+                "userId": "user-abc",
+                "email": "user@example.com",
+                "username": "trader1",
+                "createdAt": "2025-01-01T00:00:00Z"
+            },
+            "settings": {
+                "timezone": "UTC",
+                "notifications": { "email": true }
+            },
+            "security": {
+                "mfaEnabled": true,
+                "lastLogin": "2026-05-12T09:00:00Z"
+            },
+            "trading": {
+                "totalOrders": 142,
+                "totalVolumeUsdc": 50000.0
+            },
+            "communications": {
+                "tickets": 3
+            },
+            "social": {
+                "followers": 12,
+                "following": 5
+            }
+        });
+        let export: PersonalDataExport = serde_json::from_value(json).unwrap();
+        assert_eq!(export.generated_at, "2026-05-12T10:30:00Z");
+        assert_eq!(export.format_version, "2.0");
+        let meta = export.meta.unwrap();
+        assert!(meta.collections_truncated.is_empty());
+        assert_eq!(meta.max_records_per_collection, 1000);
+        assert_eq!(export.account["userId"], "user-abc");
+        assert_eq!(export.settings["timezone"], "UTC");
+        assert_eq!(export.security["mfaEnabled"], true);
+        assert_eq!(export.trading["totalOrders"], 142);
+        assert_eq!(export.communications["tickets"], 3);
+        assert_eq!(export.social["followers"], 12);
+    }
+
+    #[test]
+    fn test_personal_data_export_deserializes_minimal() {
+        let json = serde_json::json!({
+            "generatedAt": "2026-05-12T10:30:00Z",
+            "formatVersion": "1.0"
+        });
+        let export: PersonalDataExport = serde_json::from_value(json).unwrap();
+        assert_eq!(export.generated_at, "2026-05-12T10:30:00Z");
+        assert_eq!(export.format_version, "1.0");
+        assert!(export.meta.is_none());
+        assert_eq!(export.account, serde_json::Value::Null);
+        assert_eq!(export.settings, serde_json::Value::Null);
+        assert_eq!(export.security, serde_json::Value::Null);
+        assert_eq!(export.trading, serde_json::Value::Null);
+        assert_eq!(export.communications, serde_json::Value::Null);
+        assert_eq!(export.social, serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_personal_data_export_preserves_extra_fields() {
+        let json = serde_json::json!({
+            "generatedAt": "2026-05-12T10:30:00Z",
+            "formatVersion": "1.0",
+            "futureField": "forward-compat"
+        });
+        let export: PersonalDataExport = serde_json::from_value(json).unwrap();
+        assert_eq!(export.extra["futureField"], "forward-compat");
+    }
+
+    #[tokio::test]
+    async fn test_export_personal_data_uses_max_body_size_endpoint() {
+        let resp = capture_request(
+            r#"{"generatedAt":"t","formatVersion":"1"}"#,
+            |client| async move {
+                client.export_personal_data().await.map(|_| ())
+            },
+        )
+        .await;
+        assert!(resp.contains("GET /api/v1/me/export HTTP/1.1"));
+    }
+
+    #[tokio::test]
+    async fn test_export_personal_data_csv_uses_max_body_size_endpoint() {
+        let resp = capture_request("", |client| async move {
+            client.export_personal_data_csv().await.map(|_| ())
+        })
+        .await;
+        assert!(resp.contains("GET /api/v1/me/export?format=csv HTTP/1.1"));
     }
 }
