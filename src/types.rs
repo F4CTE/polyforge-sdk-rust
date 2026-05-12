@@ -2278,10 +2278,10 @@ pub struct Rebates {
 /// Iterate over these via [`crate::client::StrategyEventStream::next`].
 ///
 /// Common event types: `CONNECTED`, `STRATEGY_STARTED`, `STRATEGY_STOPPED`,
-/// `STRATEGY_PAUSED`, `STRATEGY_RESUMED`, `STRATEGY_ERROR`, `ORDER_PLACED`,
-/// `ORDER_SUBMITTED`, `ORDER_FILLED`, `ORDER_PARTIAL`, `ORDER_CANCELLED`,
-/// `ORDER_FAILED`, `ORDER_ERROR`, `BACKTEST_PROGRESS`, `BACKTEST_COMPLETED`,
-/// `BACKTEST_FAILED`.
+/// `STRATEGY_PAUSED`, `STRATEGY_RESUMED`, `STRATEGY_ERROR`,
+/// `ORDER_PLACED`, `ORDER_SUBMITTED`, `ORDER_PARTIAL`, `ORDER_FILLED`,
+/// `ORDER_FAILED`, `ORDER_CANCELLED`, `ORDER_ERROR`,
+/// `BACKTEST_PROGRESS`, `BACKTEST_COMPLETED`, `BACKTEST_FAILED`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyEvent {
     /// Event type identifier.
@@ -2297,6 +2297,29 @@ pub struct StrategyEvent {
     #[serde(default)]
     pub timestamp: u64,
 }
+
+/// Known strategy event types emitted by the platform.
+///
+/// The platform may emit additional event types not listed here;
+/// clients should handle unknown types gracefully.
+pub const KNOWN_STRATEGY_EVENT_TYPES: &[&str] = &[
+    "CONNECTED",
+    "STRATEGY_STARTED",
+    "STRATEGY_STOPPED",
+    "STRATEGY_PAUSED",
+    "STRATEGY_RESUMED",
+    "STRATEGY_ERROR",
+    "ORDER_PLACED",
+    "ORDER_SUBMITTED",
+    "ORDER_PARTIAL",
+    "ORDER_FILLED",
+    "ORDER_FAILED",
+    "ORDER_CANCELLED",
+    "ORDER_ERROR",
+    "BACKTEST_PROGRESS",
+    "BACKTEST_COMPLETED",
+    "BACKTEST_FAILED",
+];
 
 // ---------------------------------------------------------------------------
 // Cross-Venue Arbitrage (POLA-782)

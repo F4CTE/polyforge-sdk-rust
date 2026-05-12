@@ -4802,6 +4802,115 @@ mod tests {
     }
 
     #[test]
+    fn test_known_strategy_event_types_list() {
+        // #214: Verify all 16 known event types (including the 6 that
+        // were previously missing) are listed in the constant.
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"STRATEGY_PAUSED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"STRATEGY_RESUMED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"ORDER_SUBMITTED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"ORDER_PARTIAL"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"ORDER_FAILED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"ORDER_ERROR"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"CONNECTED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"STRATEGY_STARTED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"STRATEGY_STOPPED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"STRATEGY_ERROR"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"ORDER_PLACED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"ORDER_FILLED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"ORDER_CANCELLED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"BACKTEST_PROGRESS"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"BACKTEST_COMPLETED"));
+        assert!(KNOWN_STRATEGY_EVENT_TYPES.contains(&"BACKTEST_FAILED"));
+        assert_eq!(KNOWN_STRATEGY_EVENT_TYPES.len(), 16);
+    }
+
+    #[test]
+    fn test_strategy_event_deserializes_known_types() {
+        // #214: Ensure StrategyEvent deserializes correctly for the 6
+        // event types that were previously undocumented.
+        let json = serde_json::json!({
+            "type": "STRATEGY_PAUSED",
+            "strategyId": "strat-1",
+            "data": null,
+            "timestamp": 1715000000000_u64
+        });
+        let event: crate::types::StrategyEvent = serde_json::from_value(json).unwrap();
+        assert_eq!(event.event_type, "STRATEGY_PAUSED");
+        assert_eq!(event.strategy_id.as_deref(), Some("strat-1"));
+        assert_eq!(event.timestamp, 1715000000000);
+    }
+
+    #[test]
+    fn test_strategy_event_deserializes_order_submitted() {
+        let json = serde_json::json!({
+            "type": "ORDER_SUBMITTED",
+            "strategyId": "strat-2",
+            "data": {"orderId": "ord-123", "side": "BUY"},
+            "timestamp": 1715000001000_u64
+        });
+        let event: crate::types::StrategyEvent = serde_json::from_value(json).unwrap();
+        assert_eq!(event.event_type, "ORDER_SUBMITTED");
+        assert_eq!(event.data["orderId"], "ord-123");
+        assert_eq!(event.data["side"], "BUY");
+    }
+
+    #[test]
+    fn test_strategy_event_deserializes_strategy_resumed() {
+        let json = serde_json::json!({
+            "type": "STRATEGY_RESUMED",
+            "strategyId": "strat-3",
+            "data": null,
+            "timestamp": 1715000002000_u64
+        });
+        let event: crate::types::StrategyEvent = serde_json::from_value(json).unwrap();
+        assert_eq!(event.event_type, "STRATEGY_RESUMED");
+        assert_eq!(event.strategy_id.as_deref(), Some("strat-3"));
+        assert_eq!(event.timestamp, 1715000002000);
+    }
+
+    #[test]
+    fn test_strategy_event_deserializes_order_partial() {
+        let json = serde_json::json!({
+            "type": "ORDER_PARTIAL",
+            "strategyId": "strat-4",
+            "data": {"orderId": "ord-456", "side": "SELL", "filledSize": "50", "remainingSize": "50"},
+            "timestamp": 1715000003000_u64
+        });
+        let event: crate::types::StrategyEvent = serde_json::from_value(json).unwrap();
+        assert_eq!(event.event_type, "ORDER_PARTIAL");
+        assert_eq!(event.data["orderId"], "ord-456");
+        assert_eq!(event.data["side"], "SELL");
+    }
+
+    #[test]
+    fn test_strategy_event_deserializes_order_failed() {
+        let json = serde_json::json!({
+            "type": "ORDER_FAILED",
+            "strategyId": "strat-5",
+            "data": {"orderId": "ord-789", "reason": "insufficient_funds"},
+            "timestamp": 1715000004000_u64
+        });
+        let event: crate::types::StrategyEvent = serde_json::from_value(json).unwrap();
+        assert_eq!(event.event_type, "ORDER_FAILED");
+        assert_eq!(event.data["orderId"], "ord-789");
+        assert_eq!(event.data["reason"], "insufficient_funds");
+    }
+
+    #[test]
+    fn test_strategy_event_deserializes_order_error() {
+        let json = serde_json::json!({
+            "type": "ORDER_ERROR",
+            "strategyId": "strat-6",
+            "data": {"orderId": "ord-000", "error": "exchange_timeout"},
+            "timestamp": 1715000005000_u64
+        });
+        let event: crate::types::StrategyEvent = serde_json::from_value(json).unwrap();
+        assert_eq!(event.event_type, "ORDER_ERROR");
+        assert_eq!(event.data["orderId"], "ord-000");
+        assert_eq!(event.data["error"], "exchange_timeout");
+    }
+
+    #[test]
     fn test_ai_query_body_uses_query_field() {
         // #89: Must send { "query": ... } not { "question": ... }
         let body = json!({ "query": "what is BTC?" });
