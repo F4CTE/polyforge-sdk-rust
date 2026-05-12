@@ -1721,6 +1721,10 @@ impl PolyforgeClient {
     ///
     /// The SDK automatically sends an `Idempotency-Key` header required by the
     /// platform for trading writes.
+    ///
+    /// # Errors
+    /// Returns [`PolyforgeError::Validation`] if both `position_id` and
+    /// `market_id` are `None`.
     pub async fn redeem_position(
         &self,
         params: &RedeemPositionParams,
