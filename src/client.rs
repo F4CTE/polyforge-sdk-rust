@@ -7547,9 +7547,54 @@ mod tests {
         let p: ArbPosition = serde_json::from_str(json).unwrap();
         assert_eq!(p.id, "ap-1");
         assert_eq!(p.status, Some(ArbPositionStatus::Open));
+        assert_eq!(p.buy_venue, Some(Venue::Polymarket));
+        assert_eq!(p.sell_venue, Some(Venue::Kalshi));
         assert_eq!(p.buy_price.as_deref(), Some("0.55"));
         assert_eq!(p.entry_spread_pct.as_deref(), Some("0.07"));
         assert_eq!(p.unrealized_pnl.as_deref(), Some("2.50"));
+    }
+
+    #[test]
+    fn test_venue_serialization_round_trip() {
+        let cases = [
+            (Venue::Polymarket, "POLYMARKET"),
+            (Venue::Kalshi, "KALSHI"),
+            (Venue::PolymarketUs, "POLYMARKET_US"),
+        ];
+        for (variant, expected_wire) in cases {
+            let serialized = serde_json::to_string(&variant).unwrap();
+            assert_eq!(serialized, format!("\"{expected_wire}\""));
+            let deserialized: Venue = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(deserialized, variant);
+        }
+    }
+
+    #[test]
+    fn test_arb_execution_leg_deserializes_polymarket_us() {
+        let json = r#"{"venue":"POLYMARKET_US","tokenId":"tok-a","price":"0.75"}"#;
+        let leg: ArbExecutionLeg = serde_json::from_str(json).unwrap();
+        assert_eq!(leg.venue, Some(Venue::PolymarketUs));
+        assert_eq!(leg.token_id.as_deref(), Some("tok-a"));
+    }
+
+    #[test]
+    fn test_arb_position_deserializes_polymarket_us_venue() {
+        let json = r#"{
+            "id":"ap-2","buyVenue":"POLYMARKET_US","sellVenue":"POLYMARKET_US",
+            "buyTokenId":"tok-b","sellTokenId":"tok-c",
+            "createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"
+        }"#;
+        let p: ArbPosition = serde_json::from_str(json).unwrap();
+        assert_eq!(p.id, "ap-2");
+        assert_eq!(p.buy_venue, Some(Venue::PolymarketUs));
+        assert_eq!(p.sell_venue, Some(Venue::PolymarketUs));
+    }
+
+    #[test]
+    fn test_venue_deserialization_unknown_is_error() {
+        let err = serde_json::from_str::<Venue>("\"UNKNOWN_VENUE\"").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("UNKNOWN_VENUE"));
     }
 
     #[test]
