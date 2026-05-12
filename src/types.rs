@@ -2513,6 +2513,28 @@ pub struct ExecuteArbitrageParams {
     pub max_slippage_pct: Option<f64>,
 }
 
+/// Supported prediction-market venue.
+///
+/// Serializes as `"POLYMARKET"`, `"KALSHI"`, or `"POLYMARKET_US"` over the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Venue {
+    Polymarket,
+    Kalshi,
+    #[serde(rename = "POLYMARKET_US")]
+    PolymarketUs,
+}
+
+impl Venue {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Polymarket => "POLYMARKET",
+            Self::Kalshi => "KALSHI",
+            Self::PolymarketUs => "POLYMARKET_US",
+        }
+    }
+}
+
 /// Lifecycle status for a cross-venue arbitrage position.
 ///
 /// Flow: `PENDING` → `OPEN` → `CLOSING` → `CLOSED` (normal path)
@@ -2563,7 +2585,7 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct ArbExecutionLeg {
     #[serde(default)]
-    pub venue: Option<String>,
+    pub venue: Option<Venue>,
     #[serde(default)]
     pub intent_id: Option<String>,
     #[serde(default)]
@@ -2625,7 +2647,7 @@ pub struct ArbPosition {
     pub status: Option<ArbPositionStatus>,
 
     #[serde(default)]
-    pub buy_venue: Option<String>,
+    pub buy_venue: Option<Venue>,
     #[serde(default)]
     pub buy_order_id: Option<String>,
     #[serde(default)]
@@ -2640,7 +2662,7 @@ pub struct ArbPosition {
     pub buy_fill_size: Option<String>,
 
     #[serde(default)]
-    pub sell_venue: Option<String>,
+    pub sell_venue: Option<Venue>,
     #[serde(default)]
     pub sell_order_id: Option<String>,
     #[serde(default)]
