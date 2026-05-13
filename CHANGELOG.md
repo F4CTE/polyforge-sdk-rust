@@ -32,6 +32,7 @@
   mirror the controller's `Record<string, unknown>` / `unknown[]` fidelity instead
   of inventing strict shapes.
 - **UpdateSettingsProfileParams.twitter_handle** — add optional `twitter_handle: Option<String>` field. Serializes as `twitterHandle` (camelCase) to match the platform's `UpdateProfileDto` and reach feature parity with `polyforge-sdk-python` and `polyforge-mcp`. (closes #185)
+- **UpdateProfileParams.twitter_handle** — add optional `twitter_handle: Option<String>` field to the profile/me update params. Serializes as `twitterHandle` (camelCase). Struct marked `#[non_exhaustive]` to preserve semver compatibility for future field additions. (closes #256)
 - **Misc public utility endpoints (POLA-1858)** — 18 read/write methods that close the SDK gap matrix from POLA-1845 and bring the Rust SDK to parity with the platform's miscellaneous user/markets/fees/analytics surface:
   - `get_accuracy_overview()` → `GET /api/v1/accuracy` — companion to `get_accuracy()` (`/accuracy/me`); both return the same `AccuracyScore` shape.
   - `get_feed(Option<&GetWhaleFeedParams>)` → `GET /api/v1/feed` — paged whale-trade feed (reuses existing `WhaleTrade` and `GetWhaleFeedParams` types since the controller delegates to `WhalesService.getFeed`).
