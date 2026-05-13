@@ -14,7 +14,7 @@
 - **Cross-SDK naming aliases** — `get_notifications()` is now a deprecated alias for `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the canonical `MyReferralsResponse` type.
 
 ### Fixed
-- **ConditionalOrder response compatibility** — `condition_type` field now deserializes from the platform's `"type"` JSON key (via `#[serde(rename = "type")]`), matching the key used by `CreateConditionalOrderParams` and `ListConditionalOrdersParams`. The legacy `"conditionType"` key is still accepted as a serde alias for backward compatibility. (closes #250)
+- **ConditionalOrder response compatibility** — `condition_type` field now accepts an additional `"type"` JSON key during deserialization (via `#[serde(alias = "type")]`), matching the key used by the platform and by `CreateConditionalOrderParams` / `ListConditionalOrdersParams`. The default `"conditionType"` key (from the struct-level `camelCase` policy) is preserved for both serialization and deserialization — no wire-format break. (closes #250)
 
 ### Added
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
