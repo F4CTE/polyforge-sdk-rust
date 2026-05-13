@@ -333,7 +333,8 @@ pub struct StrategyTemplate {
 ///
 /// All fields except `name` are `Option` and default to `None`.
 /// This struct is **exhaustive** — adding a new field is a breaking change
-/// (covered by the 3.0.0 major version bump).
+/// (covered by the 3.0.0 major version bump). Use [`Default`] + struct-update
+/// syntax for forward-compatible construction.
 ///
 /// Use [`CreateStrategyParams::new`] for construction, or [`Default`] + struct-update:
 ///
