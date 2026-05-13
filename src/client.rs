@@ -1980,7 +1980,7 @@ impl PolyforgeClient {
 
     /// Reset the circuit breaker after it has been triggered.
     ///
-    /// Returns the updated risk settings with `circuit_breaker_triggered: false`.
+    /// Returns the updated risk settings with `circuit_breaker_tripped: false`.
     pub async fn reset_circuit_breaker(&self) -> Result<RiskSettings> {
         self.post(
             "/api/v1/settings/risk/reset",
@@ -6776,63 +6776,71 @@ mod tests {
     #[test]
     fn test_risk_settings_deserializes_full() {
         let json = r#"{
-            "dailyLossLimit": "500.00",
-            "maxPositionSize": "100.00",
-            "maxBetsPerDay": 20,
-            "circuitBreakerTriggered": false
+            "drawdownEnabled": true,
+            "drawdownLookbackHours": 72,
+            "drawdownThresholdPct": 0.15,
+            "circuitBreakerTripped": false,
+            "circuitBreakerTrippedAt": null
         }"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
-        assert_eq!(rs.daily_loss_limit, "500.00");
-        assert_eq!(rs.max_position_size, "100.00");
-        assert_eq!(rs.max_bets_per_day, 20);
-        assert!(!rs.circuit_breaker_triggered);
+        assert!(rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 72);
+        assert!((rs.drawdown_threshold_pct - 0.15).abs() < f64::EPSILON);
+        assert!(!rs.circuit_breaker_tripped);
+        assert!(rs.circuit_breaker_tripped_at.is_none());
     }
 
     #[test]
     fn test_risk_settings_deserializes_minimal() {
         let json = r#"{}"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
-        assert_eq!(rs.daily_loss_limit, "");
-        assert_eq!(rs.max_position_size, "");
-        assert_eq!(rs.max_bets_per_day, 0);
-        assert!(!rs.circuit_breaker_triggered);
+        assert!(!rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 24);
+        assert!((rs.drawdown_threshold_pct - 0.1).abs() < f64::EPSILON);
+        assert!(!rs.circuit_breaker_tripped);
+        assert!(rs.circuit_breaker_tripped_at.is_none());
     }
 
     #[test]
     fn test_risk_settings_circuit_breaker_triggered() {
         let json = r#"{
-            "dailyLossLimit": "500.00",
-            "maxPositionSize": "100.00",
-            "maxBetsPerDay": 20,
-            "circuitBreakerTriggered": true
+            "drawdownEnabled": true,
+            "drawdownLookbackHours": 48,
+            "drawdownThresholdPct": 0.2,
+            "circuitBreakerTripped": true,
+            "circuitBreakerTrippedAt": "2024-01-15T12:00:00Z"
         }"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
-        assert!(rs.circuit_breaker_triggered);
+        assert!(rs.circuit_breaker_tripped);
+        assert_eq!(
+            rs.circuit_breaker_tripped_at.as_deref(),
+            Some("2024-01-15T12:00:00Z")
+        );
     }
 
     #[test]
     fn test_update_risk_settings_params_omits_none_fields() {
         let params = UpdateRiskSettingsParams {
-            daily_loss_limit: Some("250.00".to_string()),
+            drawdown_enabled: Some(true),
             ..Default::default()
         };
         let body = serde_json::to_value(&params).unwrap();
-        assert_eq!(body["dailyLossLimit"], "250.00");
-        assert!(body.get("maxPositionSize").is_none());
-        assert!(body.get("maxBetsPerDay").is_none());
+        assert_eq!(body["drawdownEnabled"], true);
+        assert!(body.get("drawdownLookbackHours").is_none());
+        assert!(body.get("drawdownThresholdPct").is_none());
     }
 
     #[test]
     fn test_update_risk_settings_params_all_fields() {
         let params = UpdateRiskSettingsParams {
-            daily_loss_limit: Some("1000.00".to_string()),
-            max_position_size: Some("200.00".to_string()),
-            max_bets_per_day: Some(50),
+            drawdown_enabled: Some(false),
+            drawdown_lookback_hours: Some(168),
+            drawdown_threshold_pct: Some(0.25),
         };
         let body = serde_json::to_value(&params).unwrap();
-        assert_eq!(body["dailyLossLimit"], "1000.00");
-        assert_eq!(body["maxPositionSize"], "200.00");
-        assert_eq!(body["maxBetsPerDay"], 50);
+        assert_eq!(body["drawdownEnabled"], false);
+        assert_eq!(body["drawdownLookbackHours"], 168);
+        assert!((body["drawdownThresholdPct"].as_f64().unwrap() - 0.25).abs() < f64::EPSILON);
     }
 
     #[test]
