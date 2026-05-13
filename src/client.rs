@@ -6203,7 +6203,7 @@ mod tests {
             "size": "100",
             "triggerPrice": "0.60",
             "limitPrice": "0.62",
-            "conditionType": "STOP",
+            "type": "STOP",
             "status": "PENDING",
             "createdAt": "2026-04-13T10:00:00Z",
             "triggeredAt": null,
@@ -6215,6 +6215,7 @@ mod tests {
         assert_eq!(co.trigger_price.as_deref(), Some("0.60"));
         assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
         assert_eq!(co.expires_at.as_deref(), Some("2026-04-20T10:00:00Z"));
+        assert_eq!(co.condition_type.as_deref(), Some("STOP"));
     }
 
     #[test]
