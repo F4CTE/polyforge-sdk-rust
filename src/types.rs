@@ -16,6 +16,13 @@ pub struct PaginatedResponse<T> {
     pub has_next: bool,
 }
 
+/// A search results response matching the platform's `{ results: [...] }` shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResults<T> {
+    pub results: Vec<T>,
+}
+
 // ---------------------------------------------------------------------------
 // Markets
 // ---------------------------------------------------------------------------
