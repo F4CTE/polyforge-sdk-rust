@@ -330,6 +330,15 @@ pub struct StrategyTemplate {
 }
 
 /// Parameters for creating a strategy with full block configuration.
+///
+/// Use [`CreateStrategyParams::new`] for construction, or [`Default`] + struct-update:
+/// ```ignore
+/// CreateStrategyParams {
+///     name: "My Strategy".into(),
+///     kalshi_subaccount: Some(42),
+///     ..Default::default()
+/// };
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateStrategyParams {
@@ -362,6 +371,18 @@ pub struct CreateStrategyParams {
     pub variables: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canvas: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kalshi_subaccount: Option<u64>,
+}
+
+impl CreateStrategyParams {
+    /// Create a new `CreateStrategyParams` with the given name and default values.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Default::default()
+        }
+    }
 }
 
 /// Parameters for running a backtest.
