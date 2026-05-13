@@ -6848,6 +6848,38 @@ mod tests {
     }
 
     #[test]
+    fn test_risk_settings_default_matches_serde_empty_json() {
+        let rs = RiskSettings::default();
+        assert!(!rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 24);
+        assert!((rs.drawdown_threshold_pct - 0.1).abs() < f64::EPSILON);
+        assert!(!rs.circuit_breaker_tripped);
+        assert!(rs.circuit_breaker_tripped_at.is_none());
+        assert!(rs.extra.as_object().is_some_and(|o| o.is_empty()));
+
+        let from_empty: RiskSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(from_empty.drawdown_enabled, rs.drawdown_enabled);
+        assert_eq!(
+            from_empty.drawdown_lookback_hours,
+            rs.drawdown_lookback_hours
+        );
+        assert!(
+            (from_empty.drawdown_threshold_pct - rs.drawdown_threshold_pct).abs()
+                < f64::EPSILON
+        );
+        assert_eq!(
+            from_empty.circuit_breaker_tripped,
+            rs.circuit_breaker_tripped
+        );
+        assert_eq!(
+            from_empty.circuit_breaker_tripped_at,
+            rs.circuit_breaker_tripped_at
+        );
+        // extra fields should also match (both empty objects)
+        assert_eq!(from_empty.extra, rs.extra);
+    }
+
+    #[test]
     fn test_update_risk_settings_params_omits_none_fields() {
         let params = UpdateRiskSettingsParams {
             drawdown_enabled: Some(true),

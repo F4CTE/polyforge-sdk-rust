@@ -1693,6 +1693,19 @@ pub struct RiskSettings {
     pub extra: serde_json::Value,
 }
 
+impl Default for RiskSettings {
+    fn default() -> Self {
+        Self {
+            drawdown_enabled: false,
+            drawdown_lookback_hours: default_drawdown_lookback_hours(),
+            drawdown_threshold_pct: default_drawdown_threshold_pct(),
+            circuit_breaker_tripped: false,
+            circuit_breaker_tripped_at: None,
+            extra: serde_json::Value::Object(serde_json::Map::new()),
+        }
+    }
+}
+
 fn default_drawdown_lookback_hours() -> i32 {
     24
 }
