@@ -153,6 +153,35 @@ fn validate_optional_financial_param(name: &str, value: Option<f64>) -> Result<(
     Ok(())
 }
 
+/// Validate drawdown threshold percentage is in `0.01..=0.99`.
+///
+/// Mirrors `@Min(0.01) @Max(0.99)` on the platform DTO.
+fn validate_drawdown_threshold(value: f64) -> Result<()> {
+    if value.is_nan() || value.is_infinite() {
+        return Err(PolyforgeError::Validation(format!(
+            "drawdown_threshold_pct must be a finite number, got {value}"
+        )));
+    }
+    if !(0.01..=0.99).contains(&value) {
+        return Err(PolyforgeError::Validation(format!(
+            "drawdown_threshold_pct must be between 0.01 and 0.99, got {value}"
+        )));
+    }
+    Ok(())
+}
+
+/// Validate drawdown lookback hours is in `1..=168`.
+///
+/// Mirrors `@Min(1) @Max(168)` on the platform DTO.
+fn validate_drawdown_lookback(hours: i32) -> Result<()> {
+    if !(1..=168).contains(&hours) {
+        return Err(PolyforgeError::Validation(format!(
+            "drawdown_lookback_hours must be between 1 and 168, got {hours}"
+        )));
+    }
+    Ok(())
+}
+
 /// Reject arb sizes outside the server-enforced `1..=10000` USDC range.
 ///
 /// Mirrors `class-validator` bounds in `ExecuteArbDto` so the SDK rejects bad
@@ -1970,11 +1999,20 @@ impl PolyforgeClient {
     }
 
     /// Update risk settings. Only supplied fields are changed.
+    ///
+    /// Client-side validation mirrors the platform's `class-validator` rules:
+    /// - `drawdown_threshold_pct`: 0.01–0.99
+    /// - `drawdown_lookback_hours`: 1–168
     pub async fn update_risk_settings(
         &self,
         params: &UpdateRiskSettingsParams,
     ) -> Result<RiskSettings> {
-        validate_optional_financial_param("drawdown_threshold_pct", params.drawdown_threshold_pct)?;
+        if let Some(v) = params.drawdown_threshold_pct {
+            validate_drawdown_threshold(v)?;
+        }
+        if let Some(v) = params.drawdown_lookback_hours {
+            validate_drawdown_lookback(v)?;
+        }
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.patch("/api/v1/settings/risk", &body).await
     }
@@ -6909,6 +6947,54 @@ mod tests {
         let params = UpdateRiskSettingsParams::default();
         let body = serde_json::to_value(&params).unwrap();
         assert!(body.as_object().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_rejects_out_of_range() {
+        // Below minimum
+        let err = validate_drawdown_threshold(0.005).unwrap_err();
+        assert!(err.to_string().contains("between 0.01 and 0.99"));
+
+        // Above maximum
+        let err = validate_drawdown_threshold(1.0).unwrap_err();
+        assert!(err.to_string().contains("between 0.01 and 0.99"));
+
+        // NaN
+        let err = validate_drawdown_threshold(f64::NAN).unwrap_err();
+        assert!(err.to_string().contains("finite"));
+
+        // Infinity
+        let err = validate_drawdown_threshold(f64::INFINITY).unwrap_err();
+        assert!(err.to_string().contains("finite"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_accepts_valid() {
+        assert!(validate_drawdown_threshold(0.01).is_ok());
+        assert!(validate_drawdown_threshold(0.5).is_ok());
+        assert!(validate_drawdown_threshold(0.99).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_rejects_out_of_range() {
+        // Below minimum
+        let err = validate_drawdown_lookback(0).unwrap_err();
+        assert!(err.to_string().contains("between 1 and 168"));
+
+        // Negative
+        let err = validate_drawdown_lookback(-1).unwrap_err();
+        assert!(err.to_string().contains("between 1 and 168"));
+
+        // Above maximum
+        let err = validate_drawdown_lookback(169).unwrap_err();
+        assert!(err.to_string().contains("between 1 and 168"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_accepts_valid() {
+        assert!(validate_drawdown_lookback(1).is_ok());
+        assert!(validate_drawdown_lookback(24).is_ok());
+        assert!(validate_drawdown_lookback(168).is_ok());
     }
 
     // ── Market title field (#141) ────────────────────────────────────────────
