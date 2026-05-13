@@ -876,9 +876,10 @@ impl PolyforgeClient {
 
     /// Full-text search across all markets.
     ///
-    /// Returns `PaginatedResponse<Market>`. The platform returns `{ results: [...] }`
-    /// (deserialized internally as `SearchResults<Market>`) and the SDK converts to
-    /// the standard paginated shape so existing callers are unaffected.
+    /// The platform returns `{ results: [...] }` rather than the standard
+    /// paginated envelope.  The SDK deserializes into `SearchResults<Market>`
+    /// internally and converts to `PaginatedResponse<Market>` so callers see
+    /// a uniform paginated shape.
     pub async fn search_markets(
         &self,
         params: &SearchMarketsParams,
@@ -894,7 +895,7 @@ impl PolyforgeClient {
         let qs = format!("?{}", pairs.join("&"));
         let results: SearchResults<Market> =
             self.get(&format!("/api/v1/markets/search{qs}")).await?;
-        Ok(results.into())
+        Ok(results.into_paginated_response(params.limit.unwrap_or(20)))
     }
 
     /// Get the minimum price tick size for a market token.
@@ -7117,59 +7118,58 @@ mod tests {
 
     #[test]
     fn test_search_results_deserializes_markets() {
-        // The platform returns { results: [...] } not PaginatedResponse
         let json = r#"{
             "results": [
                 {"id":"m1","title":"Election 2028"},
-                {"id":"m2","title":"Weather bet"}
+                {"id":"m2","title":"Fed Rate Cut"}
             ]
         }"#;
-        let resp: SearchResults<Market> = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.results.len(), 2);
-        assert_eq!(resp.results[0].id, "m1");
-        assert_eq!(resp.results[0].title, "Election 2028");
+        let sr: SearchResults<Market> = serde_json::from_str(json).unwrap();
+        assert_eq!(sr.results.len(), 2);
+        assert_eq!(sr.results[0].id, "m1");
+        assert_eq!(sr.results[1].id, "m2");
     }
 
     #[test]
     fn test_search_results_into_paginated_response() {
-        let sr = SearchResults {
-            results: vec![Market {
-                id: "m1".into(),
-                title: "Election 2028".into(),
-                category: None,
-                price: None,
-                volume_24h: None,
-                change_24h: None,
-                liquidity: None,
-                tokens: vec![],
-                created_at: None,
-                description: None,
-                end_date: None,
-                resolved: None,
-                extra: serde_json::Value::Object(Default::default()),
-            }],
-            extra: serde_json::Value::Object(Default::default()),
-        };
-        let pr: PaginatedResponse<Market> = sr.into();
-        assert_eq!(pr.data.len(), 1);
-        assert_eq!(pr.data[0].id, "m1");
-        assert_eq!(pr.total, 1);
+        let json = r#"{
+            "results": [
+                {"id":"m1","title":"Election 2028"},
+                {"id":"m2","title":"Fed Rate Cut"}
+            ]
+        }"#;
+        let sr: SearchResults<Market> = serde_json::from_str(json).unwrap();
+        let pr: PaginatedResponse<Market> = sr.into_paginated_response(10);
+        assert_eq!(pr.data.len(), 2);
+        assert_eq!(pr.total, 2);
         assert_eq!(pr.page, 1);
-        assert_eq!(pr.limit, 1);
+        assert_eq!(pr.limit, 10);
         assert_eq!(pr.total_pages, 1);
         assert!(!pr.has_next);
+        assert_eq!(pr.data[0].id, "m1");
     }
 
     #[test]
     fn test_search_results_empty_into_paginated_response() {
-        let sr: SearchResults<Market> = SearchResults {
-            results: vec![],
-            extra: serde_json::Value::Object(Default::default()),
-        };
-        let pr: PaginatedResponse<Market> = sr.into();
+        let json = r#"{"results":[]}"#;
+        let sr: SearchResults<Market> = serde_json::from_str(json).unwrap();
+        let pr: PaginatedResponse<Market> = sr.into_paginated_response(20);
         assert_eq!(pr.data.len(), 0);
         assert_eq!(pr.total, 0);
+        assert_eq!(pr.limit, 20);
         assert_eq!(pr.total_pages, 0);
+        assert!(!pr.has_next);
+    }
+
+    #[test]
+    fn test_search_results_missing_results_field_is_error() {
+        let json = r#"{"other":"stuff"}"#;
+        let result: std::result::Result<SearchResults<Market>, serde_json::Error> =
+            serde_json::from_str(json);
+        assert!(
+            result.is_err(),
+            "missing `results` field should be a decode error"
+        );
     }
 
     #[test]
