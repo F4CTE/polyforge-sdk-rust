@@ -331,8 +331,7 @@ pub struct StrategyTemplate {
 
 /// Parameters for creating a strategy with full block configuration.
 ///
-/// Use [`CreateStrategyParams::new`] or [`Default`] + struct-update syntax for
-/// forward-compatible construction:
+/// Use [`CreateStrategyParams::new`] for construction, or [`Default`] + struct-update:
 /// ```ignore
 /// CreateStrategyParams {
 ///     name: "My Strategy".into(),
@@ -342,7 +341,6 @@ pub struct StrategyTemplate {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub struct CreateStrategyParams {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
