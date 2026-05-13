@@ -1361,8 +1361,10 @@ pub struct CreateConditionalOrderParams {
     pub outcome: String,
     pub size: f64,
     pub trigger_price: f64,
+    /// Limit price as a number string (e.g. `"0.67"`).  The platform
+    /// validates this field with `@IsNumberString()`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit_price: Option<f64>,
+    pub limit_price: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trailing_pct: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

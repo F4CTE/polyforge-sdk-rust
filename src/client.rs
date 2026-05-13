@@ -2582,14 +2582,23 @@ impl PolyforgeClient {
     ///
     /// # Errors
     /// Returns [`PolyforgeError::Validation`] if `size` or `trigger_price` is
-    /// NaN, infinite, zero, or negative.
+    /// NaN, infinite, zero, or negative, or if `limit_price` is provided but
+    /// is not a valid numeric string or is non-positive/non-finite.
     pub async fn create_conditional_order(
         &self,
         params: &CreateConditionalOrderParams,
     ) -> Result<ConditionalOrder> {
         validate_financial_param("size", params.size)?;
         validate_financial_param("trigger_price", params.trigger_price)?;
-        validate_optional_financial_param("limit_price", params.limit_price)?;
+        if let Some(ref lp) = params.limit_price {
+            let price: f64 = lp.parse().map_err(|_| {
+                PolyforgeError::Validation(format!(
+                    "limit_price must be a numeric string, got {:?}",
+                    lp
+                ))
+            })?;
+            validate_financial_param("limit_price", price)?;
+        }
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post_idempotent("/api/v1/orders/conditional", &body)
             .await
@@ -3962,7 +3971,7 @@ mod tests {
                 outcome: "YES".into(),
                 size: 10.0,
                 trigger_price: 0.55,
-                limit_price: Some(0.56),
+                limit_price: Some("0.56".into()),
                 trailing_pct: None,
                 expires_at: None,
             };
@@ -6236,7 +6245,7 @@ mod tests {
             outcome: "YES".into(),
             size: 50.0,
             trigger_price: 0.65,
-            limit_price: Some(0.67),
+            limit_price: Some("0.67".into()),
             trailing_pct: None,
             expires_at: None,
         };
@@ -6245,7 +6254,7 @@ mod tests {
         assert_eq!(json["tokenId"], "tok-1");
         assert_eq!(json["type"], "STOP_LOSS");
         assert_eq!(json["triggerPrice"], 0.65);
-        assert_eq!(json["limitPrice"], 0.67);
+        assert_eq!(json["limitPrice"], "0.67");
         assert!(json.get("expiresAt").is_none());
         assert!(json.get("trailingPct").is_none());
     }
@@ -6297,7 +6306,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_conditional_order_validation_rejects_nan_limit_price() {
+    fn test_create_conditional_order_validation_rejects_invalid_limit_price_string() {
         let params = CreateConditionalOrderParams {
             market_id: "mkt-1".into(),
             token_id: "tok-1".into(),
@@ -6306,7 +6315,7 @@ mod tests {
             outcome: "YES".into(),
             size: 10.0,
             trigger_price: 0.5,
-            limit_price: Some(f64::NAN),
+            limit_price: Some("not-a-number".into()),
             trailing_pct: None,
             expires_at: None,
         };
