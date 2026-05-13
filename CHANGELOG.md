@@ -20,6 +20,7 @@
 - **vote_market_sentiment params** — `vote_market_sentiment()` now accepts `VoteMarketSentimentParams` with `direction` and `confidence` fields instead of sending an empty JSON body, matching the platform's expected request schema for `POST /api/v1/markets/:marketId/sentiment`. (POLA-5122)
 
 ### Added
+- **`CreateStrategyParams.kalshi_subaccount`** — adds an optional `kalshi_subaccount: Option<u64>` field to `CreateStrategyParams`, serialized as `kalshiSubaccount` (camelCase) and omitted when `None`. Enables passing a Kalshi subaccount identifier when creating strategies. `CreateStrategyParams` has a `new(name)` constructor and derives `Default` for forward-compatible construction. (closes #4178)
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
 - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):

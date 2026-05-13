@@ -333,21 +333,22 @@ pub struct StrategyTemplate {
 ///
 /// All fields except `name` are `Option` and default to `None`.
 /// This struct is **exhaustive** — adding a new field is a breaking change
-/// (covered by the 2.0.0 major version bump).
+/// (covered by the 3.0.0 major version bump).
 ///
-/// Construct with a struct literal and `..Default::default()`:
+/// Use [`CreateStrategyParams::new`] for construction, or [`Default`] + struct-update:
 ///
 /// ```ignore
-/// let params = CreateStrategyParams {
+/// CreateStrategyParams {
 ///     name: "My Strategy".into(),
 ///     kalshi_subaccount: Some(42),
 ///     ..Default::default()
 /// };
 /// ```
+///
 /// Or use the convenience constructor [`CreateStrategyParams::new`].
 ///
-/// ## Migration from 1.x
-/// Users upgrading from 1.x must use `..Default::default()` or
+/// ## Migration from 2.x
+/// Users upgrading from 2.x must use `..Default::default()` or
 /// `CreateStrategyParams::new(...)` instead of bare struct literals.
 /// The new `kalshi_subaccount` field defaults to `None` and is omitted
 /// from serialized JSON when `None`.
