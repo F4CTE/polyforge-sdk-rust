@@ -1688,7 +1688,7 @@ pub struct RiskSettings {
 
 impl RiskSettings {
     /// Deprecated alias for [`circuit_breaker_tripped`](Self::circuit_breaker_tripped).
-    #[deprecated(since = "1.8.0", note = "use circuit_breaker_tripped instead")]
+    #[deprecated(note = "use circuit_breaker_tripped instead")]
     pub fn circuit_breaker_triggered(&self) -> bool {
         self.circuit_breaker_tripped
     }
