@@ -5547,12 +5547,14 @@ mod tests {
             tags: Some(vec!["test".into()]),
             variables: None,
             canvas: None,
+            kalshi_subaccount: Some(42),
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["name"], "My Strategy");
         assert_eq!(json["visibility"], "PUBLIC");
         assert_eq!(json["execMode"], "TICK");
         assert_eq!(json["tickMs"], 5000);
+        assert_eq!(json["kalshiSubaccount"], 42);
         assert!(json["triggers"].is_array());
         assert!(json["tags"].is_array());
         // logicBlocks and calcBlocks omitted when None

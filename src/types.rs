@@ -362,6 +362,9 @@ pub struct CreateStrategyParams {
     pub variables: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canvas: Option<serde_json::Value>,
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kalshi_subaccount: Option<u64>,
 }
 
 /// Parameters for running a backtest.
