@@ -332,16 +332,18 @@ pub struct StrategyTemplate {
 /// Parameters for creating a strategy with full block configuration.
 ///
 /// All fields except `name` are `Option` and default to `None`.
-/// This struct is `#[non_exhaustive]` — construct it with
-/// [`CreateStrategyParams::new`] and set optional fields individually:
+/// Construct with a struct literal and `..Default::default()`:
 ///
 /// ```ignore
-/// let mut params = CreateStrategyParams::new("My Strategy");
-/// params.kalshi_subaccount = Some(42);
+/// let params = CreateStrategyParams {
+///     name: "My Strategy".into(),
+///     kalshi_subaccount: Some(42),
+///     ..Default::default()
+/// };
 /// ```
+/// Or use the convenience constructor [`CreateStrategyParams::new`].
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub struct CreateStrategyParams {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -380,8 +382,8 @@ pub struct CreateStrategyParams {
 impl CreateStrategyParams {
     /// Create a new `CreateStrategyParams` with the given name and default values.
     ///
-    /// This constructor is the backward-compatible construction path —
-    /// it never needs to change when new optional fields are added.
+    /// This is a convenience constructor — you can also use a struct literal
+    /// with `..Default::default()`.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
