@@ -1663,7 +1663,7 @@ pub struct RateListingParams {
 // ---------------------------------------------------------------------------
 
 /// Current risk / circuit-breaker settings for the authenticated user.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RiskSettings {
     #[serde(default)]
@@ -1676,6 +1676,18 @@ pub struct RiskSettings {
     pub circuit_breaker_tripped: bool,
     #[serde(default)]
     pub circuit_breaker_tripped_at: Option<String>,
+}
+
+impl Default for RiskSettings {
+    fn default() -> Self {
+        Self {
+            drawdown_enabled: false,
+            drawdown_lookback_hours: default_lookback_hours(),
+            drawdown_threshold_pct: default_threshold_pct(),
+            circuit_breaker_tripped: false,
+            circuit_breaker_tripped_at: None,
+        }
+    }
 }
 
 fn default_lookback_hours() -> u32 {
