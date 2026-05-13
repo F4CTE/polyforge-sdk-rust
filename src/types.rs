@@ -1327,7 +1327,8 @@ pub struct ConditionalOrder {
     #[serde(default)]
     pub limit_price: Option<String>,
     #[serde(default)]
-    pub condition_type: Option<String>,
+    #[serde(rename = "type")]
+    pub order_type: Option<String>,
     #[serde(default)]
     pub status: Option<ConditionalOrderStatus>,
     #[serde(default)]

@@ -6203,7 +6203,7 @@ mod tests {
             "size": "100",
             "triggerPrice": "0.60",
             "limitPrice": "0.62",
-            "conditionType": "STOP",
+            "type": "STOP",
             "status": "PENDING",
             "createdAt": "2026-04-13T10:00:00Z",
             "triggeredAt": null,
