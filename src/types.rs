@@ -1662,18 +1662,48 @@ pub struct RateListingParams {
 // Risk Settings
 // ---------------------------------------------------------------------------
 
-/// Current risk / circuit-breaker settings for the authenticated user.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Current drawdown / circuit-breaker settings for the authenticated user.
+///
+/// Field names and types match the platform `RiskSettings` contract
+/// exactly (camelCase on the wire).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RiskSettings {
+    /// Whether drawdown-based circuit breaker is enabled.
     #[serde(default)]
-    pub daily_loss_limit: String,
+    pub drawdown_enabled: bool,
+    /// Lookback window in hours (1–168).
+    #[serde(default = "default_drawdown_lookback_hours")]
+    pub drawdown_lookback_hours: i32,
+    /// Drawdown threshold as a decimal, e.g. 0.10 = 10 % (0.01–0.99).
+    #[serde(default = "default_drawdown_threshold_pct")]
+    pub drawdown_threshold_pct: f64,
+    /// Whether the circuit breaker is currently tripped.
     #[serde(default)]
-    pub max_position_size: String,
+    pub circuit_breaker_tripped: bool,
+    /// ISO-8601 timestamp of when the circuit breaker tripped, or `None`.
     #[serde(default)]
-    pub max_bets_per_day: u32,
-    #[serde(default)]
-    pub circuit_breaker_triggered: bool,
+    pub circuit_breaker_tripped_at: Option<String>,
+}
+
+impl Default for RiskSettings {
+    fn default() -> Self {
+        Self {
+            drawdown_enabled: false,
+            drawdown_lookback_hours: 24,
+            drawdown_threshold_pct: 0.1,
+            circuit_breaker_tripped: false,
+            circuit_breaker_tripped_at: None,
+        }
+    }
+}
+
+fn default_drawdown_lookback_hours() -> i32 {
+    24
+}
+
+fn default_drawdown_threshold_pct() -> f64 {
+    0.1
 }
 
 /// Parameters for updating risk settings. Only supplied fields are changed.
@@ -1681,11 +1711,13 @@ pub struct RiskSettings {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRiskSettingsParams {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub daily_loss_limit: Option<String>,
+    pub drawdown_enabled: Option<bool>,
+    /// Lookback window in hours (1–168).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_position_size: Option<String>,
+    pub drawdown_lookback_hours: Option<i32>,
+    /// Drawdown threshold as a decimal, e.g. 0.10 = 10 % (0.01–0.99).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_bets_per_day: Option<u32>,
+    pub drawdown_threshold_pct: Option<f64>,
 }
 
 // ---------------------------------------------------------------------------
