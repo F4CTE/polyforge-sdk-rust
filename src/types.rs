@@ -331,6 +331,9 @@ pub struct StrategyTemplate {
 
 /// Parameters for creating a strategy with full block configuration.
 ///
+/// All fields except `name` are `Option` and default to `None`, with struct-update
+/// syntax (`..Default::default()`) for forward-compatible construction.
+///
 /// Use [`CreateStrategyParams::new`] for construction, or [`Default`] + struct-update:
 /// ```ignore
 /// CreateStrategyParams {
