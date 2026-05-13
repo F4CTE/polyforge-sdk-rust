@@ -32,7 +32,7 @@
   mirror the controller's `Record<string, unknown>` / `unknown[]` fidelity instead
   of inventing strict shapes.
 - **UpdateSettingsProfileParams.twitter_handle** — add optional `twitter_handle: Option<String>` field. Serializes as `twitterHandle` (camelCase) to match the platform's `UpdateProfileDto` and reach feature parity with `polyforge-sdk-python` and `polyforge-mcp`. (closes #185)
-- **CreateStrategyParams.kalshi_subaccount** — add optional `kalshi_subaccount: Option<u64>` field (0–99) for Kalshi P&L attribution. Serializes as `kalshiSubaccount` (camelCase) to match the platform's `CreateStrategyDto`. (POLA-4510)
+- **CreateStrategyParams.kalshi_subaccount** — add optional `kalshi_subaccount: Option<u64>` field (0–99) for Kalshi P&L attribution. Serializes as `kalshiSubaccount` (camelCase) to match the platform's `CreateStrategyDto`. New `CreateStrategyParams::new(name)` constructor provides backward-compatible construction so downstream callers are not forced to update every struct literal when fields are added. New `UpdateStrategyParams` struct and `update_strategy_with()` method offer the same field coverage for `PATCH /api/v1/strategies/:id`. (POLA-4510)
 - **Misc public utility endpoints (POLA-1858)** — 18 read/write methods that close the SDK gap matrix from POLA-1845 and bring the Rust SDK to parity with the platform's miscellaneous user/markets/fees/analytics surface:
   - `get_accuracy_overview()` → `GET /api/v1/accuracy` — companion to `get_accuracy()` (`/accuracy/me`); both return the same `AccuracyScore` shape.
   - `get_feed(Option<&GetWhaleFeedParams>)` → `GET /api/v1/feed` — paged whale-trade feed (reuses existing `WhaleTrade` and `GetWhaleFeedParams` types since the controller delegates to `WhalesService.getFeed`).

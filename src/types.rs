@@ -330,6 +330,18 @@ pub struct StrategyTemplate {
 }
 
 /// Parameters for creating a strategy with full block configuration.
+///
+/// All fields except `name` are `Option` and default to `None`.
+/// Construct with [`CreateStrategyParams::new`] for the simple case,
+/// or use struct-update syntax for fine-grained control:
+///
+/// ```ignore
+/// CreateStrategyParams {
+///     name: "My Strategy".into(),
+///     kalshi_subaccount: Some(42),
+///     ..Default::default()
+/// };
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateStrategyParams {
@@ -362,6 +374,45 @@ pub struct CreateStrategyParams {
     pub variables: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canvas: Option<serde_json::Value>,
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kalshi_subaccount: Option<u64>,
+}
+
+impl CreateStrategyParams {
+    /// Create a new `CreateStrategyParams` with the given name and default values.
+    ///
+    /// This constructor is the backward-compatible construction path —
+    /// it never needs to change when new optional fields are added.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Default::default()
+        }
+    }
+}
+
+/// Parameters for updating a strategy's mutable fields.
+///
+/// All fields are optional — only supplied fields are sent in the PATCH body.
+/// Construct with [`Default`] + struct-update syntax:
+///
+/// ```ignore
+/// UpdateStrategyParams {
+///     name: Some("New Name".into()),
+///     kalshi_subaccount: Some(42),
+///     ..Default::default()
+/// };
+/// ```
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateStrategyParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_id: Option<String>,
     /// Kalshi subaccount ID (0–99) for P&L attribution.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kalshi_subaccount: Option<u64>,
