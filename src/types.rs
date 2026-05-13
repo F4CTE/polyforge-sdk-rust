@@ -1667,13 +1667,15 @@ pub struct RateListingParams {
 #[serde(rename_all = "camelCase")]
 pub struct RiskSettings {
     #[serde(default)]
-    pub daily_loss_limit: String,
+    pub drawdown_enabled: bool,
     #[serde(default)]
-    pub max_position_size: String,
+    pub drawdown_lookback_hours: u32,
     #[serde(default)]
-    pub max_bets_per_day: u32,
+    pub drawdown_threshold_pct: f64,
     #[serde(default)]
-    pub circuit_breaker_triggered: bool,
+    pub circuit_breaker_tripped: bool,
+    #[serde(default)]
+    pub circuit_breaker_tripped_at: Option<String>,
 }
 
 /// Parameters for updating risk settings. Only supplied fields are changed.
@@ -1681,11 +1683,11 @@ pub struct RiskSettings {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRiskSettingsParams {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub daily_loss_limit: Option<String>,
+    pub drawdown_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_position_size: Option<String>,
+    pub drawdown_lookback_hours: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_bets_per_day: Option<u32>,
+    pub drawdown_threshold_pct: Option<f64>,
 }
 
 // ---------------------------------------------------------------------------
