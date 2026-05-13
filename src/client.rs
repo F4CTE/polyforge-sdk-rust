@@ -1053,14 +1053,13 @@ impl PolyforgeClient {
             .await
     }
 
-    /// Update a strategy's name, description, market_id, and/or kalshi_subaccount.
+    /// Update a strategy's name and/or description.
     pub async fn update_strategy(
         &self,
         id: &str,
         name: Option<&str>,
         description: Option<&str>,
         market_id: Option<&str>,
-        kalshi_subaccount: Option<u64>,
     ) -> Result<Strategy> {
         let mut body = serde_json::json!({});
         if let Some(n) = name {
@@ -1071,9 +1070,6 @@ impl PolyforgeClient {
         }
         if let Some(mid) = market_id {
             body["marketId"] = serde_json::json!(mid);
-        }
-        if let Some(sub) = kalshi_subaccount {
-            body["kalshiSubaccount"] = serde_json::json!(sub);
         }
         self.patch(&format!("/api/v1/strategies/{}", encode(id)), &body)
             .await
