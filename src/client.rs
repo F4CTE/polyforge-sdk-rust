@@ -1053,13 +1053,14 @@ impl PolyforgeClient {
             .await
     }
 
-    /// Update a strategy's name and/or description.
+    /// Update a strategy's name, description, market_id, and/or kalshi_subaccount.
     pub async fn update_strategy(
         &self,
         id: &str,
         name: Option<&str>,
         description: Option<&str>,
         market_id: Option<&str>,
+        kalshi_subaccount: Option<u64>,
     ) -> Result<Strategy> {
         let mut body = serde_json::json!({});
         if let Some(n) = name {
@@ -1070,6 +1071,9 @@ impl PolyforgeClient {
         }
         if let Some(mid) = market_id {
             body["marketId"] = serde_json::json!(mid);
+        }
+        if let Some(sub) = kalshi_subaccount {
+            body["kalshiSubaccount"] = serde_json::json!(sub);
         }
         self.patch(&format!("/api/v1/strategies/{}", encode(id)), &body)
             .await
@@ -5547,6 +5551,7 @@ mod tests {
             tags: Some(vec!["test".into()]),
             variables: None,
             canvas: None,
+            kalshi_subaccount: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["name"], "My Strategy");
@@ -5555,8 +5560,20 @@ mod tests {
         assert_eq!(json["tickMs"], 5000);
         assert!(json["triggers"].is_array());
         assert!(json["tags"].is_array());
-        // logicBlocks and calcBlocks omitted when None
+        // logicBlocks, calcBlocks, and kalshiSubaccount omitted when None
         assert!(json.get("logicBlocks").is_none());
+        assert!(json.get("kalshiSubaccount").is_none());
+    }
+
+    #[test]
+    fn test_create_strategy_params_kalshi_subaccount_serializes() {
+        let params = CreateStrategyParams {
+            name: "Test".into(),
+            kalshi_subaccount: Some(42),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["kalshiSubaccount"], 42);
     }
 
     #[test]
