@@ -6219,23 +6219,47 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_deserializes_condition_type_alias() {
+        // Backward compat: deserialize from "conditionType" (struct camelCase default)
+        let json = r#"{
+            "id": "co-ct",
+            "conditionType": "LIMIT"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-ct");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+    }
+
+    #[test]
+    fn test_conditional_order_serializes_condition_type_as_condition_type() {
+        // Regression: serialization must keep "conditionType", not "type"
+        let co = ConditionalOrder {
+            id: "co-serial".into(),
+            token_id: None,
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: Some("STOP_LOSS".into()),
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Object(Default::default()),
+        };
+        let json = serde_json::to_value(&co).unwrap();
+        assert_eq!(json["conditionType"], "STOP_LOSS");
+        assert!(json.get("type").is_none());
+    }
+
+    #[test]
     fn test_conditional_order_deserializes_minimal() {
         let json = r#"{"id": "co-2"}"#;
         let co: ConditionalOrder = serde_json::from_str(json).unwrap();
         assert_eq!(co.id, "co-2");
         assert!(co.token_id.is_none());
         assert!(co.status.is_none());
-    }
-
-    #[test]
-    fn test_conditional_order_deserializes_condition_type_alias() {
-        let json = r#"{
-            "id": "co-3",
-            "conditionType": "LIMIT"
-        }"#;
-        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
-        assert_eq!(co.id, "co-3");
-        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
     }
 
     #[test]
