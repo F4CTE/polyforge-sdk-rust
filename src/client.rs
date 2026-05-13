@@ -875,6 +875,14 @@ impl PolyforgeClient {
     }
 
     /// Full-text search across all markets.
+    ///
+    /// Returns `SearchResults<Market>` matching the platform `{ results: [...] }`
+    /// envelope. To migrate from the previous (incorrect) `PaginatedResponse<Market>`
+    /// return type, use `.into()`:
+    ///
+    /// ```ignore
+    /// let paginated: PaginatedResponse<Market> = client.search_markets(params).await?.into();
+    /// ```
     pub async fn search_markets(
         &self,
         params: &SearchMarketsParams,
@@ -5427,21 +5435,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_search_results_deserializes_markets() {
-        // #253: search_markets returns { results: [...] } not PaginatedResponse
-        let json = r#"{
-            "results": [
-                {"id":"m1","title":"Election 2028"},
-                {"id":"m2","title":"Weather bet"}
-            ]
-        }"#;
-        let resp: SearchResults<Market> = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.results.len(), 2);
-        assert_eq!(resp.results[0].id, "m1");
-        assert_eq!(resp.results[0].title, "Election 2028");
-    }
-
     // -----------------------------------------------------------------------
     // Breaking compat fixes (#33, #34, #35, #36, #37, #51, #68)
     // -----------------------------------------------------------------------
@@ -7122,6 +7115,63 @@ mod tests {
         };
         assert_eq!(params.q, "election");
         assert_eq!(params.limit, Some(10));
+    }
+
+    #[test]
+    fn test_search_results_deserializes_markets() {
+        // The platform returns { results: [...] } not PaginatedResponse
+        let json = r#"{
+            "results": [
+                {"id":"m1","title":"Election 2028"},
+                {"id":"m2","title":"Weather bet"}
+            ]
+        }"#;
+        let resp: SearchResults<Market> = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.results.len(), 2);
+        assert_eq!(resp.results[0].id, "m1");
+        assert_eq!(resp.results[0].title, "Election 2028");
+    }
+
+    #[test]
+    fn test_search_results_into_paginated_response() {
+        let sr = SearchResults {
+            results: vec![Market {
+                id: "m1".into(),
+                title: "Election 2028".into(),
+                category: None,
+                price: None,
+                volume_24h: None,
+                change_24h: None,
+                liquidity: None,
+                tokens: vec![],
+                created_at: None,
+                description: None,
+                end_date: None,
+                resolved: None,
+                extra: serde_json::Value::Object(Default::default()),
+            }],
+            extra: serde_json::Value::Object(Default::default()),
+        };
+        let pr: PaginatedResponse<Market> = sr.into();
+        assert_eq!(pr.data.len(), 1);
+        assert_eq!(pr.data[0].id, "m1");
+        assert_eq!(pr.total, 1);
+        assert_eq!(pr.page, 1);
+        assert_eq!(pr.limit, 1);
+        assert_eq!(pr.total_pages, 1);
+        assert!(!pr.has_next);
+    }
+
+    #[test]
+    fn test_search_results_empty_into_paginated_response() {
+        let sr: SearchResults<Market> = SearchResults {
+            results: vec![],
+            extra: serde_json::Value::Object(Default::default()),
+        };
+        let pr: PaginatedResponse<Market> = sr.into();
+        assert_eq!(pr.data.len(), 0);
+        assert_eq!(pr.total, 0);
+        assert_eq!(pr.total_pages, 0);
     }
 
     #[test]
