@@ -8020,10 +8020,12 @@ mod tests {
             display_name: Some("Alice".into()),
             bio: None,
             avatar_url: None,
+            twitter_handle: None,
         };
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["displayName"], "Alice");
         assert!(v.get("bio").is_none());
+        assert!(v.get("twitterHandle").is_none());
     }
 
     #[test]
