@@ -6860,6 +6860,22 @@ mod tests {
         assert!(rs.circuit_breaker_tripped_at.is_none());
     }
 
+    #[test]
+    fn test_risk_settings_deprecated_circuit_breaker_triggered() {
+        // Deprecated accessor delegates to circuit_breaker_tripped.
+        let json = r#"{
+            "drawdownEnabled": false,
+            "drawdownLookbackHours": 24,
+            "drawdownThresholdPct": 0.1,
+            "circuitBreakerTripped": true
+        }"#;
+        let rs: RiskSettings = serde_json::from_str(json).unwrap();
+        #[allow(deprecated)]
+        let triggered = rs.circuit_breaker_triggered();
+        assert!(triggered);
+        assert_eq!(triggered, rs.circuit_breaker_tripped);
+    }
+
     // ── Market title field (#141) ────────────────────────────────────────────
 
     #[test]
