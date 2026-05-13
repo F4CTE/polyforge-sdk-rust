@@ -3433,8 +3433,8 @@ impl PolyforgeClient {
             .await
     }
 
-    /// List the authenticated user's support tickets.
-    pub async fn list_tickets(&self) -> Result<Vec<Ticket>> {
+    /// List the authenticated user's support tickets (paginated).
+    pub async fn list_tickets(&self) -> Result<PaginatedResponse<Ticket>> {
         self.get("/api/v1/tickets").await
     }
 
