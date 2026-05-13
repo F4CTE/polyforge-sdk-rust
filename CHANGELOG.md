@@ -13,6 +13,9 @@
 - **Auth behavior for public endpoints** — `get_actions()` now uses `get_with_optional_auth()` and `get_health()` uses `get_no_auth()` (never attaches the `Authorization` header). When the client is constructed with an empty API key these methods skip auth, matching the platform's public-route contract. `get_user_score()`, `get_user_badges()`, and `get_user_profile()` use `get()` which always sends the `Authorization: Bearer <key>` header, matching the platform requirement that these endpoints are authenticated (not public).
 - **Cross-SDK naming aliases** — `get_notifications()` is now a deprecated alias for `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the canonical `MyReferralsResponse` type.
 
+### Fixed
+- **ConditionalOrder response compatibility** — `condition_type` field now deserializes from the platform's `"type"` JSON key (via `#[serde(rename = "type")]`), matching the key used by `CreateConditionalOrderParams` and `ListConditionalOrdersParams`. The legacy `"conditionType"` key is still accepted as a serde alias for backward compatibility. (closes #250)
+
 ### Added
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
 - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
