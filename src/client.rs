@@ -878,7 +878,7 @@ impl PolyforgeClient {
     pub async fn search_markets(
         &self,
         params: &SearchMarketsParams,
-    ) -> Result<PaginatedResponse<Market>> {
+    ) -> Result<SearchResults<Market>> {
         let mut qp: Vec<(&str, String)> = vec![("q", params.q.clone())];
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
@@ -5425,6 +5425,21 @@ mod tests {
             result.is_err(),
             "bare array must not deserialize as PaginatedResponse"
         );
+    }
+
+    #[test]
+    fn test_search_results_deserializes_markets() {
+        // #253: search_markets returns { results: [...] } not PaginatedResponse
+        let json = r#"{
+            "results": [
+                {"id":"m1","title":"Election 2028"},
+                {"id":"m2","title":"Weather bet"}
+            ]
+        }"#;
+        let resp: SearchResults<Market> = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.results.len(), 2);
+        assert_eq!(resp.results[0].id, "m1");
+        assert_eq!(resp.results[0].title, "Election 2028");
     }
 
     // -----------------------------------------------------------------------
