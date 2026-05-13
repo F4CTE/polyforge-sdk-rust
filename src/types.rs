@@ -1810,6 +1810,19 @@ pub struct SearchMarketsParams {
     pub limit: Option<u32>,
 }
 
+/// Response from `GET /api/v1/markets/search`.
+///
+/// The platform wraps search results in a `{ "results": [...] }` envelope
+/// rather than the paginated `{ "data": [...] }` shape used by list endpoints.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchMarketsResponse {
+    #[serde(default)]
+    pub results: Vec<Market>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
 /// Tick-size for a market token (minimum price increment).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

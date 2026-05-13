@@ -879,7 +879,7 @@ impl PolyforgeClient {
     pub async fn search_markets(
         &self,
         params: &SearchMarketsParams,
-    ) -> Result<MarketSearchResponse> {
+    ) -> Result<SearchMarketsResponse> {
         let mut qp: Vec<(&str, String)> = vec![("q", params.q.clone())];
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
@@ -7236,6 +7236,23 @@ mod tests {
         };
         assert_eq!(params.q, "election");
         assert_eq!(params.limit, Some(10));
+    }
+
+    #[test]
+    fn test_search_markets_response_deserializes() {
+        let json = r#"{"results": [{"id": "m1", "title": "Market One"}, {"id": "m2", "title": "Market Two"}]}"#;
+        let resp: SearchMarketsResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.results.len(), 2);
+        assert_eq!(resp.results[0].id, "m1");
+        assert_eq!(resp.results[0].title, "Market One");
+        assert_eq!(resp.results[1].id, "m2");
+    }
+
+    #[test]
+    fn test_search_markets_response_deserializes_empty() {
+        let json = r#"{"results": []}"#;
+        let resp: SearchMarketsResponse = serde_json::from_str(json).unwrap();
+        assert!(resp.results.is_empty());
     }
 
     #[test]

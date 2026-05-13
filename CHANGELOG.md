@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **search_markets response shape** — `search_markets()` now returns `SearchMarketsResponse { results: Vec<Market> }` instead of `PaginatedResponse<Market>`, matching the platform's actual `{ "results": [...] }` envelope. (#253)
+
 ### Changed
 - **report_strategy doc** — updated `report_strategy` doc comment to reference `"INAPPROPRIATE"` instead of `"HARMFUL"` to match the platform's current report reason values. (closes #227)
 - **Arbitrage docstrings** — updated cross-venue arb docstrings to reflect backend hardening (POLA-1911, POLA-1958):
