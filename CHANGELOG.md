@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Breaking
+- **UpdateProfileParams.twitter_handle** — adds optional `twitter_handle: Option<String>` field to `UpdateProfileParams`. This is a source-breaking change for downstream callers constructing `UpdateProfileParams` with exhaustive struct literals; add `twitter_handle: None` or use `..Default::default()`. Bumps crate version to **2.0.0**. (closes #255)
+
 ### Changed
 - **Arbitrage docstrings** — updated cross-venue arb docstrings to reflect backend hardening (POLA-1911, POLA-1958):
   - `Idempotency-Key` is now **required** on `execute_arbitrage` and `close_arbitrage_position` (8–128 characters, validated client-side).
