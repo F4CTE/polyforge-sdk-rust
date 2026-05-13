@@ -1,6 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [3.0.0] — 2026-05-13
+
+### Breaking
+- **`CreateStrategyParams` new field** — `kalshi_subaccount: Option<u64>` added. Any code that constructs `CreateStrategyParams` with an exhaustive struct literal without `..Default::default()` must add the new field. Use [`CreateStrategyParams::new`] or `..Default::default()` for forward-compatible construction.
 
 ### Changed
 - **Arbitrage docstrings** — updated cross-venue arb docstrings to reflect backend hardening (POLA-1911, POLA-1958):
