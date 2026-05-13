@@ -18,9 +18,29 @@ pub struct PaginatedResponse<T> {
 
 /// A search results response matching the platform's `{ results: [...] }` shape.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(
+    rename_all = "camelCase",
+    bound(deserialize = "T: serde::de::DeserializeOwned")
+)]
 pub struct SearchResults<T> {
+    #[serde(default)]
     pub results: Vec<T>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+impl<T> From<SearchResults<T>> for PaginatedResponse<T> {
+    fn from(sr: SearchResults<T>) -> Self {
+        let len = sr.results.len() as u64;
+        Self {
+            data: sr.results,
+            total: len,
+            page: 1,
+            limit: len,
+            total_pages: if len > 0 { 1 } else { 0 },
+            has_next: false,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
