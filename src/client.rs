@@ -8020,10 +8020,39 @@ mod tests {
             display_name: Some("Alice".into()),
             bio: None,
             avatar_url: None,
+            twitter_handle: None,
         };
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["displayName"], "Alice");
         assert!(v.get("bio").is_none());
+        assert!(v.get("twitterHandle").is_none());
+    }
+
+    #[test]
+    fn test_update_profile_serializes_twitter_handle_camel_case() {
+        let p = UpdateProfileParams {
+            display_name: None,
+            bio: None,
+            avatar_url: None,
+            twitter_handle: Some("polyforge".into()),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["twitterHandle"], "polyforge");
+        assert!(v.get("twitter_handle").is_none());
+    }
+
+    #[test]
+    fn test_update_profile_twitter_handle_max_length_50() {
+        let handle = "a".repeat(50);
+        let p = UpdateProfileParams {
+            display_name: None,
+            bio: None,
+            avatar_url: None,
+            twitter_handle: Some(handle.clone()),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["twitterHandle"], handle);
+        assert_eq!(v["twitterHandle"].as_str().unwrap().len(), 50);
     }
 
     #[test]
