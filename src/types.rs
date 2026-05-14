@@ -1166,8 +1166,14 @@ pub struct AccuracyLeaderboardEntry {
 #[derive(Debug, Default)]
 pub struct AccuracyLeaderboardParams {
     pub period: Option<String>,
-    pub page: Option<u32>,
+    /// 1–100. Defaults to 20 server-side.
     pub limit: Option<u32>,
+    /// Platform-native page number. Takes precedence over offset when supplied.
+    pub page: Option<u32>,
+    /// Zero-based row offset. Converted to the platform page/limit contract.
+    pub offset: Option<u32>,
+    /// Reserved for future cursor pagination. The current API is page-based.
+    pub cursor: Option<String>,
 }
 
 /// AI-generated portfolio review and optimization suggestions.

@@ -2811,7 +2811,8 @@ impl PolyforgeClient {
     /// trade-count and P&L fields (`GET /api/v1/accuracy/leaderboard`).
     ///
     /// Rows include profile metadata (rank, userId, username, displayName,
-    /// avatarUrl, pnl, winRate, tradeCount).  Paginated with `page` / `limit`.
+    /// avatarUrl, pnl, winRate, tradeCount).  Paginated with `page` / `limit`
+    /// (with `offset` → page conversion when page is omitted).
     pub async fn get_accuracy_leaderboard(
         &self,
         params: Option<&AccuracyLeaderboardParams>,
@@ -2821,11 +2822,24 @@ impl PolyforgeClient {
             if let Some(ref period) = p.period {
                 qp.push(("period", period.clone()));
             }
-            if let Some(page) = p.page {
+            // page takes precedence over offset; offset is converted to page
+            // when supplied without an explicit page.
+            let page = if let Some(page) = p.page {
+                Some(page)
+            } else if let Some(offset) = p.offset {
+                let limit = p.limit.unwrap_or(20);
+                Some((offset / limit) + 1)
+            } else {
+                None
+            };
+            if let Some(page) = page {
                 qp.push(("page", page.to_string()));
             }
             if let Some(limit) = p.limit {
                 qp.push(("limit", limit.to_string()));
+            }
+            if let Some(ref cursor) = p.cursor {
+                qp.push(("cursor", cursor.clone()));
             }
         }
         let qs = if qp.is_empty() {
@@ -8060,6 +8074,20 @@ mod tests {
     }
 
     #[test]
+    fn test_accuracy_leaderboard_entry_deserializes() {
+        let json = r#"{"rank":51,"userId":"u1","username":"alice","displayName":null,"avatarUrl":null,"pnl":"12.50","winRate":"55.0","tradeCount":10}"#;
+        let e: AccuracyLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(e.rank, 51);
+        assert_eq!(e.user_id, "u1");
+        assert_eq!(e.username, "alice");
+        assert!(e.display_name.is_none());
+        assert!(e.avatar_url.is_none());
+        assert_eq!(e.pnl, "12.50");
+        assert_eq!(e.win_rate, "55.0");
+        assert_eq!(e.trade_count, 10);
+    }
+
+    #[test]
     fn test_whale_alert_filter_deserializes() {
         let json = r#"{"minSizeUsd":5000,"marketIds":["m1","m2"],"walletAddresses":["0x1"]}"#;
         let f: WhaleAlertFilter = serde_json::from_str(json).unwrap();
@@ -8943,6 +8971,13 @@ mod tests {
         let client = PolyforgeClient::new("k").unwrap();
         let url = client.url("/api/v1/accuracy");
         assert!(url.ends_with("/api/v1/accuracy"));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/accuracy/leaderboard");
+        assert!(url.ends_with("/api/v1/accuracy/leaderboard"));
     }
 
     #[test]
