@@ -6241,6 +6241,44 @@ mod tests {
         assert_eq!(co.trigger_price.as_deref(), Some("0.60"));
         assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
         assert_eq!(co.expires_at.as_deref(), Some("2026-04-20T10:00:00Z"));
+        assert_eq!(co.condition_type.as_deref(), Some("STOP"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_with_type_field() {
+        let json = r#"{
+            "id": "co-3",
+            "tokenId": "tok-xyz",
+            "side": "SELL",
+            "outcome": "NO",
+            "size": "200",
+            "triggerPrice": "0.40",
+            "limitPrice": "0.42",
+            "type": "LIMIT",
+            "status": "TRIGGERED",
+            "createdAt": "2026-04-14T10:00:00Z",
+            "triggeredAt": "2026-04-14T12:00:00Z",
+            "expiresAt": null
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-3");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Triggered));
+        assert_eq!(co.trigger_price.as_deref(), Some("0.40"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_with_condition_type_snake_case() {
+        let json = r#"{
+            "id": "co-4",
+            "tokenId": "tok-abc",
+            "condition_type": "TAKE_PROFIT",
+            "status": "CANCELLED"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-4");
+        assert_eq!(co.condition_type.as_deref(), Some("TAKE_PROFIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Cancelled));
     }
 
     #[test]
