@@ -3377,10 +3377,7 @@ impl PolyforgeClient {
     /// body["twitterHandle"] = serde_json::json!("@alice");
     /// client.update_my_profile_raw(&body).await?;
     /// ```
-    pub async fn update_my_profile_raw(
-        &self,
-        body: &serde_json::Value,
-    ) -> Result<UserProfile> {
+    pub async fn update_my_profile_raw(&self, body: &serde_json::Value) -> Result<UserProfile> {
         self.patch("/api/v1/profile/me", body).await
     }
 
