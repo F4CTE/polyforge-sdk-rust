@@ -141,6 +141,7 @@
 - `GET /sports/combos/:collectionTicker` currently ignores its path param server-side (forwards to `listComboCollections({page:1, limit:1})`). The SDK wraps the route as-is for fidelity; a server-side fix is tracked separately.
 - **`list_tickets()` returns `PaginatedResponse<Ticket>`** — the platform `/api/v1/tickets` endpoint returns a paginated envelope (`{ data, total, page, limit, totalPages, hasNext }`), but the SDK was decoding the response as `Vec<Ticket>`. Fix changes the return type to `PaginatedResponse<Ticket>` to match the platform contract. (closes #254)
 - **`search_markets` response shape** — the platform returns `{ results: [...] }` but the SDK previously expected a paginated `{ data: [...] }` envelope, causing serde deserialization failures. A new `SearchResults<T>` type deserializes the platform shape internally and converts to `PaginatedResponse<T>` via `into_paginated_response` so the public `search_markets()` signature stays backward-compatible. (closes #253)
+- **`ConditionalOrder.condition_type` deserialization** — the platform returns the condition type field as `type`, not `conditionType`. Added custom `Serialize`/`Deserialize` implementations that accept `type`, `conditionType`, and `condition_type` during deserialization, while always serializing as `conditionType`. (closes #250)
 
 ## [1.7.6] — 2026-04-25
 
