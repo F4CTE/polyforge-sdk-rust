@@ -2883,8 +2883,6 @@ impl PolyforgeClient {
             if let Some(limit) = p.limit {
                 qp.push(("limit", limit.to_string()));
             }
-            // cursor is reserved for future platform support; do not serialize it
-            // until the backend whitelists it (ValidationPipe forbids non-whitelisted params)
         }
         let qs = if qp.is_empty() {
             String::new()
@@ -9213,7 +9211,6 @@ mod tests {
         assert!(params.limit.is_none());
         assert!(params.page.is_none());
         assert!(params.offset.is_none());
-        assert!(params.cursor.is_none());
     }
 
     #[test]
@@ -9228,17 +9225,6 @@ mod tests {
         assert_eq!(params.limit, Some(25));
         assert_eq!(params.offset, Some(50));
         assert!(params.page.is_none());
-    }
-
-    #[test]
-    fn test_accuracy_leaderboard_params_has_cursor() {
-        let params = AccuracyLeaderboardParams {
-            cursor: Some("next-page-token".to_string()),
-            ..Default::default()
-        };
-        assert_eq!(params.cursor.as_deref(), Some("next-page-token"));
-        assert!(params.page.is_none());
-        assert!(params.offset.is_none());
     }
 
     #[test]

@@ -1222,10 +1222,6 @@ pub struct AccuracyLeaderboardParams {
     pub page: Option<u32>,
     /// Zero-based row offset. Converted to the platform page/limit contract.
     pub offset: Option<u32>,
-    /// Cursor token reserved for future platform support.
-    /// Not currently serialized in the request — the platform endpoint
-    /// does not accept `cursor` as a query parameter.
-    pub cursor: Option<String>,
 }
 
 /// A single entry in the accuracy leaderboard.
