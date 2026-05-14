@@ -2807,6 +2807,47 @@ impl PolyforgeClient {
         self.get("/api/v1/accuracy/me").await
     }
 
+    /// Get the accuracy leaderboard ranked by win-rate, augmented with trade-count
+    /// and P&L fields (`GET /api/v1/accuracy/leaderboard`).
+    ///
+    /// Rows include profile metadata (rank, userId, username, displayName,
+    /// avatarUrl, pnl, winRate, tradeCount).
+    ///
+    /// When `params.offset` is supplied without `params.page`, it is converted
+    /// to a page number using `floor(offset / limit) + 1`. This mirrors the
+    /// sdk-ts convenience wrapper.
+    pub async fn get_accuracy_leaderboard(
+        &self,
+        params: Option<&AccuracyLeaderboardParams>,
+    ) -> Result<PaginatedResponse<AccuracyLeaderboardEntry>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(ref period) = p.period {
+                qp.push(("period", period.clone()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+            if let (Some(offset), None) = (p.offset, p.page) {
+                let limit = p.limit.unwrap_or(20);
+                let page = (offset / limit).saturating_add(1);
+                qp.push(("page", page.to_string()));
+            } else if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/accuracy/leaderboard{qs}")).await
+    }
+
     /// Get AI-generated portfolio review and optimization suggestions.
     pub async fn get_portfolio_review(&self) -> Result<PortfolioReview> {
         self.get("/api/v1/ai/portfolio-review").await
@@ -8909,6 +8950,91 @@ mod tests {
         let client = PolyforgeClient::new("k").unwrap();
         let url = client.url("/api/v1/accuracy");
         assert!(url.ends_with("/api/v1/accuracy"));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/accuracy/leaderboard");
+        assert!(url.ends_with("/api/v1/accuracy/leaderboard"));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_entry_deserializes() {
+        let json = r#"{
+            "rank": 1,
+            "userId": "u-abc",
+            "username": "trader1",
+            "displayName": "Trader One",
+            "avatarUrl": "https://cdn.example.com/avatars/u-abc.png",
+            "pnl": "1500.50",
+            "winRate": "0.72",
+            "tradeCount": 42
+        }"#;
+        let entry: AccuracyLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.rank, 1);
+        assert_eq!(entry.user_id, "u-abc");
+        assert_eq!(entry.username, "trader1");
+        assert_eq!(entry.display_name.as_deref(), Some("Trader One"));
+        assert_eq!(entry.avatar_url.as_deref(), Some("https://cdn.example.com/avatars/u-abc.png"));
+        assert_eq!(entry.pnl, "1500.50");
+        assert_eq!(entry.win_rate, "0.72");
+        assert_eq!(entry.trade_count, 42);
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_entry_deserializes_minimal() {
+        let json = r#"{
+            "rank": 1,
+            "userId": "u-abc",
+            "username": "trader1",
+            "pnl": "0.00",
+            "winRate": "0.00",
+            "tradeCount": 0
+        }"#;
+        let entry: AccuracyLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.rank, 1);
+        assert_eq!(entry.user_id, "u-abc");
+        assert_eq!(entry.username, "trader1");
+        assert!(entry.display_name.is_none());
+        assert!(entry.avatar_url.is_none());
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_entry_extra_fields() {
+        let json = r#"{
+            "rank": 1,
+            "userId": "u-abc",
+            "username": "trader1",
+            "pnl": "100.00",
+            "winRate": "0.65",
+            "tradeCount": 5,
+            "customField": "extra-value"
+        }"#;
+        let entry: AccuracyLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.extra["customField"].as_str(), Some("extra-value"));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_offset_to_page() {
+        let params = AccuracyLeaderboardParams {
+            offset: Some(25),
+            limit: Some(10),
+            ..Default::default()
+        };
+        assert!(params.offset.is_some());
+        assert!(params.page.is_none());
+        assert_eq!(params.offset, Some(25));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_default() {
+        let params = AccuracyLeaderboardParams::default();
+        assert!(params.period.is_none());
+        assert!(params.page.is_none());
+        assert!(params.limit.is_none());
+        assert!(params.offset.is_none());
+        assert!(params.cursor.is_none());
     }
 
     #[test]

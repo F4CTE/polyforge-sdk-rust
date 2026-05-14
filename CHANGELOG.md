@@ -14,6 +14,8 @@
 - **Cross-SDK naming aliases** — `get_notifications()` is now a deprecated alias for `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the canonical `MyReferralsResponse` type.
 
 ### Added
+- **Accuracy leaderboard (POLA-4984)** — `get_accuracy_leaderboard()` wraps `GET /api/v1/accuracy/leaderboard`. Returns a `PaginatedResponse<AccuracyLeaderboardEntry>` with rank, user profile metadata, P&L, win rate, and trade count. Supports `period` (`7d`, `30d`, `allTime`), page-based and offset-based pagination (offset is converted to page using `floor(offset / limit) + 1` when page is not supplied, mirroring the sdk-ts convenience). (closes #279)
+- New types: `AccuracyLeaderboardEntry`, `AccuracyLeaderboardParams`.
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
 - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):

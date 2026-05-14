@@ -1130,6 +1130,44 @@ pub struct CalibrationBucket {
     pub count: u32,
 }
 
+/// A single entry on the accuracy leaderboard.
+///
+/// Returned by `GET /api/v1/accuracy/leaderboard`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccuracyLeaderboardEntry {
+    pub rank: u64,
+    pub user_id: String,
+    pub username: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+    pub pnl: String,
+    pub win_rate: String,
+    pub trade_count: u64,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for the accuracy leaderboard endpoint.
+///
+/// When `offset` is supplied without `page`, it is converted to a page number
+/// using `floor(offset / limit) + 1`. This mirrors the sdk-ts convenience.
+#[derive(Debug, Default)]
+pub struct AccuracyLeaderboardParams {
+    /// Time period: `"7d"`, `"30d"`, `"allTime"`.
+    pub period: Option<String>,
+    /// Page number (1-based). Defaults to 1 server-side.
+    pub page: Option<u32>,
+    /// Items per page (1–100). Defaults to 20 server-side.
+    pub limit: Option<u32>,
+    /// Zero-based row offset. Converted to `page` when supplied without `page`.
+    pub offset: Option<u32>,
+    /// Reserved for future cursor pagination. The current API is page-based.
+    pub cursor: Option<String>,
+}
+
 /// Prediction accuracy and calibration score for the authenticated user.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccuracyScore {
