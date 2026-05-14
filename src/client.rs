@@ -1063,15 +1063,14 @@ impl PolyforgeClient {
     /// Update a strategy's mutable fields.
     ///
     /// This is a convenience wrapper around [`update_strategy_with`](Self::update_strategy_with)
-    /// that covers the most common fields. For full field coverage use
-    /// [`update_strategy_with`](Self::update_strategy_with) directly.
+    /// that covers the most common fields. Use [`update_strategy_with`](Self::update_strategy_with)
+    /// directly for advanced fields like `kalshi_subaccount`.
     pub async fn update_strategy(
         &self,
         id: &str,
         name: Option<&str>,
         description: Option<&str>,
         market_id: Option<&str>,
-        kalshi_subaccount: Option<u64>,
     ) -> Result<Strategy> {
         self.update_strategy_with(
             id,
@@ -1079,7 +1078,7 @@ impl PolyforgeClient {
                 name: name.map(|s| s.to_string()),
                 description: description.map(|s| s.to_string()),
                 market_id: market_id.map(|s| s.to_string()),
-                kalshi_subaccount,
+                ..Default::default()
             },
         )
         .await
