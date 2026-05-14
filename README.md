@@ -215,6 +215,7 @@ async fn main() -> polyforge::Result<()> {
 | Method | Description |
 |--------|-------------|
 | `get_accuracy()` | Brier score, win rate, calibration buckets, and per-category breakdown |
+| `get_accuracy_leaderboard(params)` | Paginated accuracy leaderboard ranked by prediction accuracy with P&L, win rate, trade count |
 | `get_portfolio_review()` | AI-generated portfolio review with suggestions and score (1–10) |
 | `get_market_sentiment(market_id)` | Sentiment score (−100 to +100) with BULLISH / BEARISH / NEUTRAL label |
 

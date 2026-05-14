@@ -2847,6 +2847,47 @@ impl PolyforgeClient {
         self.get("/api/v1/accuracy/me").await
     }
 
+    /// Get the accuracy leaderboard ranked by prediction accuracy.
+    ///
+    /// Returns a paginated list of traders with their accuracy stats.
+    /// When `offset` is provided without `page`, it is converted to the
+    /// platform's page-based contract.
+    pub async fn get_accuracy_leaderboard(
+        &self,
+        params: Option<&AccuracyLeaderboardParams>,
+    ) -> Result<PaginatedResponse<AccuracyLeaderboardEntry>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(ref period) = p.period {
+                qp.push(("period", period.clone()));
+            }
+            let page = if let Some(page) = p.page {
+                Some(page)
+            } else if let Some(offset) = p.offset {
+                let limit = p.limit.unwrap_or(20);
+                Some((offset / limit) + 1)
+            } else {
+                None
+            };
+            if let Some(page) = page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/accuracy/leaderboard{qs}")).await
+    }
+
     /// Get AI-generated portfolio review and optimization suggestions.
     pub async fn get_portfolio_review(&self) -> Result<PortfolioReview> {
         self.get("/api/v1/ai/portfolio-review").await
@@ -9102,6 +9143,81 @@ mod tests {
         let client = PolyforgeClient::new("k").unwrap();
         let url = client.url("/api/v1/accuracy");
         assert!(url.ends_with("/api/v1/accuracy"));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/accuracy/leaderboard");
+        assert!(url.ends_with("/api/v1/accuracy/leaderboard"));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_entry_deserializes() {
+        let json = r#"{
+            "rank": 51,
+            "userId": "u-1",
+            "username": "alice",
+            "displayName": "Alice",
+            "avatarUrl": "https://example.com/avatar.png",
+            "pnl": "12.50",
+            "winRate": "55.0",
+            "tradeCount": 42
+        }"#;
+        let entry: AccuracyLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.rank, 51);
+        assert_eq!(entry.user_id, "u-1");
+        assert_eq!(entry.username, "alice");
+        assert_eq!(entry.display_name.as_deref(), Some("Alice"));
+        assert_eq!(
+            entry.avatar_url.as_deref(),
+            Some("https://example.com/avatar.png")
+        );
+        assert_eq!(entry.pnl, "12.50");
+        assert_eq!(entry.win_rate, "55.0");
+        assert_eq!(entry.trade_count, 42);
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_entry_deserializes_with_nulls() {
+        let json = r#"{
+            "rank": 1,
+            "userId": "u-2",
+            "username": "bob",
+            "displayName": null,
+            "avatarUrl": null,
+            "pnl": "100.00",
+            "winRate": "80.0",
+            "tradeCount": 5
+        }"#;
+        let entry: AccuracyLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.rank, 1);
+        assert_eq!(entry.display_name, None);
+        assert_eq!(entry.avatar_url, None);
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_default() {
+        let params = AccuracyLeaderboardParams::default();
+        assert!(params.period.is_none());
+        assert!(params.limit.is_none());
+        assert!(params.page.is_none());
+        assert!(params.offset.is_none());
+        assert!(params.cursor.is_none());
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_has_offset() {
+        let params = AccuracyLeaderboardParams {
+            period: Some("30d".to_string()),
+            limit: Some(25),
+            offset: Some(50),
+            ..Default::default()
+        };
+        assert_eq!(params.period.as_deref(), Some("30d"));
+        assert_eq!(params.limit, Some(25));
+        assert_eq!(params.offset, Some(50));
+        assert!(params.page.is_none());
     }
 
     #[test]
