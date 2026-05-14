@@ -6625,6 +6625,14 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_deserialization_rejects_non_string_known_field() {
+        let json = r#"{"id": "co-bad-field", "tokenId": 123}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("tokenId"), "expected error mentioning tokenId, got: {msg}");
+    }
+
+    #[test]
     fn test_conditional_order_deserialization_accepts_null_status() {
         let json = r#"{"id": "co-null-status", "status": null}"#;
         let co: ConditionalOrder = serde_json::from_str(json).unwrap();
@@ -6647,19 +6655,20 @@ mod tests {
 
     #[test]
     fn test_conditional_order_deserialization_does_not_leak_alias_keys_into_extra() {
-        // If conditionType is non-string and type is a valid string alias,
-        // the non-string conditionType must NOT leak into extra, because
-        // that would produce a duplicate "conditionType" key on re-serialization.
+        // Non-string values for known keys are now rejected — this
+        // prevents silent data loss on schema/type mismatches. Unknown
+        // keys with any value type are still captured in extra.
         let json = r#"{
             "id": "co-roundtrip",
             "conditionType": 123,
             "type": "LIMIT"
         }"#;
-        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
-        assert_eq!(co.id, "co-roundtrip");
-        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
-        // The non-string conditionType must not be in extra.
-        assert!(co.extra.get("conditionType").is_none());
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("conditionType"),
+            "expected error mentioning conditionType, got: {msg}"
+        );
         // Unknown keys should still be captured.
         let json2 = r#"{"id": "co-unk", "customField": 42}"#;
         let co2: ConditionalOrder = serde_json::from_str(json2).unwrap();

@@ -1520,16 +1520,29 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
 
         let mut extra_map = serde_json::Map::new();
 
-        let mut get_str = |key: &str| -> Option<String> {
+        let mut get_str = |key: &str| -> Result<Option<String>, D::Error> {
             match raw.get(key) {
-                Some(serde_json::Value::String(s)) => Some(s.clone()),
+                Some(serde_json::Value::String(s)) => Ok(Some(s.clone())),
                 Some(v) if !v.is_null() => {
-                    if !CONDITIONAL_ORDER_KNOWN_KEYS.contains(&key) {
+                    if CONDITIONAL_ORDER_KNOWN_KEYS.contains(&key) {
+                        Err(serde::de::Error::custom(format!(
+                            "invalid type for field `{key}`: expected string, found {}",
+                            if v.is_number() {
+                                "number"
+                            } else if v.is_boolean() {
+                                "boolean"
+                            } else if v.is_array() {
+                                "array"
+                            } else {
+                                "object"
+                            }
+                        )))
+                    } else {
                         extra_map.insert(key.to_string(), v.clone());
+                        Ok(None)
                     }
-                    None
                 }
-                _ => None,
+                _ => Ok(None),
             }
         };
 
@@ -1545,9 +1558,13 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
             }
         };
 
-        let condition_type = get_str("conditionType")
-            .or_else(|| get_str("type"))
-            .or_else(|| get_str("condition_type"));
+        let condition_type = match get_str("conditionType")? {
+            Some(v) => Some(v),
+            None => match get_str("type")? {
+                Some(v) => Some(v),
+                None => get_str("condition_type")?,
+            },
+        };
 
         let id = match raw.get("id").and_then(|v| v.as_str()) {
             Some(s) => s.to_string(),
@@ -1556,17 +1573,17 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
 
         Ok(ConditionalOrder {
             id,
-            token_id: get_str("tokenId"),
-            side: get_str("side"),
-            outcome: get_str("outcome"),
-            size: get_str("size"),
-            trigger_price: get_str("triggerPrice"),
-            limit_price: get_str("limitPrice"),
+            token_id: get_str("tokenId")?,
+            side: get_str("side")?,
+            outcome: get_str("outcome")?,
+            size: get_str("size")?,
+            trigger_price: get_str("triggerPrice")?,
+            limit_price: get_str("limitPrice")?,
             condition_type,
             status: get_status()?,
-            created_at: get_str("createdAt"),
-            triggered_at: get_str("triggeredAt"),
-            expires_at: get_str("expiresAt"),
+            created_at: get_str("createdAt")?,
+            triggered_at: get_str("triggeredAt")?,
+            expires_at: get_str("expiresAt")?,
             extra: {
                 if let Some(obj) = raw.as_object() {
                     for (k, v) in obj {
