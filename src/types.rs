@@ -1444,39 +1444,17 @@ impl Serialize for ConditionalOrder {
         use serde::ser::SerializeMap;
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("id", &self.id)?;
-        if let Some(ref v) = self.token_id {
-            map.serialize_entry("tokenId", v)?;
-        }
-        if let Some(ref v) = self.side {
-            map.serialize_entry("side", v)?;
-        }
-        if let Some(ref v) = self.outcome {
-            map.serialize_entry("outcome", v)?;
-        }
-        if let Some(ref v) = self.size {
-            map.serialize_entry("size", v)?;
-        }
-        if let Some(ref v) = self.trigger_price {
-            map.serialize_entry("triggerPrice", v)?;
-        }
-        if let Some(ref v) = self.limit_price {
-            map.serialize_entry("limitPrice", v)?;
-        }
-        if let Some(ref v) = self.condition_type {
-            map.serialize_entry("conditionType", v)?;
-        }
-        if let Some(ref v) = self.status {
-            map.serialize_entry("status", v)?;
-        }
-        if let Some(ref v) = self.created_at {
-            map.serialize_entry("createdAt", v)?;
-        }
-        if let Some(ref v) = self.triggered_at {
-            map.serialize_entry("triggeredAt", v)?;
-        }
-        if let Some(ref v) = self.expires_at {
-            map.serialize_entry("expiresAt", v)?;
-        }
+        map.serialize_entry("tokenId", &self.token_id)?;
+        map.serialize_entry("side", &self.side)?;
+        map.serialize_entry("outcome", &self.outcome)?;
+        map.serialize_entry("size", &self.size)?;
+        map.serialize_entry("triggerPrice", &self.trigger_price)?;
+        map.serialize_entry("limitPrice", &self.limit_price)?;
+        map.serialize_entry("conditionType", &self.condition_type)?;
+        map.serialize_entry("status", &self.status)?;
+        map.serialize_entry("createdAt", &self.created_at)?;
+        map.serialize_entry("triggeredAt", &self.triggered_at)?;
+        map.serialize_entry("expiresAt", &self.expires_at)?;
         match &self.extra {
             serde_json::Value::Object(obj) => {
                 for (k, v) in obj {
@@ -1579,60 +1557,102 @@ impl<'de> serde::de::Visitor<'de> for ConditionalOrderVisitor {
         while let Some(key) = map.next_key::<String>()? {
             match key.as_str() {
                 "id" => {
+                    if id.is_some() {
+                        return Err(serde::de::Error::duplicate_field("id"));
+                    }
                     id = Some(map_field_value(&mut map, "id")?);
                 }
                 "tokenId" => {
+                    if token_id.is_some() {
+                        return Err(serde::de::Error::duplicate_field("tokenId"));
+                    }
                     token_id = Some(map_field_value(&mut map, "tokenId")?);
                 }
                 "side" => {
+                    if side.is_some() {
+                        return Err(serde::de::Error::duplicate_field("side"));
+                    }
                     side = Some(map_field_value(&mut map, "side")?);
                 }
                 "outcome" => {
+                    if outcome.is_some() {
+                        return Err(serde::de::Error::duplicate_field("outcome"));
+                    }
                     outcome = Some(map_field_value(&mut map, "outcome")?);
                 }
                 "size" => {
+                    if size.is_some() {
+                        return Err(serde::de::Error::duplicate_field("size"));
+                    }
                     size = Some(map_field_value(&mut map, "size")?);
                 }
                 "triggerPrice" => {
+                    if trigger_price.is_some() {
+                        return Err(serde::de::Error::duplicate_field("triggerPrice"));
+                    }
                     trigger_price = Some(map_field_value(&mut map, "triggerPrice")?);
                 }
                 "limitPrice" => {
+                    if limit_price.is_some() {
+                        return Err(serde::de::Error::duplicate_field("limitPrice"));
+                    }
                     limit_price = Some(map_field_value(&mut map, "limitPrice")?);
                 }
                 "conditionType" => {
                     if condition_type_priority < 3 {
-                        condition_type = Some(map_field_value(&mut map, "conditionType")?);
-                        condition_type_priority = 3;
+                        let val: Option<String> = map_field_value(&mut map, "conditionType")?;
+                        if let Some(v) = val {
+                            condition_type = Some(v);
+                            condition_type_priority = 3;
+                        }
                     } else {
                         let _: serde::de::IgnoredAny = map.next_value()?;
                     }
                 }
                 "type" => {
                     if condition_type_priority < 2 {
-                        condition_type = Some(map_field_value(&mut map, "type")?);
-                        condition_type_priority = 2;
+                        let val: Option<String> = map_field_value(&mut map, "type")?;
+                        if let Some(v) = val {
+                            condition_type = Some(v);
+                            condition_type_priority = 2;
+                        }
                     } else {
                         let _: serde::de::IgnoredAny = map.next_value()?;
                     }
                 }
                 "condition_type" => {
                     if condition_type_priority < 1 {
-                        condition_type = Some(map_field_value(&mut map, "condition_type")?);
-                        condition_type_priority = 1;
+                        let val: Option<String> = map_field_value(&mut map, "condition_type")?;
+                        if let Some(v) = val {
+                            condition_type = Some(v);
+                            condition_type_priority = 1;
+                        }
                     } else {
                         let _: serde::de::IgnoredAny = map.next_value()?;
                     }
                 }
                 "status" => {
+                    if status.is_some() {
+                        return Err(serde::de::Error::duplicate_field("status"));
+                    }
                     status = Some(map_field_value(&mut map, "status")?);
                 }
                 "createdAt" => {
+                    if created_at.is_some() {
+                        return Err(serde::de::Error::duplicate_field("createdAt"));
+                    }
                     created_at = Some(map_field_value(&mut map, "createdAt")?);
                 }
                 "triggeredAt" => {
+                    if triggered_at.is_some() {
+                        return Err(serde::de::Error::duplicate_field("triggeredAt"));
+                    }
                     triggered_at = Some(map_field_value(&mut map, "triggeredAt")?);
                 }
                 "expiresAt" => {
+                    if expires_at.is_some() {
+                        return Err(serde::de::Error::duplicate_field("expiresAt"));
+                    }
                     expires_at = Some(map_field_value(&mut map, "expiresAt")?);
                 }
                 _ => {

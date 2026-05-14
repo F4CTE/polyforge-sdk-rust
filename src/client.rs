@@ -6721,6 +6721,95 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_serialization_emits_null_for_none_fields() {
+        let co = ConditionalOrder {
+            id: "co-serial".into(),
+            token_id: None,
+            side: Some("BUY".into()),
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Null,
+        };
+        let json = serde_json::to_value(&co).unwrap();
+        assert_eq!(json["id"], "co-serial");
+        assert!(json["tokenId"].is_null());
+        assert_eq!(json["side"], "BUY");
+        assert!(json["outcome"].is_null());
+        assert!(json["size"].is_null());
+        assert!(json["triggerPrice"].is_null());
+        assert!(json["limitPrice"].is_null());
+        assert!(json["conditionType"].is_null());
+        assert!(json["status"].is_null());
+        assert!(json["createdAt"].is_null());
+        assert!(json["triggeredAt"].is_null());
+        assert!(json["expiresAt"].is_null());
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_id() {
+        // serde_json itself collapses duplicate keys, but serde's
+        // derive-based deserialization would reject them. We use a
+        // custom serializer to inject a genuine duplicate in the
+        // stream.
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup","id":"co-dup2","size":"100"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_status() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-st","status":"PENDING","status":"CANCELLED"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_accepts_null_condition_type_alias() {
+        // conditionType: null should not prevent type from filling in
+        let json = r#"{
+            "id": "co-null-alias",
+            "conditionType": null,
+            "type": "LIMIT"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-null-alias");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_null_type_with_condition_type_fallback() {
+        // type: null should not prevent condition_type (snake_case) from filling in
+        let json = r#"{
+            "id": "co-null-type",
+            "conditionType": null,
+            "type": null,
+            "condition_type": "TAKE_PROFIT"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-null-type");
+        assert_eq!(co.condition_type.as_deref(), Some("TAKE_PROFIT"));
+    }
+
+    #[test]
     fn test_create_conditional_order_params_serializes_camelcase() {
         let params = CreateConditionalOrderParams {
             market_id: "mkt-1".into(),
