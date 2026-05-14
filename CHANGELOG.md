@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **ConditionalOrder deserialization compatibility** — Added `#[serde(alias = "type")]` to `ConditionalOrder.condition_type` so the SDK accepts the platform's `"type"` field name in API responses, while retaining backward compatibility with the existing `"conditionType"` camelCase form. (POLA-4740, #250)
+
 ### Changed
 - **Arbitrage docstrings** — updated cross-venue arb docstrings to reflect backend hardening (POLA-1911, POLA-1958):
   - `Idempotency-Key` is now **required** on `execute_arbitrage` and `close_arbitrage_position` (8–128 characters, validated client-side).

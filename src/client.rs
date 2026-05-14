@@ -6218,6 +6218,27 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_deserializes_platform_type_field() {
+        let json = r#"{
+            "id": "co-3",
+            "type": "STOP_LOSS",
+            "tokenId": "tok-xyz",
+            "side": "SELL",
+            "outcome": "NO",
+            "size": "200",
+            "triggerPrice": "0.45",
+            "status": "TRIGGERED",
+            "createdAt": "2026-04-14T08:00:00Z"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-3");
+        assert_eq!(co.condition_type.as_deref(), Some("STOP_LOSS"));
+        assert_eq!(co.token_id.as_deref(), Some("tok-xyz"));
+        assert_eq!(co.side.as_deref(), Some("SELL"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Triggered));
+    }
+
+    #[test]
     fn test_conditional_order_deserializes_minimal() {
         let json = r#"{"id": "co-2"}"#;
         let co: ConditionalOrder = serde_json::from_str(json).unwrap();
