@@ -314,6 +314,20 @@ let csv = client.export_personal_data_csv().await?;
 std::fs::write("polyforge-export.csv", csv)?;
 ```
 
+### Actions Catalog
+
+| Method | Description |
+|--------|-------------|
+| `get_actions()` | Fetch the platform's public API actions catalog (`ActionsSchema`). Public endpoint (no auth required). |
+
+```rust
+let actions = client.get_actions().await?;
+println!("API version: {}", actions.version);
+for action in &actions.actions {
+    println!("{} {} {} ({})", action.method, action.path, action.name, action.scope);
+}
+```
+
 ## Error Handling
 
 All methods return `polyforge::Result<T>`. Errors are represented by `PolyforgeError`:

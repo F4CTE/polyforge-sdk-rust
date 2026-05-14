@@ -14,6 +14,7 @@
 - **Cross-SDK naming aliases** — `get_notifications()` is now a deprecated alias for `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the canonical `MyReferralsResponse` type.
 
 ### Added
+- **Actions Catalog (POLA-3690)** — `get_actions()` method for `GET /api/v1/actions`. Returns the platform's public API actions catalog (`ActionsSchema`) for agent/tooling discovery, matching `getActions()` in sdk-ts and `get_actions()` in sdk-python. Endpoint is public (optional auth). New types: `ActionsSchema`, `ActionDefinition`, `ActionParameter`. (closes #208)
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
 - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
