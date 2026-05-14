@@ -6239,6 +6239,7 @@ mod tests {
         assert_eq!(co.id, "co-1");
         assert_eq!(co.token_id.as_deref(), Some("tok-abc"));
         assert_eq!(co.trigger_price.as_deref(), Some("0.60"));
+        assert_eq!(co.condition_type.as_deref(), Some("STOP"));
         assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
         assert_eq!(co.expires_at.as_deref(), Some("2026-04-20T10:00:00Z"));
         assert_eq!(co.condition_type.as_deref(), Some("STOP"));
@@ -6288,6 +6289,21 @@ mod tests {
         assert_eq!(co.id, "co-2");
         assert!(co.token_id.is_none());
         assert!(co.status.is_none());
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_duplicate_type_keys_gracefully() {
+        let json = r#"{
+            "id": "co-5",
+            "conditionType": "LIMIT",
+            "type": "STOP",
+            "condition_type": "TAKE_PROFIT",
+            "status": "PENDING"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-5");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
     }
 
     #[test]
