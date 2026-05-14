@@ -3012,11 +3012,12 @@ pub struct UpdateProfileParams {
     pub avatar_url: Option<String>,
     /// Future platform extensions.  Keys must use camelCase.
     ///
-    /// Use the builder and its convenience methods instead of modifying this
-    /// map directly.
+    /// Private to prevent callers from inserting keys that collide with typed
+    /// fields (`displayName`, `bio`, `avatarUrl`) which would produce duplicate
+    /// JSON keys.  Use the builder and its convenience methods instead.
     #[serde(flatten)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub extra: HashMap<String, serde_json::Value>,
+    pub(crate) extra: HashMap<String, serde_json::Value>,
 }
 
 impl UpdateProfileParams {
