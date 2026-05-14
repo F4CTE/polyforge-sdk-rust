@@ -1496,9 +1496,15 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
 
         // `condition_type` prefers the canonical camelCase key, then the
         // platform Prisma column name `type`, then the snake_case form.
-        let condition_type = opt_str("conditionType")?
-            .or(opt_str("type")?)
-            .or(opt_str("condition_type")?);
+        // Uses lazy fallback via match so that a lower-priority key with a
+        // non-string value does not defeat a valid higher-priority key.
+        let condition_type = match opt_str("conditionType")? {
+            Some(v) => Some(v),
+            None => match opt_str("type")? {
+                Some(v) => Some(v),
+                None => opt_str("condition_type")?,
+            },
+        };
 
         // --- extra / unknown keys ---------------------------------------------
 
