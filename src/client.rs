@@ -6203,7 +6203,7 @@ mod tests {
             "size": "100",
             "triggerPrice": "0.60",
             "limitPrice": "0.62",
-            "conditionType": "STOP",
+            "type": "STOP",
             "status": "PENDING",
             "createdAt": "2026-04-13T10:00:00Z",
             "triggeredAt": null,
@@ -6212,6 +6212,7 @@ mod tests {
         let co: ConditionalOrder = serde_json::from_str(json).unwrap();
         assert_eq!(co.id, "co-1");
         assert_eq!(co.token_id.as_deref(), Some("tok-abc"));
+        assert_eq!(co.order_type.as_deref(), Some("STOP"));
         assert_eq!(co.trigger_price.as_deref(), Some("0.60"));
         assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
         assert_eq!(co.expires_at.as_deref(), Some("2026-04-20T10:00:00Z"));

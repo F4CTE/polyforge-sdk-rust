@@ -107,6 +107,7 @@
 ### Fixed
 - **`get_user_score()`, `get_user_badges()`, `get_user_profile()` require JWT auth** — these three methods now use `get()` which always sends the `Authorization: Bearer <key>` header, matching the platform requirement that these endpoints are authenticated (not public). Previously they used `get_with_optional_auth()` which could skip auth when the API key was empty, causing 401 errors. (closes #211)
 - **Trading writes** — automatically attach a fresh `Idempotency-Key` header to order, bulk order, liquidity, position, smart-order, and conditional-order mutations so platform idempotency validation no longer rejects Rust SDK writes with `MISSING_IDEMPOTENCY_KEY`. (closes #197)
+- **`ConditionalOrder` response deserialization** — rename `condition_type` to `order_type` with `#[serde(rename = "type")]` so the response struct correctly deserializes the platform's `"type"` JSON key (the platform does not return `"conditionType"`). (closes #250)
 - **`RewardMarket.extra` / `RewardMarketDetail.extra` backward compatibility** — custom `Deserialize` implementations now preserve ALL response fields (including named ones) inside `extra`, so downstream code that reads `extra["conditionId"]` or other previously-dynamic keys continues to work after the keys were promoted to first-class struct fields. 1 new test and 6 new assertions verify the backward-compatible shape.
 - **Admin-only arbitrage match mutations** — hide `create_arbitrage_match`,
   `verify_arbitrage_match`, `delete_arbitrage_match`, and
