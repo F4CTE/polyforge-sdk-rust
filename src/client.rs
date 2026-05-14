@@ -6482,6 +6482,45 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_condition_type_key() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-ct","conditionType":"LIMIT","conditionType":"STOP_LOSS"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_type_key() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-t","type":"LIMIT","type":"STOP_LOSS"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_condition_type_snake_key() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-cts","condition_type":"LIMIT","condition_type":"STOP_LOSS"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
     fn test_conditional_order_deserialization_accepts_null_condition_type_alias() {
         // conditionType: null should not prevent type from filling in
         let json = r#"{

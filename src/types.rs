@@ -1515,6 +1515,9 @@ impl<'de> serde::de::Visitor<'de> for ConditionalOrderVisitor {
         let mut limit_price: Option<Option<String>> = None;
         let mut condition_type: Option<String> = None;
         let mut condition_type_priority: u8 = 0;
+        let mut seen_condition_type: bool = false;
+        let mut seen_type: bool = false;
+        let mut seen_condition_type_snake: bool = false;
         let mut status: Option<Option<ConditionalOrderStatus>> = None;
         let mut created_at: Option<Option<String>> = None;
         let mut triggered_at: Option<Option<String>> = None;
@@ -1566,6 +1569,10 @@ impl<'de> serde::de::Visitor<'de> for ConditionalOrderVisitor {
                     limit_price = Some(map_field_value(&mut map, "limitPrice")?);
                 }
                 "conditionType" => {
+                    if seen_condition_type {
+                        return Err(serde::de::Error::duplicate_field("conditionType"));
+                    }
+                    seen_condition_type = true;
                     if condition_type_priority < 3 {
                         let val: Option<String> = map_field_value(&mut map, "conditionType")?;
                         if let Some(v) = val {
@@ -1577,6 +1584,10 @@ impl<'de> serde::de::Visitor<'de> for ConditionalOrderVisitor {
                     }
                 }
                 "type" => {
+                    if seen_type {
+                        return Err(serde::de::Error::duplicate_field("type"));
+                    }
+                    seen_type = true;
                     if condition_type_priority < 2 {
                         let val: Option<String> = map_field_value(&mut map, "type")?;
                         if let Some(v) = val {
@@ -1588,6 +1599,10 @@ impl<'de> serde::de::Visitor<'de> for ConditionalOrderVisitor {
                     }
                 }
                 "condition_type" => {
+                    if seen_condition_type_snake {
+                        return Err(serde::de::Error::duplicate_field("condition_type"));
+                    }
+                    seen_condition_type_snake = true;
                     if condition_type_priority < 1 {
                         let val: Option<String> = map_field_value(&mut map, "condition_type")?;
                         if let Some(v) = val {
