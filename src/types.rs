@@ -332,6 +332,9 @@ pub struct StrategyTemplate {
 /// Parameters for creating a strategy with full block configuration.
 ///
 /// All fields except `name` are `Option` and default to `None`.
+/// This struct is **exhaustive** — adding a new field is a breaking change
+/// (covered by the 2.0.0 major version bump).
+///
 /// Construct with a struct literal and `..Default::default()`:
 ///
 /// ```ignore
@@ -342,6 +345,12 @@ pub struct StrategyTemplate {
 /// };
 /// ```
 /// Or use the convenience constructor [`CreateStrategyParams::new`].
+///
+/// ## Migration from 1.x
+/// Users upgrading from 1.x must use `..Default::default()` or
+/// `CreateStrategyParams::new(...)` instead of bare struct literals.
+/// The new `kalshi_subaccount` field defaults to `None` and is omitted
+/// from serialized JSON when `None`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateStrategyParams {
