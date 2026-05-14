@@ -289,6 +289,9 @@ pub struct Strategy {
     pub created_at: Option<String>,
     #[serde(default)]
     pub updated_at: Option<String>,
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    #[serde(default)]
+    pub kalshi_subaccount: Option<u64>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -332,9 +335,7 @@ pub struct StrategyTemplate {
 /// Parameters for creating a strategy with full block configuration.
 ///
 /// All fields except `name` are `Option` and default to `None`.
-/// This struct is **exhaustive** — adding a new field is a breaking change
-/// (covered by the 3.0.0 major version bump). Use [`Default`] + struct-update
-/// syntax for forward-compatible construction.
+
 ///
 /// Use [`CreateStrategyParams::new`] for construction, or [`Default`] + struct-update:
 ///
@@ -355,6 +356,7 @@ pub struct StrategyTemplate {
 /// from serialized JSON when `None`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct CreateStrategyParams {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]

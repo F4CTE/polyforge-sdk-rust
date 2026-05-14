@@ -5689,6 +5689,7 @@ mod tests {
         assert!(json["tags"].is_array());
         // logicBlocks, calcBlocks, and kalshiSubaccount omitted when None
         assert!(json.get("logicBlocks").is_none());
+
         assert!(json.get("kalshiSubaccount").is_none());
     }
 
@@ -5701,6 +5702,48 @@ mod tests {
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["kalshiSubaccount"], 42);
+    }
+
+    #[test]
+    fn test_strategy_deserializes_kalshi_subaccount() {
+        let json = r#"{
+            "id": "strat-1",
+            "name": "My Strategy",
+            "kalshiSubaccount": 7
+        }"#;
+        let strategy: Strategy = serde_json::from_str(json).unwrap();
+        assert_eq!(strategy.kalshi_subaccount, Some(7));
+    }
+
+    #[test]
+    fn test_strategy_omits_kalshi_subaccount_when_absent() {
+        let json = r#"{"id": "strat-1", "name": "My Strategy"}"#;
+        let strategy: Strategy = serde_json::from_str(json).unwrap();
+        assert_eq!(strategy.kalshi_subaccount, None);
+    }
+
+    #[test]
+    fn test_update_strategy_params_serializes_kalshi_subaccount() {
+        let params = UpdateStrategyParams {
+            name: Some("Updated".into()),
+            kalshi_subaccount: Some(42),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["name"], "Updated");
+        assert_eq!(json["kalshiSubaccount"], 42);
+        assert!(json.get("description").is_none());
+    }
+
+    #[test]
+    fn test_update_strategy_params_omits_kalshi_subaccount_when_none() {
+        let params = UpdateStrategyParams {
+            name: Some("Updated".into()),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["name"], "Updated");
+        assert!(json.get("kalshiSubaccount").is_none());
     }
 
     #[test]
