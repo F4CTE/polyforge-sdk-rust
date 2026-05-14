@@ -8076,12 +8076,7 @@ mod tests {
 
     #[test]
     fn test_update_profile_params_omits_none_fields() {
-        let p = UpdateProfileParams {
-            display_name: Some("Alice".into()),
-            bio: None,
-            avatar_url: None,
-            twitter_handle: None,
-        };
+        let p = UpdateProfileParams::builder().display_name("Alice").build();
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["displayName"], "Alice");
         assert!(v.get("bio").is_none());
@@ -8090,12 +8085,9 @@ mod tests {
 
     #[test]
     fn test_update_profile_params_serializes_twitter_handle_camel_case() {
-        let p = UpdateProfileParams {
-            display_name: None,
-            bio: None,
-            avatar_url: None,
-            twitter_handle: Some("polyforge".into()),
-        };
+        let p = UpdateProfileParams::builder()
+            .twitter_handle("polyforge")
+            .build();
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["twitterHandle"], "polyforge");
         assert!(v.get("twitter_handle").is_none());
@@ -8104,15 +8096,21 @@ mod tests {
     #[test]
     fn test_update_profile_params_twitter_handle_max_length_50() {
         let handle = "a".repeat(50);
-        let p = UpdateProfileParams {
-            display_name: None,
-            bio: None,
-            avatar_url: None,
-            twitter_handle: Some(handle.clone()),
-        };
+        let p = UpdateProfileParams::builder()
+            .twitter_handle(handle.clone())
+            .build();
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["twitterHandle"], handle);
         assert_eq!(v["twitterHandle"].as_str().unwrap().len(), 50);
+    }
+
+    #[test]
+    fn test_update_profile_params_builder_can_be_reused() {
+        let b = UpdateProfileParams::builder();
+        let p1 = b.clone().display_name("A").build();
+        let p2 = b.display_name("B").build();
+        assert_eq!(p1.display_name.as_deref(), Some("A"));
+        assert_eq!(p2.display_name.as_deref(), Some("B"));
     }
 
     #[test]

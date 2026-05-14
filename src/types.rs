@@ -2971,7 +2971,19 @@ pub struct UpdateWhaleAlertFilterParams {
 /// Parameters for updating the authenticated user's profile.
 ///
 /// All fields are optional — only supplied fields are sent in the PATCH body.
-/// Construct with [`Default`] + struct-update syntax:
+///
+/// # Construction
+///
+/// **Builder (preferred — forward-compatible):**
+///
+/// ```ignore
+/// let params = UpdateProfileParams::builder()
+///     .display_name("Alice")
+///     .twitter_handle("@alice")
+///     .build();
+/// ```
+///
+/// **Struct literal (existing callers — must list every field):**
 ///
 /// ```ignore
 /// UpdateProfileParams {
@@ -3002,6 +3014,70 @@ impl UpdateProfileParams {
     /// This is equivalent to [`UpdateProfileParams::default()`].
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a [`UpdateProfileParamsBuilder`] for forward-compatible construction.
+    ///
+    /// This is the preferred way to construct the params: when new optional
+    /// fields are added in future releases, builder-using callers will not
+    /// need source changes.
+    pub fn builder() -> UpdateProfileParamsBuilder {
+        UpdateProfileParamsBuilder::default()
+    }
+}
+
+/// Builder for [`UpdateProfileParams`] — forward-compatible field-by-field construction.
+///
+/// # Example
+///
+/// ```ignore
+/// let params = UpdateProfileParams::builder()
+///     .display_name("Alice")
+///     .bio("Trader and developer")
+///     .twitter_handle("@alice")
+///     .build();
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct UpdateProfileParamsBuilder {
+    display_name: Option<String>,
+    bio: Option<String>,
+    avatar_url: Option<String>,
+    twitter_handle: Option<String>,
+}
+
+impl UpdateProfileParamsBuilder {
+    /// Set the display name.
+    pub fn display_name(mut self, value: impl Into<String>) -> Self {
+        self.display_name = Some(value.into());
+        self
+    }
+
+    /// Set the bio.
+    pub fn bio(mut self, value: impl Into<String>) -> Self {
+        self.bio = Some(value.into());
+        self
+    }
+
+    /// Set the avatar URL.
+    pub fn avatar_url(mut self, value: impl Into<String>) -> Self {
+        self.avatar_url = Some(value.into());
+        self
+    }
+
+    /// Set the Twitter handle.
+    pub fn twitter_handle(mut self, value: impl Into<String>) -> Self {
+        self.twitter_handle = Some(value.into());
+        self
+    }
+
+    /// Build the [`UpdateProfileParams`].
+    pub fn build(self) -> UpdateProfileParams {
+        UpdateProfileParams {
+            display_name: self.display_name,
+            bio: self.bio,
+            avatar_url: self.avatar_url,
+            twitter_handle: self.twitter_handle,
+        }
     }
 }
 
