@@ -6253,6 +6253,61 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_deserializes_type_field() {
+        // Platform returns "type", not "conditionType"
+        let json = r#"{
+            "id": "co-3",
+            "tokenId": "tok-xyz",
+            "side": "SELL",
+            "size": "200",
+            "type": "STOP_LOSS",
+            "status": "TRIGGERED"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-3");
+        assert_eq!(co.condition_type.as_deref(), Some("STOP_LOSS"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Triggered));
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_condition_type_snake_case() {
+        // Accept snake_case "condition_type" as fallback
+        let json = r#"{"id": "co-4", "condition_type": "LIMIT", "status": "CANCELLED"}"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+    }
+
+    #[test]
+    fn test_conditional_order_serializes_condition_type_as_camelcase() {
+        let co = ConditionalOrder {
+            id: "co-5".into(),
+            token_id: Some("tok-abc".into()),
+            side: Some("BUY".into()),
+            outcome: Some("YES".into()),
+            size: Some("100".into()),
+            trigger_price: Some("0.60".into()),
+            limit_price: Some("0.62".into()),
+            condition_type: Some("STOP".into()),
+            status: Some(ConditionalOrderStatus::Pending),
+            created_at: Some("2026-04-13T10:00:00Z".into()),
+            triggered_at: None,
+            expires_at: Some("2026-04-20T10:00:00Z".into()),
+            extra: serde_json::json!({}),
+        };
+        let json = serde_json::to_value(&co).unwrap();
+        assert_eq!(json["id"], "co-5");
+        assert_eq!(json["conditionType"], "STOP");
+        assert!(
+            json.get("type").is_none(),
+            "serialized form must not emit 'type'"
+        );
+        assert!(
+            json.get("condition_type").is_none(),
+            "serialized form must not emit 'condition_type'"
+        );
+    }
+
+    #[test]
     fn test_create_conditional_order_params_serializes_camelcase() {
         let params = CreateConditionalOrderParams {
             market_id: "mkt-1".into(),
