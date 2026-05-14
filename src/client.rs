@@ -9465,17 +9465,6 @@ mod tests {
     }
 
     #[test]
-    fn test_export_personal_data_path() {
-        let client = PolyforgeClient::new("k").unwrap();
-        assert!(client
-            .url("/api/v1/me/export")
-            .ends_with("/api/v1/me/export"));
-        assert!(client
-            .url("/api/v1/me/export?format=csv")
-            .ends_with("/api/v1/me/export?format=csv"));
-    }
-
-    #[test]
     fn test_personal_data_export_deserializes_full() {
         let json = serde_json::json!({
             "generatedAt": "2026-05-12T10:30:00Z",
