@@ -1373,74 +1373,43 @@ pub enum ConditionalOrderType {
 }
 
 /// A conditional order (limit, stop, trailing-stop, etc.).
-#[derive(Debug, Clone)]
+///
+/// During deserialization, the `condition_type` field accepts three JSON key
+/// formats — `conditionType` (camelCase, the canonical form), `type` (raw
+/// Prisma column name used by the platform), and `condition_type`
+/// (snake_case) — to remain compatible across API transitions.
+/// Serialization always produces the canonical `conditionType` key.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConditionalOrder {
     pub id: String,
+    #[serde(default)]
     pub token_id: Option<String>,
+    #[serde(default)]
     pub side: Option<String>,
+    #[serde(default)]
     pub outcome: Option<String>,
+    #[serde(default)]
     pub size: Option<String>,
+    #[serde(default)]
     pub trigger_price: Option<String>,
+    #[serde(default)]
     pub limit_price: Option<String>,
+    #[serde(default)]
     pub condition_type: Option<String>,
+    #[serde(default)]
     pub status: Option<ConditionalOrderStatus>,
+    #[serde(default)]
     pub created_at: Option<String>,
+    #[serde(default)]
     pub triggered_at: Option<String>,
+    #[serde(default)]
     pub expires_at: Option<String>,
+    #[serde(flatten)]
     pub extra: serde_json::Value,
 }
 
-impl Serialize for ConditionalOrder {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeMap;
-        let mut map = serializer.serialize_map(None)?;
-        map.serialize_entry("id", &self.id)?;
-        if let Some(ref v) = self.token_id {
-            map.serialize_entry("tokenId", v)?;
-        }
-        if let Some(ref v) = self.side {
-            map.serialize_entry("side", v)?;
-        }
-        if let Some(ref v) = self.outcome {
-            map.serialize_entry("outcome", v)?;
-        }
-        if let Some(ref v) = self.size {
-            map.serialize_entry("size", v)?;
-        }
-        if let Some(ref v) = self.trigger_price {
-            map.serialize_entry("triggerPrice", v)?;
-        }
-        if let Some(ref v) = self.limit_price {
-            map.serialize_entry("limitPrice", v)?;
-        }
-        if let Some(ref v) = self.condition_type {
-            map.serialize_entry("conditionType", v)?;
-        }
-        if let Some(ref v) = self.status {
-            map.serialize_entry("status", v)?;
-        }
-        if let Some(ref v) = self.created_at {
-            map.serialize_entry("createdAt", v)?;
-        }
-        if let Some(ref v) = self.triggered_at {
-            map.serialize_entry("triggeredAt", v)?;
-        }
-        if let Some(ref v) = self.expires_at {
-            map.serialize_entry("expiresAt", v)?;
-        }
-        if let Some(obj) = self.extra.as_object() {
-            for (k, v) in obj {
-                map.serialize_entry(k, v)?;
-            }
-        }
-        map.end()
-    }
-}
-
-const CONDITIONAL_ORDER_KNOWN_KEYS: &[&str] = &[
+const _CONDITIONAL_ORDER_KNOWN_KEYS: &[&str] = &[
     "id",
     "tokenId",
     "side",
@@ -1464,58 +1433,97 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
     {
         let raw: serde_json::Value = serde_json::Value::deserialize(deserializer)?;
 
-        if !raw.is_object() {
-            return Err(serde::de::Error::custom(
-                "expected a JSON object for ConditionalOrder",
-            ));
-        }
-
-        let get_str = |key: &str| -> Option<String> {
-            raw.get(key).and_then(|v| v.as_str()).map(String::from)
-        };
-
-        let get_status = || -> Option<ConditionalOrderStatus> {
-            match raw.get("status") {
-                Some(serde_json::Value::String(s)) => {
-                    serde_json::from_value(serde_json::Value::String(s.clone())).ok()
-                }
-                _ => None,
+        let obj = match raw.as_object() {
+            Some(o) => o,
+            None => {
+                return Err(serde::de::Error::custom(
+                    "expected a JSON object for ConditionalOrder",
+                ))
             }
         };
 
-        let condition_type = get_str("conditionType")
-            .or_else(|| get_str("type"))
-            .or_else(|| get_str("condition_type"));
-
-        let id = match raw.get("id").and_then(|v| v.as_str()) {
-            Some(s) => s.to_string(),
-            None => return Err(serde::de::Error::missing_field("id")),
+        // Optional string: accepts string, null or absent → None. Rejects other types.
+        let opt_str = |key: &str| -> Result<Option<String>, D::Error> {
+            match obj.get(key) {
+                Some(serde_json::Value::String(s)) => Ok(Some(s.clone())),
+                Some(serde_json::Value::Null) | None => Ok(None),
+                Some(other) => Err(serde::de::Error::custom(format!(
+                    "invalid type for field '{}': expected string or null, got {}",
+                    key, other
+                ))),
+            }
         };
+
+        // Optional status: accepts valid variant string, null or absent → None.
+        // Rejects unknown variants and non-string types.
+        let opt_status = || -> Result<Option<ConditionalOrderStatus>, D::Error> {
+            match obj.get("status") {
+                Some(serde_json::Value::String(s)) => {
+                    let val = serde_json::Value::String(s.clone());
+                    serde_json::from_value(val).map_err(|e| {
+                        serde::de::Error::custom(format!("invalid value for field 'status': {}", e))
+                    })
+                }
+                Some(serde_json::Value::Null) | None => Ok(None),
+                Some(other) => Err(serde::de::Error::custom(format!(
+                    "invalid type for field 'status': expected string or null, got {}",
+                    other
+                ))),
+            }
+        };
+
+        // --- required fields --------------------------------------------------
+
+        let id = match obj.get("id").and_then(|v| v.as_str()) {
+            Some(s) => s.to_string(),
+            None => {
+                return Err(serde::de::Error::missing_field("id"));
+            }
+        };
+
+        // --- optional fields --------------------------------------------------
+
+        let token_id = opt_str("tokenId")?;
+        let side = opt_str("side")?;
+        let outcome = opt_str("outcome")?;
+        let size = opt_str("size")?;
+        let trigger_price = opt_str("triggerPrice")?;
+        let limit_price = opt_str("limitPrice")?;
+        let created_at = opt_str("createdAt")?;
+        let triggered_at = opt_str("triggeredAt")?;
+        let expires_at = opt_str("expiresAt")?;
+        let status = opt_status()?;
+
+        // `condition_type` prefers the canonical camelCase key, then the
+        // platform Prisma column name `type`, then the snake_case form.
+        let condition_type = opt_str("conditionType")?
+            .or(opt_str("type")?)
+            .or(opt_str("condition_type")?);
+
+        // --- extra / unknown keys ---------------------------------------------
+
+        let mut extra_map = serde_json::Map::new();
+        for (k, v) in obj {
+            if !_CONDITIONAL_ORDER_KNOWN_KEYS.contains(&k.as_str()) {
+                extra_map.insert(k.clone(), v.clone());
+            }
+        }
+        let extra = serde_json::Value::Object(extra_map);
 
         Ok(ConditionalOrder {
             id,
-            token_id: get_str("tokenId"),
-            side: get_str("side"),
-            outcome: get_str("outcome"),
-            size: get_str("size"),
-            trigger_price: get_str("triggerPrice"),
-            limit_price: get_str("limitPrice"),
+            token_id,
+            side,
+            outcome,
+            size,
+            trigger_price,
+            limit_price,
             condition_type,
-            status: get_status(),
-            created_at: get_str("createdAt"),
-            triggered_at: get_str("triggeredAt"),
-            expires_at: get_str("expiresAt"),
-            extra: {
-                let mut extra_map = serde_json::Map::new();
-                if let Some(obj) = raw.as_object() {
-                    for (k, v) in obj {
-                        if !CONDITIONAL_ORDER_KNOWN_KEYS.contains(&k.as_str()) {
-                            extra_map.insert(k.clone(), v.clone());
-                        }
-                    }
-                }
-                serde_json::Value::Object(extra_map)
-            },
+            status,
+            created_at,
+            triggered_at,
+            expires_at,
+            extra,
         })
     }
 }

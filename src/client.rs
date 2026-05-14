@@ -6307,6 +6307,43 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_rejects_wrong_type_for_string_field() {
+        let json = r#"{"id": "co-6", "side": 123}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        assert!(err.to_string().contains("side"));
+        assert!(err.to_string().contains("string"));
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_invalid_status() {
+        let json = r#"{"id": "co-7", "status": "INVALID_STATUS"}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        assert!(err.to_string().contains("status"));
+    }
+
+    #[test]
+    fn test_conditional_order_serializes_condition_type_as_camelcase() {
+        let co = ConditionalOrder {
+            id: "co-8".into(),
+            token_id: Some("tok-1".into()),
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: Some("LIMIT".into()),
+            status: Some(ConditionalOrderStatus::Pending),
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Object(Default::default()),
+        };
+        let json = serde_json::to_value(&co).unwrap();
+        assert_eq!(json["conditionType"], "LIMIT");
+        assert_eq!(json["status"], "PENDING");
+    }
+
+    #[test]
     fn test_create_conditional_order_params_serializes_camelcase() {
         let params = CreateConditionalOrderParams {
             market_id: "mkt-1".into(),
