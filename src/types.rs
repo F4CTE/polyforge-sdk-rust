@@ -1406,6 +1406,13 @@ pub enum ConditionalOrderType {
 }
 
 /// A conditional order (limit, stop, trailing-stop, etc.).
+///
+/// **Deserialization**: accepts `conditionType` (canonical), `type`
+/// (platform alias), and `condition_type` (snake_case) as field names for
+/// [`condition_type`](Self::condition_type). When multiple aliases appear,
+/// precedence is `conditionType` > `type` > `condition_type`.
+///
+/// **Serialization**: uses canonical `conditionType` (camelCase).
 #[derive(Debug, Clone)]
 pub struct ConditionalOrder {
     pub id: String,
@@ -1464,9 +1471,17 @@ impl Serialize for ConditionalOrder {
         if let Some(ref v) = self.expires_at {
             map.serialize_entry("expiresAt", v)?;
         }
-        if let Some(obj) = self.extra.as_object() {
-            for (k, v) in obj {
-                map.serialize_entry(k, v)?;
+        match &self.extra {
+            serde_json::Value::Object(obj) => {
+                for (k, v) in obj {
+                    map.serialize_entry(k, v)?;
+                }
+            }
+            serde_json::Value::Null => {}
+            _ => {
+                return Err(serde::ser::Error::custom(
+                    "ConditionalOrder::extra must be an Object or Null",
+                ));
             }
         }
         map.end()
@@ -1503,16 +1518,27 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
             ));
         }
 
-        let get_str = |key: &str| -> Option<String> {
-            raw.get(key).and_then(|v| v.as_str()).map(String::from)
-        };
+        let mut extra_map = serde_json::Map::new();
 
-        let get_status = || -> Option<ConditionalOrderStatus> {
-            match raw.get("status") {
-                Some(serde_json::Value::String(s)) => {
-                    serde_json::from_value(serde_json::Value::String(s.clone())).ok()
+        let mut get_str = |key: &str| -> Option<String> {
+            match raw.get(key) {
+                Some(serde_json::Value::String(s)) => Some(s.clone()),
+                Some(v) if !v.is_null() => {
+                    extra_map.insert(key.to_string(), v.clone());
+                    None
                 }
                 _ => None,
+            }
+        };
+
+        let get_status = || -> Result<Option<ConditionalOrderStatus>, D::Error> {
+            match raw.get("status") {
+                Some(serde_json::Value::String(s)) => {
+                    serde_json::from_value(serde_json::Value::String(s.clone()))
+                        .map_err(serde::de::Error::custom)
+                }
+                Some(_) => Err(serde::de::Error::custom("status field must be a string")),
+                None => Ok(None),
             }
         };
 
@@ -1534,12 +1560,11 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
             trigger_price: get_str("triggerPrice"),
             limit_price: get_str("limitPrice"),
             condition_type,
-            status: get_status(),
+            status: get_status()?,
             created_at: get_str("createdAt"),
             triggered_at: get_str("triggeredAt"),
             expires_at: get_str("expiresAt"),
             extra: {
-                let mut extra_map = serde_json::Map::new();
                 if let Some(obj) = raw.as_object() {
                     for (k, v) in obj {
                         if !CONDITIONAL_ORDER_KNOWN_KEYS.contains(&k.as_str()) {

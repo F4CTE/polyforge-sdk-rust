@@ -143,6 +143,8 @@
 - **`search_markets` response shape** — the platform returns `{ results: [...] }` but the SDK previously expected a paginated `{ data: [...] }` envelope, causing serde deserialization failures. A new `SearchResults<T>` type deserializes the platform shape internally and converts to `PaginatedResponse<T>` via `into_paginated_response` so the public `search_markets()` signature stays backward-compatible. (closes #253)
 - **`ConditionalOrder.condition_type` deserialization** — the platform returns the condition type field as `type`, not `conditionType`. Added custom `Serialize`/`Deserialize` implementations that accept `type`, `conditionType`, and `condition_type` during deserialization, while always serializing as `conditionType`. (closes #250)
 
+- **`ConditionalOrder.condition_type` deserialization** — replaced `#[serde(alias)]` with a custom `Deserialize` implementation that accepts `conditionType` (camelCase), `type` (platform Prisma column name), and `condition_type` (snake_case) without failing when multiple key formats appear in the same payload. Prevents a compatibility regression during API transitions where the platform may switch from `conditionType` to `type`. (closes #250)
+
 ## [1.7.6] — 2026-04-25
 
 ### Fixed

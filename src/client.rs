@@ -6510,6 +6510,7 @@ mod tests {
         assert_eq!(co.id, "co-1");
         assert_eq!(co.token_id.as_deref(), Some("tok-abc"));
         assert_eq!(co.trigger_price.as_deref(), Some("0.60"));
+        assert_eq!(co.condition_type.as_deref(), Some("STOP"));
         assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
         assert_eq!(co.expires_at.as_deref(), Some("2026-04-20T10:00:00Z"));
     }
@@ -6554,58 +6555,130 @@ mod tests {
     }
 
     #[test]
-    fn test_conditional_order_deserializes_type_field() {
-        // Platform returns "type", not "conditionType"
+    fn test_conditional_order_deserializes_with_type_field() {
         let json = r#"{
             "id": "co-3",
             "tokenId": "tok-xyz",
             "side": "SELL",
+            "outcome": "NO",
             "size": "200",
-            "type": "STOP_LOSS",
-            "status": "TRIGGERED"
+            "triggerPrice": "0.40",
+            "limitPrice": "0.42",
+            "type": "LIMIT",
+            "status": "TRIGGERED",
+            "createdAt": "2026-04-14T10:00:00Z",
+            "triggeredAt": "2026-04-14T12:00:00Z",
+            "expiresAt": null
         }"#;
         let co: ConditionalOrder = serde_json::from_str(json).unwrap();
         assert_eq!(co.id, "co-3");
-        assert_eq!(co.condition_type.as_deref(), Some("STOP_LOSS"));
-        assert_eq!(co.status, Some(ConditionalOrderStatus::Triggered));
-    }
-
-    #[test]
-    fn test_conditional_order_deserializes_condition_type_snake_case() {
-        // Accept snake_case "condition_type" as fallback
-        let json = r#"{"id": "co-4", "condition_type": "LIMIT", "status": "CANCELLED"}"#;
-        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
         assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Triggered));
+        assert_eq!(co.trigger_price.as_deref(), Some("0.40"));
     }
 
     #[test]
-    fn test_conditional_order_serializes_condition_type_as_camelcase() {
+    fn test_conditional_order_deserializes_with_condition_type_snake_case() {
+        let json = r#"{
+            "id": "co-4",
+            "tokenId": "tok-abc",
+            "condition_type": "TAKE_PROFIT",
+            "status": "CANCELLED"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-4");
+        assert_eq!(co.condition_type.as_deref(), Some("TAKE_PROFIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Cancelled));
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_duplicate_type_keys_gracefully() {
+        let json = r#"{
+            "id": "co-5",
+            "conditionType": "LIMIT",
+            "type": "STOP",
+            "condition_type": "TAKE_PROFIT",
+            "status": "PENDING"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-5");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_invalid_status() {
+        let json = r#"{"id": "co-bad-status", "status": "INVALID_STATUS"}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("INVALID_STATUS"),
+            "expected error mentioning the invalid variant, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_non_string_status() {
+        let json = r#"{"id": "co-bad-type", "status": 123}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        assert!(err.to_string().contains("status"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_preserves_non_string_known_key_in_extra() {
+        let json = r#"{
+            "id": "co-extra",
+            "size": 123,
+            "triggerPrice": true
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-extra");
+        assert!(co.size.is_none());
+        assert!(co.trigger_price.is_none());
+        assert_eq!(co.extra["size"], serde_json::json!(123));
+        assert_eq!(co.extra["triggerPrice"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn test_conditional_order_serialization_rejects_non_object_extra() {
         let co = ConditionalOrder {
-            id: "co-5".into(),
-            token_id: Some("tok-abc".into()),
-            side: Some("BUY".into()),
-            outcome: Some("YES".into()),
-            size: Some("100".into()),
-            trigger_price: Some("0.60".into()),
-            limit_price: Some("0.62".into()),
-            condition_type: Some("STOP".into()),
-            status: Some(ConditionalOrderStatus::Pending),
-            created_at: Some("2026-04-13T10:00:00Z".into()),
+            id: "co-non-obj".into(),
+            token_id: None,
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
             triggered_at: None,
-            expires_at: Some("2026-04-20T10:00:00Z".into()),
-            extra: serde_json::json!({}),
+            expires_at: None,
+            extra: serde_json::json!("not-an-object"),
+        };
+        let err = serde_json::to_value(&co).unwrap_err();
+        assert!(err.to_string().contains("extra"));
+    }
+
+    #[test]
+    fn test_conditional_order_serialization_allows_null_extra() {
+        let co = ConditionalOrder {
+            id: "co-null-extra".into(),
+            token_id: None,
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Null,
         };
         let json = serde_json::to_value(&co).unwrap();
-        assert_eq!(json["id"], "co-5");
-        assert_eq!(json["conditionType"], "STOP");
-        assert!(
-            json.get("type").is_none(),
-            "serialized form must not emit 'type'"
-        );
-        assert!(
-            json.get("condition_type").is_none(),
-            "serialized form must not emit 'condition_type'"
-        );
+        assert_eq!(json["id"], "co-null-extra");
     }
 
     #[test]
