@@ -6214,7 +6214,34 @@ mod tests {
         assert_eq!(co.token_id.as_deref(), Some("tok-abc"));
         assert_eq!(co.trigger_price.as_deref(), Some("0.60"));
         assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
+        assert_eq!(co.condition_type.as_deref(), Some("STOP"));
         assert_eq!(co.expires_at.as_deref(), Some("2026-04-20T10:00:00Z"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_with_type_field() {
+        let json = r#"{
+            "id": "co-3",
+            "tokenId": "tok-def",
+            "side": "SELL",
+            "outcome": "NO",
+            "size": "200",
+            "triggerPrice": "0.40",
+            "limitPrice": "0.42",
+            "type": "TAKE_PROFIT",
+            "status": "TRIGGERED",
+            "createdAt": "2026-04-13T10:00:00Z",
+            "triggeredAt": "2026-04-14T10:00:00Z",
+            "expiresAt": null
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-3");
+        assert_eq!(co.token_id.as_deref(), Some("tok-def"));
+        assert_eq!(co.trigger_price.as_deref(), Some("0.40"));
+        assert_eq!(co.condition_type.as_deref(), Some("TAKE_PROFIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Triggered));
+        assert_eq!(co.triggered_at.as_deref(), Some("2026-04-14T10:00:00Z"));
+        assert!(co.expires_at.is_none());
     }
 
     #[test]
