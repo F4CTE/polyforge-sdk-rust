@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -2983,15 +2985,19 @@ pub struct UpdateWhaleAlertFilterParams {
 ///     .build();
 /// ```
 ///
-/// **Struct literal (existing callers — must list every field):**
+/// **Struct literal — use `..Default::default()` for forward compat:**
 ///
 /// ```ignore
 /// UpdateProfileParams {
 ///     display_name: Some("Alice".into()),
-///     twitter_handle: Some("@alice".into()),
 ///     ..Default::default()
 /// };
 /// ```
+///
+/// The [`extra`][Self::extra] field is a [`serde(flatten)`] escape hatch for
+/// future platform extensions.  Fields not known at compile time are
+/// preserved there; convenience methods on [`UpdateProfileParamsBuilder`] wrap
+/// known extensions so callers do not need to hand-write JSON keys.
 ///
 /// The convenience constructor [`UpdateProfileParams::new()`] returns a
 /// default-initialized instance with all fields set to `None`.
@@ -3004,8 +3010,13 @@ pub struct UpdateProfileParams {
     pub bio: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub twitter_handle: Option<String>,
+    /// Future platform extensions.  Keys must use camelCase.
+    ///
+    /// Use the builder and its convenience methods instead of modifying this
+    /// map directly.
+    #[serde(flatten)]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub extra: HashMap<String, serde_json::Value>,
 }
 
 impl UpdateProfileParams {
@@ -3023,6 +3034,15 @@ impl UpdateProfileParams {
     /// need source changes.
     pub fn builder() -> UpdateProfileParamsBuilder {
         UpdateProfileParamsBuilder::default()
+    }
+
+    /// Set the Twitter handle directly (without the builder).
+    ///
+    /// Equivalent to `UpdateProfileParams::builder().twitter_handle(value).build()`.
+    pub fn twitter_handle(mut self, value: impl Into<String>) -> Self {
+        self.extra
+            .insert("twitterHandle".to_string(), serde_json::json!(value.into()));
+        self
     }
 }
 
@@ -3042,7 +3062,7 @@ pub struct UpdateProfileParamsBuilder {
     display_name: Option<String>,
     bio: Option<String>,
     avatar_url: Option<String>,
-    twitter_handle: Option<String>,
+    extra: HashMap<String, serde_json::Value>,
 }
 
 impl UpdateProfileParamsBuilder {
@@ -3064,9 +3084,10 @@ impl UpdateProfileParamsBuilder {
         self
     }
 
-    /// Set the Twitter handle.
+    /// Set the Twitter handle (serializes as `twitterHandle`).
     pub fn twitter_handle(mut self, value: impl Into<String>) -> Self {
-        self.twitter_handle = Some(value.into());
+        self.extra
+            .insert("twitterHandle".to_string(), serde_json::json!(value.into()));
         self
     }
 
@@ -3076,7 +3097,7 @@ impl UpdateProfileParamsBuilder {
             display_name: self.display_name,
             bio: self.bio,
             avatar_url: self.avatar_url,
-            twitter_handle: self.twitter_handle,
+            extra: self.extra,
         }
     }
 }
