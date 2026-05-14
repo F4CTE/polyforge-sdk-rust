@@ -1524,7 +1524,9 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
             match raw.get(key) {
                 Some(serde_json::Value::String(s)) => Some(s.clone()),
                 Some(v) if !v.is_null() => {
-                    extra_map.insert(key.to_string(), v.clone());
+                    if !CONDITIONAL_ORDER_KNOWN_KEYS.contains(&key) {
+                        extra_map.insert(key.to_string(), v.clone());
+                    }
                     None
                 }
                 _ => None,
