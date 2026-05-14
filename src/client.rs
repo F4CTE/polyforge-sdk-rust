@@ -6203,7 +6203,7 @@ mod tests {
             "size": "100",
             "triggerPrice": "0.60",
             "limitPrice": "0.62",
-            "conditionType": "STOP",
+            "type": "STOP",
             "status": "PENDING",
             "createdAt": "2026-04-13T10:00:00Z",
             "triggeredAt": null,
@@ -6213,6 +6213,7 @@ mod tests {
         assert_eq!(co.id, "co-1");
         assert_eq!(co.token_id.as_deref(), Some("tok-abc"));
         assert_eq!(co.trigger_price.as_deref(), Some("0.60"));
+        assert_eq!(co.condition_type.as_deref(), Some("STOP"));
         assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
         assert_eq!(co.expires_at.as_deref(), Some("2026-04-20T10:00:00Z"));
     }
@@ -6224,6 +6225,25 @@ mod tests {
         assert_eq!(co.id, "co-2");
         assert!(co.token_id.is_none());
         assert!(co.status.is_none());
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_condition_type_aliases() {
+        let json_condition_type = r#"{
+            "id": "co-3",
+            "conditionType": "STOP_LOSS"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json_condition_type).unwrap();
+        assert_eq!(co.id, "co-3");
+        assert_eq!(co.condition_type.as_deref(), Some("STOP_LOSS"));
+
+        let json_snake_case = r#"{
+            "id": "co-4",
+            "condition_type": "TRAILING_STOP"
+        }"#;
+        let co2: ConditionalOrder = serde_json::from_str(json_snake_case).unwrap();
+        assert_eq!(co2.id, "co-4");
+        assert_eq!(co2.condition_type.as_deref(), Some("TRAILING_STOP"));
     }
 
     #[test]
