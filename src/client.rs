@@ -153,6 +153,35 @@ fn validate_optional_financial_param(name: &str, value: Option<f64>) -> Result<(
     Ok(())
 }
 
+/// Validate an optional financial string parameter (skip if `None`).
+///
+/// Parses the string as `f64` and applies the same checks as
+/// [`validate_financial_param`].  Rejects non-numeric strings with a
+/// clear message so the caller knows the platform expects `@IsNumberString`.
+fn validate_optional_financial_param_string(name: &str, value: Option<&str>) -> Result<()> {
+    if let Some(s) = value {
+        let parsed: f64 = s.parse().map_err(|_| {
+            PolyforgeError::Validation(format!("{name} must be a valid numeric string, got '{s}'"))
+        })?;
+        validate_financial_param(name, parsed)?;
+    }
+    Ok(())
+}
+
+/// Validate a required financial string parameter.
+///
+/// Parses the string as `f64` and applies the same checks as
+/// [`validate_financial_param`].  Rejects non-numeric strings with a
+/// clear message so the caller knows the platform expects `@IsNumberString`.
+fn validate_financial_param_string(name: &str, value: &str) -> Result<()> {
+    let parsed: f64 = value.parse().map_err(|_| {
+        PolyforgeError::Validation(format!(
+            "{name} must be a valid numeric string, got '{value}'"
+        ))
+    })?;
+    validate_financial_param(name, parsed)
+}
+
 /// Reject arb sizes outside the server-enforced `1..=10000` USDC range.
 ///
 /// Mirrors `class-validator` bounds in `ExecuteArbDto` so the SDK rejects bad
@@ -2581,15 +2610,16 @@ impl PolyforgeClient {
     /// platform for trading writes.
     ///
     /// # Errors
-    /// Returns [`PolyforgeError::Validation`] if `size` or `trigger_price` is
-    /// NaN, infinite, zero, or negative.
+    /// Returns [`PolyforgeError::Validation`] if `size`, `trigger_price`, or
+    /// `limit_price` is a non-numeric string, or if the parsed value is NaN,
+    /// infinite, zero, or negative.
     pub async fn create_conditional_order(
         &self,
         params: &CreateConditionalOrderParams,
     ) -> Result<ConditionalOrder> {
-        validate_financial_param("size", params.size)?;
-        validate_financial_param("trigger_price", params.trigger_price)?;
-        validate_optional_financial_param("limit_price", params.limit_price)?;
+        validate_financial_param_string("size", &params.size)?;
+        validate_financial_param_string("trigger_price", &params.trigger_price)?;
+        validate_optional_financial_param_string("limit_price", params.limit_price.as_deref())?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post_idempotent("/api/v1/orders/conditional", &body)
             .await
@@ -3960,9 +3990,9 @@ mod tests {
                 order_type: "LIMIT".into(),
                 side: "BUY".into(),
                 outcome: "YES".into(),
-                size: 10.0,
-                trigger_price: 0.55,
-                limit_price: Some(0.56),
+                size: "10".into(),
+                trigger_price: "0.55".into(),
+                limit_price: Some("0.56".into()),
                 trailing_pct: None,
                 expires_at: None,
             };
@@ -6234,9 +6264,9 @@ mod tests {
             order_type: "STOP_LOSS".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
-            size: 50.0,
-            trigger_price: 0.65,
-            limit_price: Some(0.67),
+            size: "50".into(),
+            trigger_price: "0.65".into(),
+            limit_price: Some("0.67".into()),
             trailing_pct: None,
             expires_at: None,
         };
@@ -6244,22 +6274,22 @@ mod tests {
         assert_eq!(json["marketId"], "mkt-1");
         assert_eq!(json["tokenId"], "tok-1");
         assert_eq!(json["type"], "STOP_LOSS");
-        assert_eq!(json["triggerPrice"], 0.65);
-        assert_eq!(json["limitPrice"], 0.67);
+        assert_eq!(json["triggerPrice"], "0.65");
+        assert_eq!(json["limitPrice"], "0.67");
         assert!(json.get("expiresAt").is_none());
         assert!(json.get("trailingPct").is_none());
     }
 
     #[test]
-    fn test_create_conditional_order_validation_rejects_nan_size() {
+    fn test_create_conditional_order_validation_rejects_non_numeric_size() {
         let params = CreateConditionalOrderParams {
             market_id: "mkt-1".into(),
             token_id: "tok-1".into(),
             order_type: "STOP_LOSS".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
-            size: f64::NAN,
-            trigger_price: 0.65,
+            size: "not_a_number".into(),
+            trigger_price: "0.65".into(),
             limit_price: None,
             trailing_pct: None,
             expires_at: None,
@@ -6281,8 +6311,8 @@ mod tests {
             order_type: "STOP_LOSS".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
-            size: 10.0,
-            trigger_price: -0.5,
+            size: "10".into(),
+            trigger_price: "-0.5".into(),
             limit_price: None,
             trailing_pct: None,
             expires_at: None,
@@ -6297,16 +6327,16 @@ mod tests {
     }
 
     #[test]
-    fn test_create_conditional_order_validation_rejects_nan_limit_price() {
+    fn test_create_conditional_order_validation_rejects_non_numeric_limit_price() {
         let params = CreateConditionalOrderParams {
             market_id: "mkt-1".into(),
             token_id: "tok-1".into(),
             order_type: "LIMIT".into(),
             side: "BUY".into(),
             outcome: "YES".into(),
-            size: 10.0,
-            trigger_price: 0.5,
-            limit_price: Some(f64::NAN),
+            size: "10".into(),
+            trigger_price: "0.5".into(),
+            limit_price: Some("not_a_number".into()),
             trailing_pct: None,
             expires_at: None,
         };
