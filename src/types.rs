@@ -1209,6 +1209,35 @@ pub struct AccuracyScore {
     pub by_category: std::collections::HashMap<String, serde_json::Value>,
 }
 
+/// Parameters for the accuracy leaderboard endpoint.
+#[derive(Debug, Default)]
+pub struct AccuracyLeaderboardParams {
+    /// Aggregation window: "7d", "30d", or "allTime".
+    pub period: Option<String>,
+    /// 1-100. Defaults to 20 server-side.
+    pub limit: Option<u32>,
+    /// Platform-native page number. Takes precedence over offset when supplied.
+    pub page: Option<u32>,
+    /// Zero-based row offset. Converted to the platform page/limit contract.
+    pub offset: Option<u32>,
+    /// Reserved for future cursor pagination. The current API is page-based.
+    pub cursor: Option<String>,
+}
+
+/// A single entry in the accuracy leaderboard.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccuracyLeaderboardEntry {
+    pub rank: u32,
+    pub user_id: String,
+    pub username: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub pnl: String,
+    pub win_rate: String,
+    pub trade_count: u32,
+}
+
 /// AI-generated portfolio review and optimization suggestions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortfolioReview {
