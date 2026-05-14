@@ -2907,7 +2907,6 @@ pub struct UpdateWhaleAlertFilterParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub struct UpdateProfileParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
