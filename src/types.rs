@@ -1222,7 +1222,7 @@ pub struct AccuracyLeaderboardParams {
     pub page: Option<u32>,
     /// Zero-based row offset. Converted to the platform page/limit contract.
     pub offset: Option<u32>,
-    /// Reserved for future cursor pagination. The current API is page-based.
+    /// Cursor token for pagination. Sent as-is when provided alongside or instead of page/offset.
     pub cursor: Option<String>,
 }
 

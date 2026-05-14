@@ -2864,7 +2864,15 @@ impl PolyforgeClient {
             let page = if let Some(page) = p.page {
                 Some(page)
             } else if let Some(offset) = p.offset {
-                let limit = p.limit.unwrap_or(20);
+                let limit = if let Some(l) = p.limit {
+                    if l > 0 {
+                        l
+                    } else {
+                        20
+                    }
+                } else {
+                    20
+                };
                 Some((offset / limit) + 1)
             } else {
                 None
@@ -2874,6 +2882,9 @@ impl PolyforgeClient {
             }
             if let Some(limit) = p.limit {
                 qp.push(("limit", limit.to_string()));
+            }
+            if let Some(ref cursor) = p.cursor {
+                qp.push(("cursor", cursor.clone()));
             }
         }
         let qs = if qp.is_empty() {
@@ -9218,6 +9229,28 @@ mod tests {
         assert_eq!(params.limit, Some(25));
         assert_eq!(params.offset, Some(50));
         assert!(params.page.is_none());
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_has_cursor() {
+        let params = AccuracyLeaderboardParams {
+            cursor: Some("next-page-token".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(params.cursor.as_deref(), Some("next-page-token"));
+        assert!(params.page.is_none());
+        assert!(params.offset.is_none());
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_zero_limit() {
+        let params = AccuracyLeaderboardParams {
+            limit: Some(0),
+            offset: Some(50),
+            ..Default::default()
+        };
+        assert_eq!(params.limit, Some(0));
+        assert_eq!(params.offset, Some(50));
     }
 
     #[test]
