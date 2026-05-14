@@ -6324,6 +6324,14 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_deserialization_accepts_null_status() {
+        let json = r#"{"id": "co-null-status", "status": null}"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-null-status");
+        assert!(co.status.is_none());
+    }
+
+    #[test]
     fn test_conditional_order_deserialization_preserves_non_string_known_key_in_extra() {
         let json = r#"{
             "id": "co-extra",

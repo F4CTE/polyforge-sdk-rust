@@ -1504,6 +1504,7 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                     serde_json::from_value(serde_json::Value::String(s.clone()))
                         .map_err(serde::de::Error::custom)
                 }
+                Some(serde_json::Value::Null) => Ok(None),
                 Some(_) => Err(serde::de::Error::custom("status field must be a string")),
                 None => Ok(None),
             }
