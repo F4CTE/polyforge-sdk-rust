@@ -2852,6 +2852,9 @@ impl PolyforgeClient {
     /// Returns a paginated list of traders with their accuracy stats.
     /// When `offset` is provided without `page`, it is converted to the
     /// platform's page-based contract.
+    ///
+    /// Returns [`PolyforgeError::Validation`] if the offset is too large
+    /// to represent as a page number for the given limit.
     pub async fn get_accuracy_leaderboard(
         &self,
         params: Option<&AccuracyLeaderboardParams>,
@@ -2861,20 +2864,22 @@ impl PolyforgeClient {
             if let Some(ref period) = p.period {
                 qp.push(("period", period.clone()));
             }
+            let effective_limit = p.limit.filter(|&l| l > 0).unwrap_or(20);
             let page = if let Some(page) = p.page {
-                Some(page)
-            } else if let Some(offset) = p.offset {
-                let limit = if let Some(l) = p.limit {
-                    if l > 0 {
-                        l
-                    } else {
-                        20
-                    }
+                if page > 0 {
+                    Some(page)
                 } else {
-                    20
-                };
-                let raw = (offset as u64 / limit as u64) + 1;
-                Some(raw.min(u32::MAX as u64) as u32)
+                    None
+                }
+            } else if let Some(offset) = p.offset {
+                let raw = (offset as u64 / effective_limit as u64) + 1;
+                if raw > u32::MAX as u64 {
+                    return Err(PolyforgeError::Validation(format!(
+                        "offset {} with limit {} produces page {}, which exceeds the maximum page {}",
+                        offset, effective_limit, raw, u32::MAX
+                    )));
+                }
+                Some(raw as u32)
             } else {
                 None
             };
@@ -2882,7 +2887,9 @@ impl PolyforgeClient {
                 qp.push(("page", page.to_string()));
             }
             if let Some(limit) = p.limit {
-                qp.push(("limit", limit.to_string()));
+                if limit > 0 {
+                    qp.push(("limit", limit.to_string()));
+                }
             }
         }
         let qs = if qp.is_empty() {
@@ -9238,6 +9245,33 @@ mod tests {
         };
         assert_eq!(params.limit, Some(0));
         assert_eq!(params.offset, Some(50));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_page_zero_ignored() {
+        let params = AccuracyLeaderboardParams {
+            page: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(params.page, Some(0));
+    }
+
+    #[tokio::test]
+    async fn test_accuracy_leaderboard_offset_overflow_rejected() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let params = AccuracyLeaderboardParams {
+            offset: Some(u32::MAX),
+            limit: Some(1),
+            ..Default::default()
+        };
+        let result = client.get_accuracy_leaderboard(Some(&params)).await;
+        assert!(result.is_err());
+        match result {
+            Err(PolyforgeError::Validation(msg)) => {
+                assert!(msg.contains("exceeds the maximum page"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got {other:?}"),
+        }
     }
 
     #[test]
