@@ -125,6 +125,8 @@
 - **`list_tickets()` returns `PaginatedResponse<Ticket>`** — the platform `/api/v1/tickets` endpoint returns a paginated envelope (`{ data, total, page, limit, totalPages, hasNext }`), but the SDK was decoding the response as `Vec<Ticket>`. Fix changes the return type to `PaginatedResponse<Ticket>` to match the platform contract. (closes #254)
 - **`ConditionalOrder.condition_type` deserialization** — the platform returns the condition type field as `type`, not `conditionType`. Added custom `Serialize`/`Deserialize` implementations that accept `type`, `conditionType`, and `condition_type` during deserialization, while always serializing as `conditionType`. (closes #250)
 
+- **`ConditionalOrder.condition_type` deserialization** — replaced `#[serde(alias)]` with a custom `Deserialize` implementation that accepts `conditionType` (camelCase), `type` (platform Prisma column name), and `condition_type` (snake_case) without failing when multiple key formats appear in the same payload. Prevents a compatibility regression during API transitions where the platform may switch from `conditionType` to `type`. (closes #250)
+
 ## [1.7.6] — 2026-04-25
 
 ### Fixed
