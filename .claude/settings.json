@@ -2,6 +2,15 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "REMOTE=$(git remote get-url origin 2>/dev/null) || true; if [ -n \"$REMOTE\" ] && ! echo \"$REMOTE\" | grep -qE '(github\\.com[/:]F4CTE/polyforge-sdk-rust)' ; then echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PreToolUse\\\",\\\"additionalContext\\\":\\\"WORKSPACE-MISMATCH: git remote origin ($REMOTE) does not point to F4CTE/polyforge-sdk-rust. This workspace is in the wrong repository. Stop and report this mismatch before editing or reviewing code.\\\"}}\" ; fi"
+          }
+        ]
+      },
+      {
         "matcher": "Glob|Grep",
         "hooks": [
           {
