@@ -1146,6 +1146,30 @@ pub struct AccuracyScore {
     pub by_category: std::collections::HashMap<String, serde_json::Value>,
 }
 
+/// A single row in the accuracy leaderboard returned by
+/// [`get_accuracy_leaderboard`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccuracyLeaderboardEntry {
+    pub rank: u32,
+    pub user_id: String,
+    pub username: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub pnl: String,
+    pub win_rate: String,
+    pub trade_count: u32,
+}
+
+/// Parameters for the accuracy leaderboard endpoint
+/// (`GET /api/v1/accuracy/leaderboard`).
+#[derive(Debug, Default)]
+pub struct AccuracyLeaderboardParams {
+    pub period: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
 /// AI-generated portfolio review and optimization suggestions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortfolioReview {

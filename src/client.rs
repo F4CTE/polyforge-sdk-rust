@@ -2807,6 +2807,40 @@ impl PolyforgeClient {
         self.get("/api/v1/accuracy/me").await
     }
 
+    /// Get the accuracy leaderboard ranked by win-rate, augmented with
+    /// trade-count and P&L fields (`GET /api/v1/accuracy/leaderboard`).
+    ///
+    /// Rows include profile metadata (rank, userId, username, displayName,
+    /// avatarUrl, pnl, winRate, tradeCount).  Paginated with `page` / `limit`.
+    pub async fn get_accuracy_leaderboard(
+        &self,
+        params: Option<&AccuracyLeaderboardParams>,
+    ) -> Result<PaginatedResponse<AccuracyLeaderboardEntry>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(ref period) = p.period {
+                qp.push(("period", period.clone()));
+            }
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/accuracy/leaderboard{qs}"))
+            .await
+    }
+
     /// Get AI-generated portfolio review and optimization suggestions.
     pub async fn get_portfolio_review(&self) -> Result<PortfolioReview> {
         self.get("/api/v1/ai/portfolio-review").await
