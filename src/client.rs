@@ -6328,7 +6328,10 @@ mod tests {
         let json = r#"{"id": "co-bad-field", "tokenId": 123}"#;
         let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("tokenId"), "expected error mentioning tokenId, got: {msg}");
+        assert!(
+            msg.contains("tokenId"),
+            "expected error mentioning tokenId, got: {msg}"
+        );
     }
 
     #[test]
