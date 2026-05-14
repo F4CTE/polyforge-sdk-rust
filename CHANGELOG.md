@@ -122,6 +122,7 @@
 - **StrategyEvent documented type list** — add 6 event types that the platform already emits to the `KNOWN_STRATEGY_EVENT_TYPES` constant and doc comments: `STRATEGY_PAUSED`, `STRATEGY_RESUMED`, `ORDER_SUBMITTED`, `ORDER_PARTIAL`, `ORDER_FAILED`, `ORDER_ERROR`. New tests verify all 16 known types and deserialization — parity with TypeScript SDK `KNOWN_STRATEGY_EVENTS`. (closes #214)
 - `GET /sports/combos/:collectionTicker` currently ignores its path param server-side (forwards to `listComboCollections({page:1, limit:1})`). The SDK wraps the route as-is for fidelity; a server-side fix is tracked separately.
 - **`list_tickets()` returns `PaginatedResponse<Ticket>`** — the platform `/api/v1/tickets` endpoint returns a paginated envelope (`{ data, total, page, limit, totalPages, hasNext }`), but the SDK was decoding the response as `Vec<Ticket>`. Fix changes the return type to `PaginatedResponse<Ticket>` to match the platform contract. (closes #254)
+- **`CreateConditionalOrderParams.limit_price`** — change type from `Option<f64>` to `Option<String>` to match platform's `@IsNumberString` validation. Conditional order creation was failing because the platform expects a numeric string, not a float. Client-side validation added for the new string type. (closes #252)
 
 ## [1.7.6] — 2026-04-25
 
