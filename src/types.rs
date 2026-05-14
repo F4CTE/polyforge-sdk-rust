@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -2968,6 +2970,37 @@ pub struct UpdateWhaleAlertFilterParams {
 // Profile (POLA-782)
 // ---------------------------------------------------------------------------
 
+/// Parameters for updating the authenticated user's profile.
+///
+/// All fields are optional — only supplied fields are sent in the PATCH body.
+///
+/// # Construction
+///
+/// **Builder (preferred — forward-compatible):**
+///
+/// ```ignore
+/// let params = UpdateProfileParams::builder()
+///     .display_name("Alice")
+///     .twitter_handle("@alice")
+///     .build();
+/// ```
+///
+/// **Struct literal — use `..Default::default()` for forward compat:**
+///
+/// ```ignore
+/// UpdateProfileParams {
+///     display_name: Some("Alice".into()),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// The [`extra`][Self::extra] field is a [`serde(flatten)`] escape hatch for
+/// future platform extensions.  Fields not known at compile time are
+/// preserved there; convenience methods on [`UpdateProfileParamsBuilder`] wrap
+/// known extensions so callers do not need to hand-write JSON keys.
+///
+/// The convenience constructor [`UpdateProfileParams::new()`] returns a
+/// default-initialized instance with all fields set to `None`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateProfileParams {
@@ -2977,8 +3010,97 @@ pub struct UpdateProfileParams {
     pub bio: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub twitter_handle: Option<String>,
+    /// Future platform extensions.  Keys must use camelCase.
+    ///
+    /// Private to prevent callers from inserting keys that collide with typed
+    /// fields (`displayName`, `bio`, `avatarUrl`) which would produce duplicate
+    /// JSON keys.  Use the builder and its convenience methods instead.
+    #[serde(flatten)]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub(crate) extra: HashMap<String, serde_json::Value>,
+}
+
+impl UpdateProfileParams {
+    /// Create a new `UpdateProfileParams` with all fields set to `None`.
+    ///
+    /// This is equivalent to [`UpdateProfileParams::default()`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a [`UpdateProfileParamsBuilder`] for forward-compatible construction.
+    ///
+    /// This is the preferred way to construct the params: when new optional
+    /// fields are added in future releases, builder-using callers will not
+    /// need source changes.
+    pub fn builder() -> UpdateProfileParamsBuilder {
+        UpdateProfileParamsBuilder::default()
+    }
+
+    /// Set the Twitter handle directly (without the builder).
+    ///
+    /// Equivalent to `UpdateProfileParams::builder().twitter_handle(value).build()`.
+    pub fn twitter_handle(mut self, value: impl Into<String>) -> Self {
+        self.extra
+            .insert("twitterHandle".to_string(), serde_json::json!(value.into()));
+        self
+    }
+}
+
+/// Builder for [`UpdateProfileParams`] — forward-compatible field-by-field construction.
+///
+/// # Example
+///
+/// ```ignore
+/// let params = UpdateProfileParams::builder()
+///     .display_name("Alice")
+///     .bio("Trader and developer")
+///     .twitter_handle("@alice")
+///     .build();
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct UpdateProfileParamsBuilder {
+    display_name: Option<String>,
+    bio: Option<String>,
+    avatar_url: Option<String>,
+    extra: HashMap<String, serde_json::Value>,
+}
+
+impl UpdateProfileParamsBuilder {
+    /// Set the display name.
+    pub fn display_name(mut self, value: impl Into<String>) -> Self {
+        self.display_name = Some(value.into());
+        self
+    }
+
+    /// Set the bio.
+    pub fn bio(mut self, value: impl Into<String>) -> Self {
+        self.bio = Some(value.into());
+        self
+    }
+
+    /// Set the avatar URL.
+    pub fn avatar_url(mut self, value: impl Into<String>) -> Self {
+        self.avatar_url = Some(value.into());
+        self
+    }
+
+    /// Set the Twitter handle (serializes as `twitterHandle`).
+    pub fn twitter_handle(mut self, value: impl Into<String>) -> Self {
+        self.extra
+            .insert("twitterHandle".to_string(), serde_json::json!(value.into()));
+        self
+    }
+
+    /// Build the [`UpdateProfileParams`].
+    pub fn build(self) -> UpdateProfileParams {
+        UpdateProfileParams {
+            display_name: self.display_name,
+            bio: self.bio,
+            avatar_url: self.avatar_url,
+            extra: self.extra,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
