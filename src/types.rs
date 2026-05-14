@@ -2968,9 +2968,23 @@ pub struct UpdateWhaleAlertFilterParams {
 // Profile (POLA-782)
 // ---------------------------------------------------------------------------
 
+/// Parameters for updating the authenticated user's profile.
+///
+/// All fields are optional — only supplied fields are sent in the PATCH body.
+/// Construct with [`Default`] + struct-update syntax:
+///
+/// ```ignore
+/// UpdateProfileParams {
+///     display_name: Some("Alice".into()),
+///     twitter_handle: Some("@alice".into()),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// The convenience constructor [`UpdateProfileParams::new()`] returns a
+/// default-initialized instance with all fields set to `None`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub struct UpdateProfileParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
@@ -2980,6 +2994,15 @@ pub struct UpdateProfileParams {
     pub avatar_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub twitter_handle: Option<String>,
+}
+
+impl UpdateProfileParams {
+    /// Create a new `UpdateProfileParams` with all fields set to `None`.
+    ///
+    /// This is equivalent to [`UpdateProfileParams::default()`].
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
