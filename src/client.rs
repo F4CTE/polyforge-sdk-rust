@@ -153,6 +153,21 @@ fn validate_optional_financial_param(name: &str, value: Option<f64>) -> Result<(
     Ok(())
 }
 
+/// Validate an optional number-string parameter — the platform expects
+/// `@IsNumberString` so we send prices as strings (e.g. `"0.67"`) rather than
+/// bare floats to avoid precision loss.
+fn validate_optional_number_string(name: &str, value: &Option<String>) -> Result<()> {
+    if let Some(s) = value {
+        let parsed: f64 = s.parse().map_err(|_| {
+            PolyforgeError::Validation(format!(
+                "{name} must be a valid number string, got \"{s}\""
+            ))
+        })?;
+        validate_financial_param(name, parsed)?;
+    }
+    Ok(())
+}
+
 /// Reject arb sizes outside the server-enforced `1..=10000` USDC range.
 ///
 /// Mirrors `class-validator` bounds in `ExecuteArbDto` so the SDK rejects bad
@@ -2589,7 +2604,7 @@ impl PolyforgeClient {
     ) -> Result<ConditionalOrder> {
         validate_financial_param("size", params.size)?;
         validate_financial_param("trigger_price", params.trigger_price)?;
-        validate_optional_financial_param("limit_price", params.limit_price)?;
+        validate_optional_number_string("limit_price", &params.limit_price)?;
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post_idempotent("/api/v1/orders/conditional", &body)
             .await
@@ -3962,7 +3977,7 @@ mod tests {
                 outcome: "YES".into(),
                 size: 10.0,
                 trigger_price: 0.55,
-                limit_price: Some(0.56),
+                limit_price: Some("0.56".into()),
                 trailing_pct: None,
                 expires_at: None,
             };
@@ -5144,6 +5159,33 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_optional_number_string_skips_none() {
+        assert!(validate_optional_number_string("limit_price", &None).is_ok());
+    }
+
+    #[test]
+    fn test_validate_optional_number_string_accepts_valid() {
+        assert!(validate_optional_number_string("limit_price", &Some("0.67".into())).is_ok());
+        assert!(validate_optional_number_string("limit_price", &Some("100".into())).is_ok());
+    }
+
+    #[test]
+    fn test_validate_optional_number_string_rejects_not_a_number() {
+        let err =
+            validate_optional_number_string("limit_price", &Some("abc".into())).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("limit_price"));
+    }
+
+    #[test]
+    fn test_validate_optional_number_string_rejects_negative() {
+        let err =
+            validate_optional_number_string("limit_price", &Some("-0.5".into())).unwrap_err();
+        assert!(matches!(err, PolyforgeError::Validation(_)));
+        assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
     fn test_place_order_params_validation_rejects_nan_size() {
         let params = PlaceOrderParams {
             token_id: "t1".into(),
@@ -6236,7 +6278,7 @@ mod tests {
             outcome: "YES".into(),
             size: 50.0,
             trigger_price: 0.65,
-            limit_price: Some(0.67),
+            limit_price: Some("0.67".into()),
             trailing_pct: None,
             expires_at: None,
         };
@@ -6245,7 +6287,7 @@ mod tests {
         assert_eq!(json["tokenId"], "tok-1");
         assert_eq!(json["type"], "STOP_LOSS");
         assert_eq!(json["triggerPrice"], 0.65);
-        assert_eq!(json["limitPrice"], 0.67);
+        assert_eq!(json["limitPrice"], "0.67");
         assert!(json.get("expiresAt").is_none());
         assert!(json.get("trailingPct").is_none());
     }
@@ -6297,7 +6339,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_conditional_order_validation_rejects_nan_limit_price() {
+    fn test_create_conditional_order_validation_rejects_invalid_limit_price() {
         let params = CreateConditionalOrderParams {
             market_id: "mkt-1".into(),
             token_id: "tok-1".into(),
@@ -6306,7 +6348,7 @@ mod tests {
             outcome: "YES".into(),
             size: 10.0,
             trigger_price: 0.5,
-            limit_price: Some(f64::NAN),
+            limit_price: Some("not-a-number".into()),
             trailing_pct: None,
             expires_at: None,
         };
