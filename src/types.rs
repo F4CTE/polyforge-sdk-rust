@@ -1222,6 +1222,7 @@ pub struct AccuracyLeaderboardParams {
     pub page: Option<u32>,
     /// Zero-based row offset. Converted to the platform page/limit contract.
     pub offset: Option<u32>,
+
 }
 
 /// A single entry in the accuracy leaderboard.
