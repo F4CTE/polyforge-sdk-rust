@@ -2849,7 +2849,8 @@ impl PolyforgeClient {
                 } else {
                     20
                 };
-                Some((offset / limit) + 1)
+                let raw = (offset as u64 / limit as u64) + 1;
+                Some(raw.min(u32::MAX as u64) as u32)
             } else {
                 None
             };
