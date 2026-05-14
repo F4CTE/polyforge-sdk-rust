@@ -2859,9 +2859,8 @@ impl PolyforgeClient {
             if let Some(limit) = p.limit {
                 qp.push(("limit", limit.to_string()));
             }
-            if let Some(ref cursor) = p.cursor {
-                qp.push(("cursor", cursor.clone()));
-            }
+            // cursor is reserved for future platform support; do not serialize it
+            // until the backend whitelists it (ValidationPipe forbids non-whitelisted params)
         }
         let qs = if qp.is_empty() {
             String::new()
