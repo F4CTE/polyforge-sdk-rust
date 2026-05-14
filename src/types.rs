@@ -330,6 +330,27 @@ pub struct StrategyTemplate {
 }
 
 /// Parameters for creating a strategy with full block configuration.
+///
+/// All fields except `name` are `Option` and default to `None`.
+/// This struct is **exhaustive** — adding a new field is a breaking change
+/// (covered by the 2.0.0 major version bump).
+///
+/// Construct with a struct literal and `..Default::default()`:
+///
+/// ```ignore
+/// let params = CreateStrategyParams {
+///     name: "My Strategy".into(),
+///     kalshi_subaccount: Some(42),
+///     ..Default::default()
+/// };
+/// ```
+/// Or use the convenience constructor [`CreateStrategyParams::new`].
+///
+/// ## Migration from 1.x
+/// Users upgrading from 1.x must use `..Default::default()` or
+/// `CreateStrategyParams::new(...)` instead of bare struct literals.
+/// The new `kalshi_subaccount` field defaults to `None` and is omitted
+/// from serialized JSON when `None`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateStrategyParams {
@@ -362,6 +383,48 @@ pub struct CreateStrategyParams {
     pub variables: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canvas: Option<serde_json::Value>,
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kalshi_subaccount: Option<u64>,
+}
+
+impl CreateStrategyParams {
+    /// Create a new `CreateStrategyParams` with the given name and default values.
+    ///
+    /// This is a convenience constructor — you can also use a struct literal
+    /// with `..Default::default()`.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Default::default()
+        }
+    }
+}
+
+/// Parameters for updating a strategy's mutable fields.
+///
+/// All fields are optional — only supplied fields are sent in the PATCH body.
+/// Construct with [`Default`] + struct-update syntax:
+///
+/// ```ignore
+/// UpdateStrategyParams {
+///     name: Some("New Name".into()),
+///     kalshi_subaccount: Some(42),
+///     ..Default::default()
+/// };
+/// ```
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateStrategyParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_id: Option<String>,
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kalshi_subaccount: Option<u64>,
 }
 
 /// Parameters for running a backtest.

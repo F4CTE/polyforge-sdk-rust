@@ -1054,6 +1054,9 @@ impl PolyforgeClient {
     }
 
     /// Update a strategy's name and/or description.
+    ///
+    /// This is a convenience wrapper around [`update_strategy_with`](Self::update_strategy_with)
+    /// that preserves backward compatibility with the original call signature.
     pub async fn update_strategy(
         &self,
         id: &str,
@@ -1061,16 +1064,29 @@ impl PolyforgeClient {
         description: Option<&str>,
         market_id: Option<&str>,
     ) -> Result<Strategy> {
-        let mut body = serde_json::json!({});
-        if let Some(n) = name {
-            body["name"] = serde_json::json!(n);
-        }
-        if let Some(d) = description {
-            body["description"] = serde_json::json!(d);
-        }
-        if let Some(mid) = market_id {
-            body["marketId"] = serde_json::json!(mid);
-        }
+        self.update_strategy_with(
+            id,
+            UpdateStrategyParams {
+                name: name.map(|s| s.to_string()),
+                description: description.map(|s| s.to_string()),
+                market_id: market_id.map(|s| s.to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+    }
+
+    /// Update a strategy's name, description, market, or Kalshi subaccount.
+    ///
+    /// Accepts an [`UpdateStrategyParams`] for full field coverage, including the
+    /// `kalshi_subaccount` field that is not available through the original
+    /// [`update_strategy`](Self::update_strategy) method.
+    pub async fn update_strategy_with(
+        &self,
+        id: &str,
+        params: UpdateStrategyParams,
+    ) -> Result<Strategy> {
+        let body = serde_json::to_value(&params)?;
         self.patch(&format!("/api/v1/strategies/{}", encode(id)), &body)
             .await
     }
@@ -5547,16 +5563,26 @@ mod tests {
             tags: Some(vec!["test".into()]),
             variables: None,
             canvas: None,
+            kalshi_subaccount: Some(42),
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["name"], "My Strategy");
         assert_eq!(json["visibility"], "PUBLIC");
         assert_eq!(json["execMode"], "TICK");
         assert_eq!(json["tickMs"], 5000);
+        assert_eq!(json["kalshiSubaccount"], 42);
         assert!(json["triggers"].is_array());
         assert!(json["tags"].is_array());
         // logicBlocks and calcBlocks omitted when None
         assert!(json.get("logicBlocks").is_none());
+    }
+
+    #[test]
+    fn test_create_strategy_params_omits_kalshi_subaccount_when_none() {
+        let params = CreateStrategyParams::new("S");
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["name"], "S");
+        assert!(json.get("kalshiSubaccount").is_none());
     }
 
     #[test]
