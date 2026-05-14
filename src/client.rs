@@ -3363,6 +3363,27 @@ impl PolyforgeClient {
             .await
     }
 
+    /// Update the authenticated user's profile with an arbitrary body.
+    ///
+    /// Use this when you need to set platform fields not covered by the typed
+    /// [`UpdateProfileParams`], such as `"twitterHandle"`. Construct the body
+    /// by calling [`UpdateProfileParams::to_value()`] and extending it:
+    ///
+    /// ```ignore
+    /// let mut body = UpdateProfileParams {
+    ///     display_name: Some("Alice".into()),
+    ///     ..Default::default()
+    /// }.to_value()?;
+    /// body["twitterHandle"] = serde_json::json!("@alice");
+    /// client.update_my_profile_raw(&body).await?;
+    /// ```
+    pub async fn update_my_profile_raw(
+        &self,
+        body: &serde_json::Value,
+    ) -> Result<UserProfile> {
+        self.patch("/api/v1/profile/me", body).await
+    }
+
     /// Change the authenticated user's password (profile route).
     pub async fn change_profile_password(&self, params: &ChangePasswordParams) -> Result<()> {
         self.post("/api/v1/profile/password", &serde_json::to_value(params)?)
@@ -8078,7 +8099,8 @@ mod tests {
     fn test_update_profile_params_omits_none_fields() {
         let p = UpdateProfileParams {
             display_name: Some("Alice".into()),
-            ..Default::default()
+            bio: None,
+            avatar_url: None,
         };
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["displayName"], "Alice");
@@ -8087,27 +8109,27 @@ mod tests {
     }
 
     #[test]
-    fn test_update_profile_serializes_twitter_handle_camel_case() {
-        let p = UpdateProfileParams::builder()
-            .twitter_handle("polyforge")
-            .build();
-        let v = serde_json::to_value(&p).unwrap();
-        assert_eq!(v["twitterHandle"], "polyforge");
-        assert!(v.get("twitter_handle").is_none());
+    fn test_update_profile_raw_builds_twitter_handle() {
+        // Callers can extend with platform fields via UpdateProfileParams::to_value()
+        // and update_my_profile_raw() without any struct surface changes.
+        let params = UpdateProfileParams {
+            display_name: Some("Alice".into()),
+            ..Default::default()
+        };
+        let mut body = params.to_value().unwrap();
+        body["twitterHandle"] = serde_json::json!("polyforge");
+        assert_eq!(body["twitterHandle"], "polyforge");
+        assert!(body.get("twitter_handle").is_none());
+        assert_eq!(body["displayName"], "Alice");
     }
 
     #[test]
-    fn test_update_profile_twitter_handle_max_length_50() {
-        // Mirrors the platform's @MaxLength(50) on UpdateProfileDto.twitterHandle.
-        // The SDK transmits the value as-is (server enforces the cap); this
-        // regression test guards against accidental client-side truncation.
+    fn test_update_profile_raw_twitter_handle_max_length() {
         let handle = "a".repeat(50);
-        let p = UpdateProfileParams::builder()
-            .twitter_handle(handle.clone())
-            .build();
-        let v = serde_json::to_value(&p).unwrap();
-        assert_eq!(v["twitterHandle"], handle);
-        assert_eq!(v["twitterHandle"].as_str().unwrap().len(), 50);
+        let params = UpdateProfileParams::default();
+        let mut body = params.to_value().unwrap();
+        body["twitterHandle"] = serde_json::json!(handle.clone());
+        assert_eq!(body["twitterHandle"].as_str().unwrap().len(), 50);
     }
 
     #[test]
