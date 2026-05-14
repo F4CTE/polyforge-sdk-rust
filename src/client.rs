@@ -2865,12 +2865,8 @@ impl PolyforgeClient {
                 qp.push(("period", period.clone()));
             }
             let effective_limit = p.limit.filter(|&l| l > 0).unwrap_or(20);
-            let page = if let Some(page) = p.page {
-                if page > 0 {
-                    Some(page)
-                } else {
-                    None
-                }
+            let page = if let Some(page) = p.page.filter(|&pg| pg > 0) {
+                Some(page)
             } else if let Some(offset) = p.offset {
                 let raw = (offset as u64 / effective_limit as u64) + 1;
                 if raw > u32::MAX as u64 {
@@ -9248,12 +9244,37 @@ mod tests {
     }
 
     #[test]
-    fn test_accuracy_leaderboard_params_page_zero_ignored() {
+    fn test_accuracy_leaderboard_params_page_zero_falls_back_to_offset() {
         let params = AccuracyLeaderboardParams {
             page: Some(0),
+            offset: Some(50),
+            limit: Some(25),
             ..Default::default()
         };
         assert_eq!(params.page, Some(0));
+        assert_eq!(params.offset, Some(50));
+    }
+
+    #[tokio::test]
+    async fn test_accuracy_leaderboard_page_zero_uses_offset() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let params = AccuracyLeaderboardParams {
+            page: Some(0),
+            offset: Some(u32::MAX),
+            limit: Some(1),
+            ..Default::default()
+        };
+        let result = client.get_accuracy_leaderboard(Some(&params)).await;
+        assert!(result.is_err());
+        match result {
+            Err(PolyforgeError::Validation(msg)) => {
+                assert!(
+                    msg.contains("exceeds the maximum page"),
+                    "expected overflow message, got: {msg}"
+                );
+            }
+            other => panic!("expected Validation error from fall-through overflow, got {other:?}"),
+        }
     }
 
     #[tokio::test]
