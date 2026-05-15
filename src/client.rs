@@ -2865,19 +2865,27 @@ impl PolyforgeClient {
                 qp.push(("period", period.clone()));
             }
             let effective_limit = p.limit.filter(|&l| l > 0).unwrap_or(20);
-            let page = if let Some(page) = p.page.filter(|&pg| pg > 0) {
-                Some(page)
-            } else if let Some(offset) = p.offset {
-                let raw = (offset as u64 / effective_limit as u64) + 1;
-                if raw > u32::MAX as u64 {
-                    return Err(PolyforgeError::Validation(format!(
-                        "offset {} with limit {} produces page {}, which exceeds the maximum page {}",
-                        offset, effective_limit, raw, u32::MAX
-                    )));
+            let page = match p.page {
+                Some(0) => {
+                    return Err(PolyforgeError::Validation(
+                        "page must be >= 1 (1-based pagination)".into(),
+                    ));
                 }
-                Some(raw as u32)
-            } else {
-                None
+                Some(pg) => Some(pg),
+                None => {
+                    if let Some(offset) = p.offset {
+                        let raw = (offset as u64 / effective_limit as u64) + 1;
+                        if raw > u32::MAX as u64 {
+                            return Err(PolyforgeError::Validation(format!(
+                                "offset {} with limit {} produces page {}, which exceeds the maximum page {}",
+                                offset, effective_limit, raw, u32::MAX
+                            )));
+                        }
+                        Some(raw as u32)
+                    } else {
+                        None
+                    }
+                }
             };
             if let Some(page) = page {
                 qp.push(("page", page.to_string()));
@@ -9244,7 +9252,7 @@ mod tests {
     }
 
     #[test]
-    fn test_accuracy_leaderboard_params_page_zero_falls_back_to_offset() {
+    fn test_accuracy_leaderboard_params_page_zero_is_allowed_for_construction() {
         let params = AccuracyLeaderboardParams {
             page: Some(0),
             offset: Some(50),
@@ -9256,12 +9264,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_accuracy_leaderboard_page_zero_uses_offset() {
+    async fn test_accuracy_leaderboard_rejects_page_zero() {
         let client = PolyforgeClient::new("k").unwrap();
         let params = AccuracyLeaderboardParams {
             page: Some(0),
-            offset: Some(u32::MAX),
-            limit: Some(1),
+            limit: Some(25),
             ..Default::default()
         };
         let result = client.get_accuracy_leaderboard(Some(&params)).await;
@@ -9269,11 +9276,11 @@ mod tests {
         match result {
             Err(PolyforgeError::Validation(msg)) => {
                 assert!(
-                    msg.contains("exceeds the maximum page"),
-                    "expected overflow message, got: {msg}"
+                    msg.contains("page must be >= 1"),
+                    "expected page-zero rejection, got: {msg}"
                 );
             }
-            other => panic!("expected Validation error from fall-through overflow, got {other:?}"),
+            other => panic!("expected Validation error for page=0, got {other:?}"),
         }
     }
 
@@ -9289,7 +9296,10 @@ mod tests {
         assert!(result.is_err());
         match result {
             Err(PolyforgeError::Validation(msg)) => {
-                assert!(msg.contains("exceeds the maximum page"), "unexpected message: {msg}");
+                assert!(
+                    msg.contains("exceeds the maximum page"),
+                    "unexpected message: {msg}"
+                );
             }
             other => panic!("expected Validation error, got {other:?}"),
         }
