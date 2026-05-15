@@ -6341,6 +6341,51 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_rejects_duplicate_optional_field_null_first() {
+        let json = r#"{
+            "id": "co-5",
+            "tokenId": null,
+            "tokenId": "tok-abc"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate"),
+            "expected duplicate field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_duplicate_field_with_value_first() {
+        let json = r#"{
+            "id": "co-6",
+            "side": "BUY",
+            "side": "SELL"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate"),
+            "expected duplicate field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_duplicate_status_null_first() {
+        let json = r#"{
+            "id": "co-7",
+            "status": null,
+            "status": "PENDING"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate"),
+            "expected duplicate field error, got: {msg}"
+        );
+    }
+
+    #[test]
     fn test_smoke() {
         let _client = PolyforgeClient::new("test-api-key").unwrap();
     }

@@ -1442,48 +1442,67 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                 let mut expires_at: Option<String> = None;
                 let mut extra_map = serde_json::Map::new();
 
+                let mut seen_id = false;
+                let mut seen_token_id = false;
+                let mut seen_side = false;
+                let mut seen_outcome = false;
+                let mut seen_size = false;
+                let mut seen_trigger_price = false;
+                let mut seen_limit_price = false;
+                let mut seen_status = false;
+                let mut seen_created_at = false;
+                let mut seen_triggered_at = false;
+                let mut seen_expires_at = false;
+
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "id" => {
-                            if id.is_some() {
+                            if seen_id {
                                 return Err(serde::de::Error::duplicate_field("id"));
                             }
+                            seen_id = true;
                             id = Some(map.next_value()?);
                         }
                         "tokenId" => {
-                            if token_id.is_some() {
+                            if seen_token_id {
                                 return Err(serde::de::Error::duplicate_field("tokenId"));
                             }
+                            seen_token_id = true;
                             token_id = map.next_value::<Option<String>>()?;
                         }
                         "side" => {
-                            if side.is_some() {
+                            if seen_side {
                                 return Err(serde::de::Error::duplicate_field("side"));
                             }
+                            seen_side = true;
                             side = map.next_value::<Option<String>>()?;
                         }
                         "outcome" => {
-                            if outcome.is_some() {
+                            if seen_outcome {
                                 return Err(serde::de::Error::duplicate_field("outcome"));
                             }
+                            seen_outcome = true;
                             outcome = map.next_value::<Option<String>>()?;
                         }
                         "size" => {
-                            if size.is_some() {
+                            if seen_size {
                                 return Err(serde::de::Error::duplicate_field("size"));
                             }
+                            seen_size = true;
                             size = map.next_value::<Option<String>>()?;
                         }
                         "triggerPrice" => {
-                            if trigger_price.is_some() {
+                            if seen_trigger_price {
                                 return Err(serde::de::Error::duplicate_field("triggerPrice"));
                             }
+                            seen_trigger_price = true;
                             trigger_price = map.next_value::<Option<String>>()?;
                         }
                         "limitPrice" => {
-                            if limit_price.is_some() {
+                            if seen_limit_price {
                                 return Err(serde::de::Error::duplicate_field("limitPrice"));
                             }
+                            seen_limit_price = true;
                             limit_price = map.next_value::<Option<String>>()?;
                         }
                         "conditionType" | "type" => {
@@ -1494,27 +1513,31 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                             }
                         }
                         "status" => {
-                            if status.is_some() {
+                            if seen_status {
                                 return Err(serde::de::Error::duplicate_field("status"));
                             }
+                            seen_status = true;
                             status = map.next_value::<Option<ConditionalOrderStatus>>()?;
                         }
                         "createdAt" => {
-                            if created_at.is_some() {
+                            if seen_created_at {
                                 return Err(serde::de::Error::duplicate_field("createdAt"));
                             }
+                            seen_created_at = true;
                             created_at = map.next_value::<Option<String>>()?;
                         }
                         "triggeredAt" => {
-                            if triggered_at.is_some() {
+                            if seen_triggered_at {
                                 return Err(serde::de::Error::duplicate_field("triggeredAt"));
                             }
+                            seen_triggered_at = true;
                             triggered_at = map.next_value::<Option<String>>()?;
                         }
                         "expiresAt" => {
-                            if expires_at.is_some() {
+                            if seen_expires_at {
                                 return Err(serde::de::Error::duplicate_field("expiresAt"));
                             }
+                            seen_expires_at = true;
                             expires_at = map.next_value::<Option<String>>()?;
                         }
                         _ => {
