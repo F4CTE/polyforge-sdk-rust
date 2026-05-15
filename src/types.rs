@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -1698,7 +1700,7 @@ pub struct RiskSettings {
     /// Forward-compat bucket for any additional fields the platform
     /// returns (e.g. `userId`, `updatedAt`).
     #[serde(default, flatten)]
-    pub extra: serde_json::Value,
+    pub extra: HashMap<String, serde_json::Value>,
 }
 
 impl RiskSettings {
@@ -1717,7 +1719,7 @@ impl Default for RiskSettings {
             drawdown_threshold_pct: default_drawdown_threshold_pct(),
             circuit_breaker_tripped: false,
             circuit_breaker_tripped_at: None,
-            extra: serde_json::Value::Object(serde_json::Map::new()),
+            extra: HashMap::new(),
         }
     }
 }
