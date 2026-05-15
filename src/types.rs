@@ -2968,6 +2968,14 @@ pub struct UpdateWhaleAlertFilterParams {
 // Profile (POLA-782)
 // ---------------------------------------------------------------------------
 
+/// Parameters for updating the authenticated user's profile.
+///
+/// All fields are optional — only supplied fields are sent in the PATCH body.
+///
+/// Use [`Self::to_value()`] to obtain a `serde_json::Value` that can be
+/// extended with platform fields not yet covered by the typed struct (such as
+/// `twitterHandle`), then pass it to
+/// [`PolyforgeClient::update_my_profile_raw()`][crate::PolyforgeClient::update_my_profile_raw].
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateProfileParams {
@@ -2977,6 +2985,14 @@ pub struct UpdateProfileParams {
     pub bio: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+}
+
+impl UpdateProfileParams {
+    /// Convert to a `serde_json::Value` so callers can add extra fields
+    /// (e.g. `"twitterHandle"`) before sending.
+    pub fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+        serde_json::to_value(self)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
