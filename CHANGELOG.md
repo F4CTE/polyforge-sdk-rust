@@ -20,6 +20,7 @@
   - `idempotency_key_header()` validation tightened from non-empty to 8–128 characters.
 - **Auth behavior for public endpoints** — `get_user_score()`, `get_user_badges()`, `get_user_profile()`, and `get_actions()` now use `get_with_optional_auth()`. When the client is constructed with an empty API key these methods skip the `Authorization` header, matching the platform's public-route contract. `get_health()` uses `get_no_auth()` (never attaches the `Authorization` header). Previously `get_user_score()`, `get_user_badges()`, and `get_user_profile()` always attached `Authorization: Bearer <key>`, causing 401 errors when no key was available.
 - **Cross-SDK naming aliases** — `get_notifications()` is now a deprecated alias for `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the canonical `MyReferralsResponse` type.
+- **search_markets return type** — `search_markets()` now returns `MarketSearchResponse` (a flat `{ results: [...] }` envelope) instead of `PaginatedResponse<Market>`, matching the platform's actual response shape for `GET /api/v1/markets/search`. New `MarketSearchResponse` type. (POLA-5122)
 - **vote_market_sentiment params** — `vote_market_sentiment()` now accepts `VoteMarketSentimentParams` with `direction` and `confidence` fields instead of sending an empty JSON body, matching the platform's expected request schema for `POST /api/v1/markets/:marketId/sentiment`. (POLA-5122)
 
 ### Added

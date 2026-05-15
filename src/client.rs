@@ -904,15 +904,11 @@ impl PolyforgeClient {
     }
 
     /// Full-text search across all markets.
-    ///
-    /// The platform returns `{ results: [...] }` rather than the standard
-    /// paginated envelope.  The SDK deserializes into `SearchResults<Market>`
-    /// internally and converts to `PaginatedResponse<Market>` so callers see
-    /// a uniform paginated shape.
+    /// Returns a flat `results` list (not a paginated envelope).
     pub async fn search_markets(
         &self,
         params: &SearchMarketsParams,
-    ) -> Result<PaginatedResponse<Market>> {
+    ) -> Result<MarketSearchResponse> {
         let mut qp: Vec<(&str, String)> = vec![("q", params.q.clone())];
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
@@ -924,7 +920,9 @@ impl PolyforgeClient {
         let qs = format!("?{}", pairs.join("&"));
         let results: SearchResults<Market> =
             self.get(&format!("/api/v1/markets/search{qs}")).await?;
-        Ok(results.into_paginated_response(params.limit.unwrap_or(20)))
+        Ok(MarketSearchResponse {
+            results: results.results,
+        })
     }
 
     /// Get the minimum price tick size for a market token.
