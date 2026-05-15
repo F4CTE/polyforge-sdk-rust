@@ -1217,7 +1217,7 @@ impl PolyforgeClient {
 
     /// Report a strategy for violating guidelines.
     ///
-    /// `reason` should be one of `"SPAM"`, `"MISLEADING"`, `"HARMFUL"`, `"OTHER"`.
+    /// `reason` should be one of `"SPAM"`, `"MISLEADING"`, `"INAPPROPRIATE"`, `"OTHER"`.
     pub async fn report_strategy(
         &self,
         id: &str,
