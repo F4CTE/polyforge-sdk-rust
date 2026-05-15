@@ -71,6 +71,10 @@
   - `get_user_sponsored_markets()` → `GET /api/v1/rewards/user/sponsored-markets` → `UserSponsoredMarkets` — list the authenticated user's sponsored-rewards markets.
   - `get_rewards_sponsor_url(market_id)` → `GET /api/v1/rewards/sponsor-url/{marketId}` → `RewardsSponsorUrl` — get the Polymarket sponsor page URL for a specific market.
   - New types: `RewardsMarketDetail`, `UserSponsoredMarkets`, `RewardsSponsorUrl`. All use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility.
+
+### Verified
+- **POLA-3834** Venue preferences compatibility check — verified that `get_my_preferences()` and `update_my_preferences()` were already implemented (POLA-3330) and the corresponding GitHub issue ([#207](https://github.com/F4CTE/polyforge-sdk-rust/issues/207)) is closed. All 389 tests pass. No code changes needed.
+
 - **Public user profile lookups (POLA-1844)** — five endpoints sourced from the weekly SDK audit:
   - `get_user_performance(username, period)` → `Vec<UserPerformancePoint>` (PnL curve).
   - `get_user_strategies(username, visibility, limit)` → `Vec<UserStrategySummary>` (server caps `limit` at 50).
