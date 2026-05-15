@@ -1380,7 +1380,7 @@ pub enum ConditionalOrderType {
 }
 
 /// A conditional order (limit, stop, trailing-stop, etc.).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConditionalOrder {
     pub id: String,
@@ -1396,7 +1396,7 @@ pub struct ConditionalOrder {
     pub trigger_price: Option<String>,
     #[serde(default)]
     pub limit_price: Option<String>,
-    #[serde(default, alias = "type")]
+    #[serde(default)]
     pub condition_type: Option<String>,
     #[serde(default)]
     pub status: Option<ConditionalOrderStatus>,
@@ -1408,6 +1408,75 @@ pub struct ConditionalOrder {
     pub expires_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+/// Private helper for deserializing `ConditionalOrder` — mirrors the public struct
+/// but uses derived `Deserialize` with the `type` alias for platform compatibility.
+/// The public struct uses a manual `Deserialize` impl that cleans up duplicate keys
+/// before delegating here.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct _ConditionalOrderRaw {
+    id: String,
+    #[serde(default)]
+    token_id: Option<String>,
+    #[serde(default)]
+    side: Option<String>,
+    #[serde(default)]
+    outcome: Option<String>,
+    #[serde(default)]
+    size: Option<String>,
+    #[serde(default)]
+    trigger_price: Option<String>,
+    #[serde(default)]
+    limit_price: Option<String>,
+    #[serde(default, alias = "type")]
+    condition_type: Option<String>,
+    #[serde(default)]
+    status: Option<ConditionalOrderStatus>,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    triggered_at: Option<String>,
+    #[serde(default)]
+    expires_at: Option<String>,
+    #[serde(flatten)]
+    extra: serde_json::Value,
+}
+
+impl<'de> Deserialize<'de> for ConditionalOrder {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let mut value = serde_json::Value::deserialize(deserializer)?;
+        // During backend transition windows, payloads may include both
+        // conditionType and type keys. Serde's alias mechanism treats
+        // these as duplicate fields and fails. We remove the extra type
+        // key here so the derived deserializer sees only one value.
+        if let Some(obj) = value.as_object_mut() {
+            if obj.contains_key("conditionType") && obj.contains_key("type") {
+                obj.remove("type");
+            }
+        }
+        let raw = serde_json::from_value::<_ConditionalOrderRaw>(value)
+            .map_err(serde::de::Error::custom)?;
+        Ok(ConditionalOrder {
+            id: raw.id,
+            token_id: raw.token_id,
+            side: raw.side,
+            outcome: raw.outcome,
+            size: raw.size,
+            trigger_price: raw.trigger_price,
+            limit_price: raw.limit_price,
+            condition_type: raw.condition_type,
+            status: raw.status,
+            created_at: raw.created_at,
+            triggered_at: raw.triggered_at,
+            expires_at: raw.expires_at,
+            extra: raw.extra,
+        })
+    }
 }
 
 /// Parameters for listing conditional orders.
@@ -3837,7 +3906,7 @@ pub struct MarketSentimentVote {
 #[serde(rename_all = "camelCase")]
 pub struct VoteMarketSentimentParams {
     pub direction: String,
-    pub confidence: i32,
+    pub confidence: f64,
 }
 
 /// Aggregated, market-controller-derived sentiment report.

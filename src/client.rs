@@ -6292,6 +6292,30 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_deserializes_dual_type_keys() {
+        // Regression: during backend transition windows, payloads may include
+        // both conditionType and type keys. The deserializer must not fail.
+        let json = r#"{
+            "id": "co-4",
+            "tokenId": "tok-abc",
+            "side": "BUY",
+            "outcome": "YES",
+            "size": "500",
+            "triggerPrice": "0.90",
+            "limitPrice": "0.88",
+            "conditionType": "LIMIT",
+            "type": "LIMIT",
+            "status": "PENDING",
+            "createdAt": "2026-05-10T08:00:00Z"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-4");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+        assert_eq!(co.trigger_price.as_deref(), Some("0.90"));
+        assert_eq!(co.limit_price.as_deref(), Some("0.88"));
+    }
+
+    #[test]
     fn test_conditional_order_deserializes_minimal() {
         let json = r#"{"id": "co-2"}"#;
         let co: ConditionalOrder = serde_json::from_str(json).unwrap();
