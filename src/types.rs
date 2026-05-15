@@ -1816,6 +1816,9 @@ pub struct SearchMarketsResponse {
     pub extra: serde_json::Value,
 }
 
+#[deprecated(note = "use SearchMarketsResponse instead")]
+pub use self::SearchMarketsResponse as MarketSearchResponse;
+
 /// Tick-size for a market token (minimum price increment).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
