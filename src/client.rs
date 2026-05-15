@@ -875,10 +875,11 @@ impl PolyforgeClient {
     }
 
     /// Full-text search across all markets.
+    /// Returns a flat `results` list (not a paginated envelope).
     pub async fn search_markets(
         &self,
         params: &SearchMarketsParams,
-    ) -> Result<PaginatedResponse<Market>> {
+    ) -> Result<MarketSearchResponse> {
         let mut qp: Vec<(&str, String)> = vec![("q", params.q.clone())];
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
@@ -3778,10 +3779,14 @@ impl PolyforgeClient {
     /// (`POST /api/v1/markets/:marketId/sentiment`).
     ///
     /// Server returns the same sentiment report shape as the GET variant.
-    pub async fn vote_market_sentiment(&self, market_id: &str) -> Result<MarketSentimentReport> {
+    pub async fn vote_market_sentiment(
+        &self,
+        market_id: &str,
+        params: &VoteMarketSentimentParams,
+    ) -> Result<MarketSentimentReport> {
         self.post(
             &format!("/api/v1/markets/{}/sentiment", encode(market_id)),
-            &json!({}),
+            &serde_json::to_value(params)?,
         )
         .await
     }
@@ -6262,12 +6267,42 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_deserializes_type_field() {
+        // #250: Platform returns 'type' not 'conditionType' for condition_type
+        let json = r#"{
+            "id": "co-3",
+            "tokenId": "tok-xyz",
+            "side": "SELL",
+            "outcome": "NO",
+            "size": "200",
+            "triggerPrice": "0.80",
+            "limitPrice": "0.78",
+            "type": "STOP_LOSS",
+            "status": "PENDING",
+            "createdAt": "2026-05-01T10:00:00Z",
+            "triggeredAt": null,
+            "expiresAt": "2026-05-10T10:00:00Z"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-3");
+        assert_eq!(co.condition_type.as_deref(), Some("STOP_LOSS"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
+        assert_eq!(co.limit_price.as_deref(), Some("0.78"));
+        assert_eq!(co.trigger_price.as_deref(), Some("0.80"));
+    }
+
+    #[test]
     fn test_conditional_order_deserializes_minimal() {
         let json = r#"{"id": "co-2"}"#;
         let co: ConditionalOrder = serde_json::from_str(json).unwrap();
         assert_eq!(co.id, "co-2");
         assert!(co.token_id.is_none());
         assert!(co.status.is_none());
+    }
+
+    #[test]
+    fn test_smoke() {
+        let _client = PolyforgeClient::new("test-api-key").unwrap();
     }
 
     #[test]
