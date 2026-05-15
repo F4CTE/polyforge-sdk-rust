@@ -61,13 +61,6 @@ pub struct Token {
     pub price: Option<f64>,
 }
 
-/// Response from `GET /api/v1/markets/search` (flat `results` list, not paginated).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MarketSearchResponse {
-    pub results: Vec<Market>,
-}
-
 // ---------------------------------------------------------------------------
 // GDPR Personal Data Export (POLA-3846)
 // ---------------------------------------------------------------------------
@@ -1809,6 +1802,22 @@ pub struct SearchMarketsParams {
     pub q: String,
     pub limit: Option<u32>,
 }
+
+/// Response from `GET /api/v1/markets/search`.
+///
+/// The platform wraps search results in a `{ "results": [...] }` envelope
+/// rather than the paginated `{ "data": [...] }` shape used by list endpoints.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchMarketsResponse {
+    #[serde(default)]
+    pub results: Vec<Market>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+#[deprecated(note = "use SearchMarketsResponse instead")]
+pub use self::SearchMarketsResponse as MarketSearchResponse;
 
 /// Tick-size for a market token (minimum price increment).
 #[derive(Debug, Clone, Serialize, Deserialize)]
