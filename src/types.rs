@@ -1403,72 +1403,124 @@ pub struct ConditionalOrder {
     pub extra: serde_json::Value,
 }
 
-/// Private helper for deserializing `ConditionalOrder` — mirrors the public struct
-/// but uses derived `Deserialize` with the `type` alias for platform compatibility.
-/// The public struct uses a manual `Deserialize` impl that cleans up duplicate keys
-/// before delegating here.
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct _ConditionalOrderRaw {
-    id: String,
-    #[serde(default)]
-    token_id: Option<String>,
-    #[serde(default)]
-    side: Option<String>,
-    #[serde(default)]
-    outcome: Option<String>,
-    #[serde(default)]
-    size: Option<String>,
-    #[serde(default)]
-    trigger_price: Option<String>,
-    #[serde(default)]
-    limit_price: Option<String>,
-    #[serde(default, alias = "type")]
-    condition_type: Option<String>,
-    #[serde(default)]
-    status: Option<ConditionalOrderStatus>,
-    #[serde(default)]
-    created_at: Option<String>,
-    #[serde(default)]
-    triggered_at: Option<String>,
-    #[serde(default)]
-    expires_at: Option<String>,
-    #[serde(flatten)]
-    extra: serde_json::Value,
-}
-
 impl<'de> Deserialize<'de> for ConditionalOrder {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let mut value = serde_json::Value::deserialize(deserializer)?;
-        // During backend transition windows, payloads may include both
-        // conditionType and type keys. Serde's alias mechanism treats
-        // these as duplicate fields and fails. We remove the extra type
-        // key here so the derived deserializer sees only one value.
-        if let Some(obj) = value.as_object_mut() {
-            if obj.contains_key("conditionType") && obj.contains_key("type") {
-                obj.remove("type");
+        struct ConditionalOrderVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for ConditionalOrderVisitor {
+            type Value = ConditionalOrder;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("struct ConditionalOrder")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<ConditionalOrder, V::Error>
+            where
+                V: serde::de::MapAccess<'de>,
+            {
+                let mut id: Option<String> = None;
+                let mut token_id: Option<String> = None;
+                let mut side: Option<String> = None;
+                let mut outcome: Option<String> = None;
+                let mut size: Option<String> = None;
+                let mut trigger_price: Option<String> = None;
+                let mut limit_price: Option<String> = None;
+                let mut condition_type: Option<String> = None;
+                let mut status: Option<ConditionalOrderStatus> = None;
+                let mut created_at: Option<String> = None;
+                let mut triggered_at: Option<String> = None;
+                let mut expires_at: Option<String> = None;
+                let mut extra_map = serde_json::Map::new();
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "id" => {
+                            id = Some(map.next_value()?);
+                        }
+                        "tokenId" => {
+                            token_id = map.next_value::<Option<String>>()?;
+                        }
+                        "side" => {
+                            side = map.next_value::<Option<String>>()?;
+                        }
+                        "outcome" => {
+                            outcome = map.next_value::<Option<String>>()?;
+                        }
+                        "size" => {
+                            size = map.next_value::<Option<String>>()?;
+                        }
+                        "triggerPrice" => {
+                            trigger_price = map.next_value::<Option<String>>()?;
+                        }
+                        "limitPrice" => {
+                            limit_price = map.next_value::<Option<String>>()?;
+                        }
+                        "conditionType" | "type" => {
+                            if condition_type.is_none() {
+                                condition_type = map.next_value::<Option<String>>()?;
+                            } else {
+                                let _: serde::de::IgnoredAny = map.next_value()?;
+                            }
+                        }
+                        "status" => {
+                            status = map.next_value::<Option<ConditionalOrderStatus>>()?;
+                        }
+                        "createdAt" => {
+                            created_at = map.next_value::<Option<String>>()?;
+                        }
+                        "triggeredAt" => {
+                            triggered_at = map.next_value::<Option<String>>()?;
+                        }
+                        "expiresAt" => {
+                            expires_at = map.next_value::<Option<String>>()?;
+                        }
+                        _ => {
+                            let val: serde_json::Value = map.next_value()?;
+                            extra_map.insert(key, val);
+                        }
+                    }
+                }
+
+                let id = id.ok_or_else(|| serde::de::Error::missing_field("id"))?;
+
+                Ok(ConditionalOrder {
+                    id,
+                    token_id,
+                    side,
+                    outcome,
+                    size,
+                    trigger_price,
+                    limit_price,
+                    condition_type,
+                    status,
+                    created_at,
+                    triggered_at,
+                    expires_at,
+                    extra: serde_json::Value::Object(extra_map),
+                })
             }
         }
-        let raw = serde_json::from_value::<_ConditionalOrderRaw>(value)
-            .map_err(serde::de::Error::custom)?;
-        Ok(ConditionalOrder {
-            id: raw.id,
-            token_id: raw.token_id,
-            side: raw.side,
-            outcome: raw.outcome,
-            size: raw.size,
-            trigger_price: raw.trigger_price,
-            limit_price: raw.limit_price,
-            condition_type: raw.condition_type,
-            status: raw.status,
-            created_at: raw.created_at,
-            triggered_at: raw.triggered_at,
-            expires_at: raw.expires_at,
-            extra: raw.extra,
-        })
+
+        const FIELDS: &[&str] = &[
+            "id",
+            "tokenId",
+            "side",
+            "outcome",
+            "size",
+            "triggerPrice",
+            "limitPrice",
+            "conditionType",
+            "type",
+            "status",
+            "createdAt",
+            "triggeredAt",
+            "expiresAt",
+        ];
+
+        deserializer.deserialize_struct("ConditionalOrder", FIELDS, ConditionalOrderVisitor)
     }
 }
 
