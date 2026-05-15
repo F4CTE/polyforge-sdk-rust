@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **report_strategy doc** — updated `report_strategy` doc comment to reference `"INAPPROPRIATE"` instead of `"HARMFUL"` to match the platform's current report reason values. (closes #227)
 - **Arbitrage docstrings** — updated cross-venue arb docstrings to reflect backend hardening (POLA-1911, POLA-1958):
   - `Idempotency-Key` is now **required** on `execute_arbitrage` and `close_arbitrage_position` (8–128 characters, validated client-side).
   - Rate limit of **5 req/min/user** on execute and close endpoints; exceeding it returns HTTP 429.
