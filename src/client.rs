@@ -7147,7 +7147,7 @@ mod tests {
         assert!((rs.drawdown_threshold_pct - 0.1).abs() < f64::EPSILON);
         assert!(!rs.circuit_breaker_tripped);
         assert!(rs.circuit_breaker_tripped_at.is_none());
-        assert!(rs.extra.as_object().is_some_and(|o| o.is_empty()));
+        assert!(rs.extra.is_empty());
 
         let from_empty: RiskSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(from_empty.drawdown_enabled, rs.drawdown_enabled);
@@ -7166,7 +7166,7 @@ mod tests {
             from_empty.circuit_breaker_tripped_at,
             rs.circuit_breaker_tripped_at
         );
-        assert!(from_empty.extra.as_object().is_some_and(|o| o.is_empty()));
+        assert!(from_empty.extra.is_empty());
     }
 
     #[test]
