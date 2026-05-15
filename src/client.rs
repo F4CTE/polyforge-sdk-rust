@@ -1061,6 +1061,9 @@ impl PolyforgeClient {
     }
 
     /// Update a strategy's name and/or description.
+    ///
+    /// This is a convenience wrapper around [`update_strategy_with`](Self::update_strategy_with)
+    /// that preserves backward compatibility with the original call signature.
     pub async fn update_strategy(
         &self,
         id: &str,
@@ -1068,16 +1071,29 @@ impl PolyforgeClient {
         description: Option<&str>,
         market_id: Option<&str>,
     ) -> Result<Strategy> {
-        let mut body = serde_json::json!({});
-        if let Some(n) = name {
-            body["name"] = serde_json::json!(n);
-        }
-        if let Some(d) = description {
-            body["description"] = serde_json::json!(d);
-        }
-        if let Some(mid) = market_id {
-            body["marketId"] = serde_json::json!(mid);
-        }
+        self.update_strategy_with(
+            id,
+            UpdateStrategyParams {
+                name: name.map(|s| s.to_string()),
+                description: description.map(|s| s.to_string()),
+                market_id: market_id.map(|s| s.to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+    }
+
+    /// Update a strategy's name, description, market, or Kalshi subaccount.
+    ///
+    /// Accepts an [`UpdateStrategyParams`] for full field coverage, including the
+    /// `kalshi_subaccount` field that is not available through the original
+    /// [`update_strategy`](Self::update_strategy) method.
+    pub async fn update_strategy_with(
+        &self,
+        id: &str,
+        params: UpdateStrategyParams,
+    ) -> Result<Strategy> {
+        let body = serde_json::to_value(&params)?;
         self.patch(&format!("/api/v1/strategies/{}", encode(id)), &body)
             .await
     }
@@ -1207,7 +1223,7 @@ impl PolyforgeClient {
 
     /// Report a strategy for violating guidelines.
     ///
-    /// `reason` should be one of `"SPAM"`, `"MISLEADING"`, `"HARMFUL"`, `"OTHER"`.
+    /// `reason` should be one of `"SPAM"`, `"MISLEADING"`, `"INAPPROPRIATE"`, `"OTHER"`.
     pub async fn report_strategy(
         &self,
         id: &str,
@@ -1987,7 +2003,7 @@ impl PolyforgeClient {
 
     /// Reset the circuit breaker after it has been triggered.
     ///
-    /// Returns the updated risk settings with `circuit_breaker_triggered: false`.
+    /// Returns the updated risk settings with `circuit_breaker_tripped: false`.
     pub async fn reset_circuit_breaker(&self) -> Result<RiskSettings> {
         self.post(
             "/api/v1/settings/risk/reset",
@@ -3352,6 +3368,24 @@ impl PolyforgeClient {
     pub async fn update_my_profile(&self, params: &UpdateProfileParams) -> Result<UserProfile> {
         self.patch("/api/v1/profile/me", &serde_json::to_value(params)?)
             .await
+    }
+
+    /// Update the authenticated user's profile with an arbitrary body.
+    ///
+    /// Use this when you need to set platform fields not covered by the typed
+    /// [`UpdateProfileParams`], such as `"twitterHandle"`. Construct the body
+    /// by calling [`UpdateProfileParams::to_value()`] and extending it:
+    ///
+    /// ```ignore
+    /// let mut body = UpdateProfileParams {
+    ///     display_name: Some("Alice".into()),
+    ///     ..Default::default()
+    /// }.to_value()?;
+    /// body["twitterHandle"] = serde_json::json!("@alice");
+    /// client.update_my_profile_raw(&body).await?;
+    /// ```
+    pub async fn update_my_profile_raw(&self, body: &serde_json::Value) -> Result<UserProfile> {
+        self.patch("/api/v1/profile/me", body).await
     }
 
     /// Change the authenticated user's password (profile route).
@@ -5554,16 +5588,26 @@ mod tests {
             tags: Some(vec!["test".into()]),
             variables: None,
             canvas: None,
+            kalshi_subaccount: Some(42),
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["name"], "My Strategy");
         assert_eq!(json["visibility"], "PUBLIC");
         assert_eq!(json["execMode"], "TICK");
         assert_eq!(json["tickMs"], 5000);
+        assert_eq!(json["kalshiSubaccount"], 42);
         assert!(json["triggers"].is_array());
         assert!(json["tags"].is_array());
         // logicBlocks and calcBlocks omitted when None
         assert!(json.get("logicBlocks").is_none());
+    }
+
+    #[test]
+    fn test_create_strategy_params_omits_kalshi_subaccount_when_none() {
+        let params = CreateStrategyParams::new("S");
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["name"], "S");
+        assert!(json.get("kalshiSubaccount").is_none());
     }
 
     #[test]
@@ -6783,63 +6827,71 @@ mod tests {
     #[test]
     fn test_risk_settings_deserializes_full() {
         let json = r#"{
-            "dailyLossLimit": "500.00",
-            "maxPositionSize": "100.00",
-            "maxBetsPerDay": 20,
-            "circuitBreakerTriggered": false
+            "drawdownEnabled": false,
+            "drawdownLookbackHours": 72,
+            "drawdownThresholdPct": 0.15,
+            "circuitBreakerTripped": false,
+            "circuitBreakerTrippedAt": null
         }"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
-        assert_eq!(rs.daily_loss_limit, "500.00");
-        assert_eq!(rs.max_position_size, "100.00");
-        assert_eq!(rs.max_bets_per_day, 20);
-        assert!(!rs.circuit_breaker_triggered);
+        assert!(!rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 72);
+        assert!((rs.drawdown_threshold_pct - 0.15).abs() < f64::EPSILON);
+        assert!(!rs.circuit_breaker_tripped);
+        assert!(rs.circuit_breaker_tripped_at.is_none());
     }
 
     #[test]
     fn test_risk_settings_deserializes_minimal() {
         let json = r#"{}"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
-        assert_eq!(rs.daily_loss_limit, "");
-        assert_eq!(rs.max_position_size, "");
-        assert_eq!(rs.max_bets_per_day, 0);
-        assert!(!rs.circuit_breaker_triggered);
+        assert!(!rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 24);
+        assert!((rs.drawdown_threshold_pct - 0.1).abs() < f64::EPSILON);
+        assert!(!rs.circuit_breaker_tripped);
+        assert!(rs.circuit_breaker_tripped_at.is_none());
     }
 
     #[test]
     fn test_risk_settings_circuit_breaker_triggered() {
         let json = r#"{
-            "dailyLossLimit": "500.00",
-            "maxPositionSize": "100.00",
-            "maxBetsPerDay": 20,
-            "circuitBreakerTriggered": true
+            "drawdownEnabled": true,
+            "drawdownLookbackHours": 48,
+            "drawdownThresholdPct": 0.05,
+            "circuitBreakerTripped": true,
+            "circuitBreakerTrippedAt": "2025-01-15T12:00:00Z"
         }"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
-        assert!(rs.circuit_breaker_triggered);
+        assert!(rs.circuit_breaker_tripped);
+        assert_eq!(
+            rs.circuit_breaker_tripped_at.as_deref(),
+            Some("2025-01-15T12:00:00Z")
+        );
     }
 
     #[test]
     fn test_update_risk_settings_params_omits_none_fields() {
         let params = UpdateRiskSettingsParams {
-            daily_loss_limit: Some("250.00".to_string()),
+            drawdown_enabled: Some(true),
             ..Default::default()
         };
         let body = serde_json::to_value(&params).unwrap();
-        assert_eq!(body["dailyLossLimit"], "250.00");
-        assert!(body.get("maxPositionSize").is_none());
-        assert!(body.get("maxBetsPerDay").is_none());
+        assert_eq!(body["drawdownEnabled"], true);
+        assert!(body.get("drawdownLookbackHours").is_none());
+        assert!(body.get("drawdownThresholdPct").is_none());
     }
 
     #[test]
     fn test_update_risk_settings_params_all_fields() {
         let params = UpdateRiskSettingsParams {
-            daily_loss_limit: Some("1000.00".to_string()),
-            max_position_size: Some("200.00".to_string()),
-            max_bets_per_day: Some(50),
+            drawdown_enabled: Some(true),
+            drawdown_lookback_hours: Some(96),
+            drawdown_threshold_pct: Some(0.25),
         };
         let body = serde_json::to_value(&params).unwrap();
-        assert_eq!(body["dailyLossLimit"], "1000.00");
-        assert_eq!(body["maxPositionSize"], "200.00");
-        assert_eq!(body["maxBetsPerDay"], 50);
+        assert_eq!(body["drawdownEnabled"], true);
+        assert_eq!(body["drawdownLookbackHours"], 96);
+        assert!((body["drawdownThresholdPct"].as_f64().unwrap() - 0.25).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -6847,6 +6899,32 @@ mod tests {
         let params = UpdateRiskSettingsParams::default();
         let body = serde_json::to_value(&params).unwrap();
         assert!(body.as_object().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_risk_settings_default_values() {
+        let rs = RiskSettings::default();
+        assert!(!rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 24);
+        assert!((rs.drawdown_threshold_pct - 0.1).abs() < f64::EPSILON);
+        assert!(!rs.circuit_breaker_tripped);
+        assert!(rs.circuit_breaker_tripped_at.is_none());
+    }
+
+    #[test]
+    fn test_risk_settings_deprecated_circuit_breaker_triggered() {
+        // Deprecated accessor delegates to circuit_breaker_tripped.
+        let json = r#"{
+            "drawdownEnabled": false,
+            "drawdownLookbackHours": 24,
+            "drawdownThresholdPct": 0.1,
+            "circuitBreakerTripped": true
+        }"#;
+        let rs: RiskSettings = serde_json::from_str(json).unwrap();
+        #[allow(deprecated)]
+        let triggered = rs.circuit_breaker_triggered();
+        assert!(triggered);
+        assert_eq!(triggered, rs.circuit_breaker_tripped);
     }
 
     // ── Market title field (#141) ────────────────────────────────────────────
@@ -8087,6 +8165,31 @@ mod tests {
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["displayName"], "Alice");
         assert!(v.get("bio").is_none());
+        assert!(v.get("twitterHandle").is_none());
+    }
+
+    #[test]
+    fn test_update_profile_raw_builds_twitter_handle() {
+        // Callers can extend with platform fields via UpdateProfileParams::to_value()
+        // and update_my_profile_raw() without any struct surface changes.
+        let params = UpdateProfileParams {
+            display_name: Some("Alice".into()),
+            ..Default::default()
+        };
+        let mut body = params.to_value().unwrap();
+        body["twitterHandle"] = serde_json::json!("polyforge");
+        assert_eq!(body["twitterHandle"], "polyforge");
+        assert!(body.get("twitter_handle").is_none());
+        assert_eq!(body["displayName"], "Alice");
+    }
+
+    #[test]
+    fn test_update_profile_raw_twitter_handle_max_length() {
+        let handle = "a".repeat(50);
+        let params = UpdateProfileParams::default();
+        let mut body = params.to_value().unwrap();
+        body["twitterHandle"] = serde_json::json!(handle.clone());
+        assert_eq!(body["twitterHandle"].as_str().unwrap().len(), 50);
     }
 
     #[test]

@@ -330,6 +330,27 @@ pub struct StrategyTemplate {
 }
 
 /// Parameters for creating a strategy with full block configuration.
+///
+/// All fields except `name` are `Option` and default to `None`.
+/// This struct is **exhaustive** — adding a new field is a breaking change
+/// (covered by the 2.0.0 major version bump).
+///
+/// Construct with a struct literal and `..Default::default()`:
+///
+/// ```ignore
+/// let params = CreateStrategyParams {
+///     name: "My Strategy".into(),
+///     kalshi_subaccount: Some(42),
+///     ..Default::default()
+/// };
+/// ```
+/// Or use the convenience constructor [`CreateStrategyParams::new`].
+///
+/// ## Migration from 1.x
+/// Users upgrading from 1.x must use `..Default::default()` or
+/// `CreateStrategyParams::new(...)` instead of bare struct literals.
+/// The new `kalshi_subaccount` field defaults to `None` and is omitted
+/// from serialized JSON when `None`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateStrategyParams {
@@ -362,6 +383,48 @@ pub struct CreateStrategyParams {
     pub variables: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canvas: Option<serde_json::Value>,
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kalshi_subaccount: Option<u64>,
+}
+
+impl CreateStrategyParams {
+    /// Create a new `CreateStrategyParams` with the given name and default values.
+    ///
+    /// This is a convenience constructor — you can also use a struct literal
+    /// with `..Default::default()`.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Default::default()
+        }
+    }
+}
+
+/// Parameters for updating a strategy's mutable fields.
+///
+/// All fields are optional — only supplied fields are sent in the PATCH body.
+/// Construct with [`Default`] + struct-update syntax:
+///
+/// ```ignore
+/// UpdateStrategyParams {
+///     name: Some("New Name".into()),
+///     kalshi_subaccount: Some(42),
+///     ..Default::default()
+/// };
+/// ```
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateStrategyParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_id: Option<String>,
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kalshi_subaccount: Option<u64>,
 }
 
 /// Parameters for running a backtest.
@@ -1662,18 +1725,56 @@ pub struct RateListingParams {
 // Risk Settings
 // ---------------------------------------------------------------------------
 
-/// Current risk / circuit-breaker settings for the authenticated user.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Current drawdown / circuit-breaker settings for the authenticated user.
+///
+/// Field names and types match the platform `RiskSettings` contract
+/// exactly (camelCase on the wire).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RiskSettings {
+    /// Whether drawdown-based circuit breaker is enabled.
     #[serde(default)]
-    pub daily_loss_limit: String,
+    pub drawdown_enabled: bool,
+    /// Lookback window in hours (1–168).
+    #[serde(default = "default_drawdown_lookback_hours")]
+    pub drawdown_lookback_hours: i32,
+    /// Drawdown threshold as a decimal, e.g. 0.10 = 10 % (0.01–0.99).
+    #[serde(default = "default_drawdown_threshold_pct")]
+    pub drawdown_threshold_pct: f64,
+    /// Whether the circuit breaker is currently tripped.
     #[serde(default)]
-    pub max_position_size: String,
+    pub circuit_breaker_tripped: bool,
+    /// ISO-8601 timestamp of when the circuit breaker tripped, or `None`.
     #[serde(default)]
-    pub max_bets_per_day: u32,
-    #[serde(default)]
-    pub circuit_breaker_triggered: bool,
+    pub circuit_breaker_tripped_at: Option<String>,
+}
+
+impl RiskSettings {
+    /// Deprecated alias for [`circuit_breaker_tripped`](Self::circuit_breaker_tripped).
+    #[deprecated(note = "use circuit_breaker_tripped instead")]
+    pub fn circuit_breaker_triggered(&self) -> bool {
+        self.circuit_breaker_tripped
+    }
+}
+
+impl Default for RiskSettings {
+    fn default() -> Self {
+        Self {
+            drawdown_enabled: false,
+            drawdown_lookback_hours: 24,
+            drawdown_threshold_pct: 0.1,
+            circuit_breaker_tripped: false,
+            circuit_breaker_tripped_at: None,
+        }
+    }
+}
+
+fn default_drawdown_lookback_hours() -> i32 {
+    24
+}
+
+fn default_drawdown_threshold_pct() -> f64 {
+    0.1
 }
 
 /// Parameters for updating risk settings. Only supplied fields are changed.
@@ -1681,11 +1782,13 @@ pub struct RiskSettings {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRiskSettingsParams {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub daily_loss_limit: Option<String>,
+    pub drawdown_enabled: Option<bool>,
+    /// Lookback window in hours (1–168).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_position_size: Option<String>,
+    pub drawdown_lookback_hours: Option<i32>,
+    /// Drawdown threshold as a decimal, e.g. 0.10 = 10 % (0.01–0.99).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_bets_per_day: Option<u32>,
+    pub drawdown_threshold_pct: Option<f64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2900,6 +3003,14 @@ pub struct UpdateWhaleAlertFilterParams {
 // Profile (POLA-782)
 // ---------------------------------------------------------------------------
 
+/// Parameters for updating the authenticated user's profile.
+///
+/// All fields are optional — only supplied fields are sent in the PATCH body.
+///
+/// Use [`Self::to_value()`] to obtain a `serde_json::Value` that can be
+/// extended with platform fields not yet covered by the typed struct (such as
+/// `twitterHandle`), then pass it to
+/// [`PolyforgeClient::update_my_profile_raw()`][crate::PolyforgeClient::update_my_profile_raw].
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateProfileParams {
@@ -2909,6 +3020,14 @@ pub struct UpdateProfileParams {
     pub bio: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+}
+
+impl UpdateProfileParams {
+    /// Convert to a `serde_json::Value` so callers can add extra fields
+    /// (e.g. `"twitterHandle"`) before sending.
+    pub fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+        serde_json::to_value(self)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

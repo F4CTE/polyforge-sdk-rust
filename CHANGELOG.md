@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **report_strategy doc** — updated `report_strategy` doc comment to reference `"INAPPROPRIATE"` instead of `"HARMFUL"` to match the platform's current report reason values. (closes #227)
 - **Arbitrage docstrings** — updated cross-venue arb docstrings to reflect backend hardening (POLA-1911, POLA-1958):
   - `Idempotency-Key` is now **required** on `execute_arbitrage` and `close_arbitrage_position` (8–128 characters, validated client-side).
   - Rate limit of **5 req/min/user** on execute and close endpoints; exceeding it returns HTTP 429.
@@ -31,7 +32,9 @@
   `SportsComboLookupParams`. Weakly-typed payloads use `serde_json::Value` to
   mirror the controller's `Record<string, unknown>` / `unknown[]` fidelity instead
   of inventing strict shapes.
+- **UpdateProfileParams** — add `UpdateProfileParams::to_value()` and `PolyforgeClient::update_my_profile_raw()` so callers can set platform fields not covered by the typed struct (e.g. `"twitterHandle"`) without changing `UpdateProfileParams`' public surface. The typed `update_my_profile()` method is unchanged. Use `UpdateProfileParams::default().to_value()` with `body["twitterHandle"] = json!(...)` to reach feature parity with `polyforge-sdk-python` and `polyforge-mcp`. (closes #255)
 - **UpdateSettingsProfileParams.twitter_handle** — add optional `twitter_handle: Option<String>` field. Serializes as `twitterHandle` (camelCase) to match the platform's `UpdateProfileDto` and reach feature parity with `polyforge-sdk-python` and `polyforge-mcp`. (closes #185)
+- **CreateStrategyParams.kalshi_subaccount** — add optional `kalshi_subaccount: Option<u64>` field (0–99) for Kalshi P&L attribution. Serializes as `kalshiSubaccount` (camelCase) to match the platform's `CreateStrategyDto`. New `UpdateStrategyParams` struct and `update_strategy_with()` method offer the same field coverage for `PATCH /api/v1/strategies/:id`. A convenience constructor `CreateStrategyParams::new(name)` is provided; callers may also use struct literal syntax with `..Default::default()`. Version bumped to 2.0.0 for the struct field addition. (POLA-4510)
 - **Misc public utility endpoints (POLA-1858)** — 18 read/write methods that close the SDK gap matrix from POLA-1845 and bring the Rust SDK to parity with the platform's miscellaneous user/markets/fees/analytics surface:
   - `get_accuracy_overview()` → `GET /api/v1/accuracy` — companion to `get_accuracy()` (`/accuracy/me`); both return the same `AccuracyScore` shape.
   - `get_feed(Option<&GetWhaleFeedParams>)` → `GET /api/v1/feed` — paged whale-trade feed (reuses existing `WhaleTrade` and `GetWhaleFeedParams` types since the controller delegates to `WhalesService.getFeed`).
@@ -69,6 +72,10 @@
   - `get_user_sponsored_markets()` → `GET /api/v1/rewards/user/sponsored-markets` → `UserSponsoredMarkets` — list the authenticated user's sponsored-rewards markets.
   - `get_rewards_sponsor_url(market_id)` → `GET /api/v1/rewards/sponsor-url/{marketId}` → `RewardsSponsorUrl` — get the Polymarket sponsor page URL for a specific market.
   - New types: `RewardsMarketDetail`, `UserSponsoredMarkets`, `RewardsSponsorUrl`. All use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility.
+
+### Verified
+- **POLA-3834** Venue preferences compatibility check — verified that `get_my_preferences()` and `update_my_preferences()` were already implemented (POLA-3330) and the corresponding GitHub issue ([#207](https://github.com/F4CTE/polyforge-sdk-rust/issues/207)) is closed. All 389 tests pass. No code changes needed.
+
 - **Public user profile lookups (POLA-1844)** — five endpoints sourced from the weekly SDK audit:
   - `get_user_performance(username, period)` → `Vec<UserPerformancePoint>` (PnL curve).
   - `get_user_strategies(username, visibility, limit)` → `Vec<UserStrategySummary>` (server caps `limit` at 50).
@@ -115,6 +122,7 @@
   compatibility, but ordinary public API keys still receive `403 Forbidden`.
 - **RedeemPositionParams.position_id** — make `position_id` optional (`Option<String>`) so callers can redeem by `market_id` only, matching the platform `RedeemPositionDto` which accepts either `positionId` or `marketId`. Added client-side validation that rejects when both fields are `None`. (closes #213)
 - **NotificationSettings / UpdateNotificationSettingsParams** — rewrite both structs to mirror the platform's `UpdateNotificationsDto`. Removes fictional fields (`pushEnabled`, `orderFills`, `strategyErrors`, `whaleAlerts`, `marketResolutions`, `dailySummary`) that the platform rejected with 400 under `forbidNonWhitelisted: true`, and adds the real DTO fields (`telegramEnabled`, `discordEnabled`, `onOrderFilled`, `onStrategyError`, `onBacktestComplete`, `onDailyLossLimit`, `onMarketResolved`, `onSomeoneForked`, `onSomeoneFollowed`, `onSomeoneLiked`, `onSomeoneCommented`). The `extra` flatten bucket is preserved on the read struct so server-only fields (`userId`, `updatedAt`, `eventPrefs`, `emailDigest`, `notificationFreq`, `minFillNotifyUsdc`, `onTicketReply`) round-trip. Added a wire-format key-set test. (closes #184)
+- **BREAKING** `RiskSettings` / `UpdateRiskSettingsParams` — replace incorrect field names (`daily_loss_limit`, `max_position_size`, `max_bets_per_day`, `circuit_breaker_triggered`) with platform's actual schema: `drawdown_enabled`, `drawdown_lookback_hours`, `drawdown_threshold_pct`, `circuit_breaker_tripped`, `circuit_breaker_tripped_at`. Every `PATCH /api/v1/settings/risk` was returning 400 because the old field names failed `forbidNonWhitelisted` validation. Migration guide: `daily_loss_limit` → configure `drawdown_threshold_pct`; `max_position_size` and `max_bets_per_day` have no direct equivalent (removed from platform DTO); `circuit_breaker_triggered` → use `circuit_breaker_tripped` (deprecated accessor available). `RiskSettings::default()` now returns `drawdown_lookback_hours = 24` and `drawdown_threshold_pct = 0.1` to match serde deserialization defaults. (closes #248)
 - **BREAKING** `PlaceSmartOrderParams`: revert `interval_seconds`/`"intervalSeconds"` back to `interval_minutes`/`"intervalMinutes"` — the #66 fix was based on incorrect platform contract info; platform DTO uses `intervalMinutes` (closes #80)
 - **BREAKING** `handle_response()`: handle 204 No Content by returning `serde_json::Value::Null` instead of crashing on empty body — `delete_strategy()` now returns `Result<()>` (closes #70)
 - **Endpoint path/method compatibility audit** — verified all 10 reported route mismatches against platform controllers (`#206`): `get_price_history` (`price-history` vs `history`), `watch_strategy` (`/events` vs `/watch`), `rollback_strategy` (`/versions/{id}/rollback`), `reset_circuit_breaker` (`/reset` vs `/reset-circuit-breaker`), `change_profile_password` (POST vs PATCH), `follow_user` (`/profile/*/follow` vs `/users/*/follow`), `get_arbitrage_comparison` (`/cross-venue/{id}/comparison` vs `/compare/{id}`), `get_rebates` (`/rewards/rebates` vs `/rebates`), `get_sports_live_data` (`/live-data/{id}` vs `/milestones/{id}/live`), `lookup_combo_market` (POST vs GET). All paths already match — no code changes required. (closes #206)
