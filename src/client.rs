@@ -6332,6 +6332,63 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_rejects_conflicting_alias_values() {
+        let json = r#"{
+            "id": "co-8",
+            "conditionType": "LIMIT",
+            "type": "STOP"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("conflicting"),
+            "expected conflicting value error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_duplicate_condition_type_key() {
+        let json = r#"{
+            "id": "co-9",
+            "conditionType": "LIMIT",
+            "conditionType": "STOP"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate"),
+            "expected duplicate field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_duplicate_type_key() {
+        let json = r#"{
+            "id": "co-10",
+            "type": "LIMIT",
+            "type": "STOP"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate"),
+            "expected duplicate field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_dual_keys_with_null_fallback() {
+        let json = r#"{
+            "id": "co-11",
+            "conditionType": null,
+            "type": "LIMIT"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-11");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+    }
+
+    #[test]
     fn test_conditional_order_deserializes_minimal() {
         let json = r#"{"id": "co-2"}"#;
         let co: ConditionalOrder = serde_json::from_str(json).unwrap();

@@ -1417,6 +1417,47 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                 f.write_str("struct ConditionalOrder")
             }
 
+            fn visit_seq<A>(self, mut seq: A) -> Result<ConditionalOrder, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let id = seq
+                    .next_element::<String>()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+                let token_id = seq.next_element::<Option<String>>()?.unwrap_or(None);
+                let side = seq.next_element::<Option<String>>()?.unwrap_or(None);
+                let outcome = seq.next_element::<Option<String>>()?.unwrap_or(None);
+                let size = seq.next_element::<Option<String>>()?.unwrap_or(None);
+                let trigger_price = seq.next_element::<Option<String>>()?.unwrap_or(None);
+                let limit_price = seq.next_element::<Option<String>>()?.unwrap_or(None);
+                let condition_type = seq.next_element::<Option<String>>()?.unwrap_or(None);
+                let status = seq
+                    .next_element::<Option<ConditionalOrderStatus>>()?
+                    .unwrap_or(None);
+                let created_at = seq.next_element::<Option<String>>()?.unwrap_or(None);
+                let triggered_at = seq.next_element::<Option<String>>()?.unwrap_or(None);
+                let expires_at = seq.next_element::<Option<String>>()?.unwrap_or(None);
+                let extra: serde_json::Value = seq
+                    .next_element()?
+                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+
+                Ok(ConditionalOrder {
+                    id,
+                    token_id,
+                    side,
+                    outcome,
+                    size,
+                    trigger_price,
+                    limit_price,
+                    condition_type,
+                    status,
+                    created_at,
+                    triggered_at,
+                    expires_at,
+                    extra,
+                })
+            }
+
             fn visit_map<V>(self, mut map: V) -> Result<ConditionalOrder, V::Error>
             where
                 V: serde::de::MapAccess<'de>,
@@ -1442,6 +1483,8 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                 let mut seen_size = false;
                 let mut seen_trigger_price = false;
                 let mut seen_limit_price = false;
+                let mut seen_condition_type = false;
+                let mut seen_type = false;
                 let mut seen_status = false;
                 let mut seen_created_at = false;
                 let mut seen_triggered_at = false;
@@ -1498,11 +1541,36 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                             seen_limit_price = true;
                             limit_price = map.next_value::<Option<String>>()?;
                         }
-                        "conditionType" | "type" => {
-                            if condition_type.is_none() {
-                                condition_type = map.next_value::<Option<String>>()?;
-                            } else {
-                                let _: serde::de::IgnoredAny = map.next_value()?;
+                        "conditionType" => {
+                            if seen_condition_type {
+                                return Err(serde::de::Error::duplicate_field("conditionType"));
+                            }
+                            seen_condition_type = true;
+                            let val = map.next_value::<Option<String>>()?;
+                            match (&condition_type, &val) {
+                                (Some(c), Some(i)) if c != i => {
+                                    return Err(serde::de::Error::custom(format!(
+                                        "conflicting values for conditionType alias: conditionType={c:?}, type={i:?}"
+                                    )));
+                                }
+                                (None, Some(_)) => condition_type = val,
+                                _ => {}
+                            }
+                        }
+                        "type" => {
+                            if seen_type {
+                                return Err(serde::de::Error::duplicate_field("type"));
+                            }
+                            seen_type = true;
+                            let val = map.next_value::<Option<String>>()?;
+                            match (&condition_type, &val) {
+                                (Some(c), Some(i)) if c != i => {
+                                    return Err(serde::de::Error::custom(format!(
+                                        "conflicting values for conditionType alias: conditionType={c:?}, type={i:?}"
+                                    )));
+                                }
+                                (None, Some(_)) => condition_type = val,
+                                _ => {}
                             }
                         }
                         "status" => {
