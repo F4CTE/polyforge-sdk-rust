@@ -1445,24 +1445,45 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "id" => {
+                            if id.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
                             id = Some(map.next_value()?);
                         }
                         "tokenId" => {
+                            if token_id.is_some() {
+                                return Err(serde::de::Error::duplicate_field("tokenId"));
+                            }
                             token_id = map.next_value::<Option<String>>()?;
                         }
                         "side" => {
+                            if side.is_some() {
+                                return Err(serde::de::Error::duplicate_field("side"));
+                            }
                             side = map.next_value::<Option<String>>()?;
                         }
                         "outcome" => {
+                            if outcome.is_some() {
+                                return Err(serde::de::Error::duplicate_field("outcome"));
+                            }
                             outcome = map.next_value::<Option<String>>()?;
                         }
                         "size" => {
+                            if size.is_some() {
+                                return Err(serde::de::Error::duplicate_field("size"));
+                            }
                             size = map.next_value::<Option<String>>()?;
                         }
                         "triggerPrice" => {
+                            if trigger_price.is_some() {
+                                return Err(serde::de::Error::duplicate_field("triggerPrice"));
+                            }
                             trigger_price = map.next_value::<Option<String>>()?;
                         }
                         "limitPrice" => {
+                            if limit_price.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limitPrice"));
+                            }
                             limit_price = map.next_value::<Option<String>>()?;
                         }
                         "conditionType" | "type" => {
@@ -1473,15 +1494,27 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                             }
                         }
                         "status" => {
+                            if status.is_some() {
+                                return Err(serde::de::Error::duplicate_field("status"));
+                            }
                             status = map.next_value::<Option<ConditionalOrderStatus>>()?;
                         }
                         "createdAt" => {
+                            if created_at.is_some() {
+                                return Err(serde::de::Error::duplicate_field("createdAt"));
+                            }
                             created_at = map.next_value::<Option<String>>()?;
                         }
                         "triggeredAt" => {
+                            if triggered_at.is_some() {
+                                return Err(serde::de::Error::duplicate_field("triggeredAt"));
+                            }
                             triggered_at = map.next_value::<Option<String>>()?;
                         }
                         "expiresAt" => {
+                            if expires_at.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expiresAt"));
+                            }
                             expires_at = map.next_value::<Option<String>>()?;
                         }
                         _ => {
