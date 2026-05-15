@@ -9160,6 +9160,17 @@ mod tests {
     }
 
     #[test]
+    fn test_vote_market_sentiment_params_preserves_fractional_confidence() {
+        let params = VoteMarketSentimentParams {
+            direction: "BUY".into(),
+            confidence: 0.82,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["direction"], "BUY");
+        assert_eq!(json["confidence"], serde_json::json!(0.82));
+    }
+
+    #[test]
     fn test_export_personal_data_path() {
         let client = PolyforgeClient::new("k").unwrap();
         assert!(client

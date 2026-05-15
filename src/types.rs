@@ -3837,7 +3837,7 @@ pub struct MarketSentimentVote {
 #[serde(rename_all = "camelCase")]
 pub struct VoteMarketSentimentParams {
     pub direction: String,
-    pub confidence: i32,
+    pub confidence: f64,
 }
 
 /// Aggregated, market-controller-derived sentiment report.
