@@ -61,6 +61,13 @@ pub struct Token {
     pub price: Option<f64>,
 }
 
+/// Response from `GET /api/v1/markets/search` (flat `results` list, not paginated).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketSearchResponse {
+    pub results: Vec<Market>,
+}
+
 // ---------------------------------------------------------------------------
 // GDPR Personal Data Export (POLA-3846)
 // ---------------------------------------------------------------------------
@@ -1389,7 +1396,7 @@ pub struct ConditionalOrder {
     pub trigger_price: Option<String>,
     #[serde(default)]
     pub limit_price: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "type")]
     pub condition_type: Option<String>,
     #[serde(default)]
     pub status: Option<ConditionalOrderStatus>,
@@ -3821,6 +3828,14 @@ impl MarketHistoryPeriod {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketSentimentVote {
+    pub direction: String,
+    pub confidence: f64,
+}
+
+/// Request body for `POST /api/v1/markets/:marketId/sentiment`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoteMarketSentimentParams {
     pub direction: String,
     pub confidence: f64,
 }

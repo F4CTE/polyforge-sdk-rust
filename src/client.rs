@@ -875,10 +875,11 @@ impl PolyforgeClient {
     }
 
     /// Full-text search across all markets.
+    /// Returns a flat `results` list (not a paginated envelope).
     pub async fn search_markets(
         &self,
         params: &SearchMarketsParams,
-    ) -> Result<PaginatedResponse<Market>> {
+    ) -> Result<MarketSearchResponse> {
         let mut qp: Vec<(&str, String)> = vec![("q", params.q.clone())];
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
@@ -1447,15 +1448,23 @@ impl PolyforgeClient {
         self.get("/api/v1/scores/me/badges").await
     }
 
-    /// Get the score for a specific user. Requires authentication.
+    /// Get the score for a specific user.
+    ///
+    /// Sends the `Authorization` header when an API key is configured;
+    /// skips it when the client is constructed with an empty key so the
+    /// endpoint remains usable for public read-only consumers.
     pub async fn get_user_score(&self, user_id: &str) -> Result<TraderScore> {
-        self.get(&format!("/api/v1/scores/{}", encode(user_id)))
+        self.get_with_optional_auth(&format!("/api/v1/scores/{}", encode(user_id)))
             .await
     }
 
-    /// Get the badges awarded to a specific user. Requires authentication.
+    /// Get the badges awarded to a specific user.
+    ///
+    /// Sends the `Authorization` header when an API key is configured;
+    /// skips it when the client is constructed with an empty key so the
+    /// endpoint remains usable for public read-only consumers.
     pub async fn get_user_badges(&self, user_id: &str) -> Result<Vec<Badge>> {
-        self.get(&format!("/api/v1/scores/{}/badges", encode(user_id)))
+        self.get_with_optional_auth(&format!("/api/v1/scores/{}/badges", encode(user_id)))
             .await
     }
 
@@ -3399,10 +3408,14 @@ impl PolyforgeClient {
         .await
     }
 
-    /// Get a user profile by username. Requires authentication.
+    /// Get a user profile by username.
+    ///
+    /// Sends the `Authorization` header when an API key is configured;
+    /// skips it when the client is constructed with an empty key so the
+    /// endpoint remains usable for public read-only consumers.
     pub async fn get_user_profile(&self, username: &str) -> Result<UserProfile> {
         let path = format!("/api/v1/profile/{}", encode(username));
-        self.get(&path).await
+        self.get_with_optional_auth(&path).await
     }
 
     /// Follow a user by username.
@@ -3778,10 +3791,14 @@ impl PolyforgeClient {
     /// (`POST /api/v1/markets/:marketId/sentiment`).
     ///
     /// Server returns the same sentiment report shape as the GET variant.
-    pub async fn vote_market_sentiment(&self, market_id: &str) -> Result<MarketSentimentReport> {
+    pub async fn vote_market_sentiment(
+        &self,
+        market_id: &str,
+        params: &VoteMarketSentimentParams,
+    ) -> Result<MarketSentimentReport> {
         self.post(
             &format!("/api/v1/markets/{}/sentiment", encode(market_id)),
-            &json!({}),
+            &serde_json::to_value(params)?,
         )
         .await
     }
@@ -4080,7 +4097,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         let server = tokio::spawn(async move {
-            for _ in 0..5 {
+            for _ in 0..7 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let mut request = vec![0_u8; 4096];
                 let n = socket.read(&mut request).await.unwrap();
@@ -4091,8 +4108,10 @@ mod tests {
                 );
                 let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
                     r#"[]"#
+                } else if request.contains("/api/v1/scores/") {
+                    r#"{}"#
                 } else if request.contains("/api/v1/profile/") {
-                    r#"{"id":"user-1","username":"alice","displayName":"Alice","bio":"hello","avatarUrl":"https://example.com/avatar.png","joinedAt":"2024-01-01T00:00:00Z","followerCount":0,"followingCount":0,"strategyCount":0,"tradeCount":0,"score":null,"stats":{"volume":"100","pnl":"50","trades":10,"winRate":"0.75","bestMarket":"market-1","favoriteCategory":"sports"}}"#
+                    r#"{}"#
                 } else if request.contains("/api/v1/actions") {
                     r#"{"version":"1.0","actions":[]}"#
                 } else {
@@ -4113,6 +4132,8 @@ mod tests {
         });
 
         let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        client.get_user_score("alice").await.unwrap();
+        client.get_user_badges("alice").await.unwrap();
         client.get_user_performance("alice", "30d").await.unwrap();
         client
             .get_user_strategies("alice", None, None)
@@ -6262,12 +6283,42 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_deserializes_type_field() {
+        // #250: Platform returns 'type' not 'conditionType' for condition_type
+        let json = r#"{
+            "id": "co-3",
+            "tokenId": "tok-xyz",
+            "side": "SELL",
+            "outcome": "NO",
+            "size": "200",
+            "triggerPrice": "0.80",
+            "limitPrice": "0.78",
+            "type": "STOP_LOSS",
+            "status": "PENDING",
+            "createdAt": "2026-05-01T10:00:00Z",
+            "triggeredAt": null,
+            "expiresAt": "2026-05-10T10:00:00Z"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-3");
+        assert_eq!(co.condition_type.as_deref(), Some("STOP_LOSS"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
+        assert_eq!(co.limit_price.as_deref(), Some("0.78"));
+        assert_eq!(co.trigger_price.as_deref(), Some("0.80"));
+    }
+
+    #[test]
     fn test_conditional_order_deserializes_minimal() {
         let json = r#"{"id": "co-2"}"#;
         let co: ConditionalOrder = serde_json::from_str(json).unwrap();
         assert_eq!(co.id, "co-2");
         assert!(co.token_id.is_none());
         assert!(co.status.is_none());
+    }
+
+    #[test]
+    fn test_smoke() {
+        let _client = PolyforgeClient::new("test-api-key").unwrap();
     }
 
     #[test]
@@ -9106,6 +9157,17 @@ mod tests {
         assert_eq!(report.no_percent, 33);
         assert_eq!(report.total_votes, 3);
         assert!(report.user_vote.is_none());
+    }
+
+    #[test]
+    fn test_vote_market_sentiment_params_preserves_fractional_confidence() {
+        let params = VoteMarketSentimentParams {
+            direction: "BUY".into(),
+            confidence: 0.82,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["direction"], "BUY");
+        assert_eq!(json["confidence"], serde_json::json!(0.82));
     }
 
     #[test]
