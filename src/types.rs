@@ -64,7 +64,7 @@ pub struct Token {
 /// Response from `GET /api/v1/markets/search` (flat `results` list, not paginated).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MarketSearchResponse {
+pub struct SearchMarketsResponse {
     pub results: Vec<Market>,
 }
 

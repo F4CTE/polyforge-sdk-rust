@@ -879,7 +879,7 @@ impl PolyforgeClient {
     pub async fn search_markets(
         &self,
         params: &SearchMarketsParams,
-    ) -> Result<MarketSearchResponse> {
+    ) -> Result<SearchMarketsResponse> {
         let mut qp: Vec<(&str, String)> = vec![("q", params.q.clone())];
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
