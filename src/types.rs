@@ -1389,7 +1389,7 @@ pub struct ConditionalOrder {
     pub trigger_price: Option<String>,
     #[serde(default)]
     pub limit_price: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "type")]
     pub condition_type: Option<String>,
     #[serde(default)]
     pub status: Option<ConditionalOrderStatus>,
@@ -1803,40 +1803,21 @@ pub struct SearchMarketsParams {
     pub limit: Option<u32>,
 }
 
-/// Response from the market search endpoint.
+/// Response from `GET /api/v1/markets/search`.
 ///
-/// The platform returns `{ results: [...] }`, not the standard paginated
-/// envelope.  `search_markets()` deserializes into this type internally and
-/// then converts to `PaginatedResponse<Market>` so the public API stays
-/// backward-compatible.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(
-    rename_all = "camelCase",
-    bound(deserialize = "T: serde::de::DeserializeOwned")
-)]
-pub struct SearchResults<T> {
-    pub results: Vec<T>,
+/// The platform wraps search results in a `{ "results": [...] }` envelope
+/// rather than the paginated `{ "data": [...] }` shape used by list endpoints.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchMarketsResponse {
+    #[serde(default)]
+    pub results: Vec<Market>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
 
-impl<T> SearchResults<T> {
-    /// Convert into a `PaginatedResponse` using the caller-requested page
-    /// size so the `limit` metadata reflects the original request, not the
-    /// raw result count.
-    pub fn into_paginated_response(self, limit: u32) -> PaginatedResponse<T> {
-        let total = self.results.len() as u64;
-        let limit = u64::from(limit);
-        PaginatedResponse {
-            data: self.results,
-            total,
-            page: 1,
-            limit,
-            total_pages: if total > 0 { 1 } else { 0 },
-            has_next: false,
-        }
-    }
-}
+#[deprecated(note = "use SearchMarketsResponse instead")]
+pub use self::SearchMarketsResponse as MarketSearchResponse;
 
 /// Tick-size for a market token (minimum price increment).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -3856,6 +3837,14 @@ impl MarketHistoryPeriod {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketSentimentVote {
+    pub direction: String,
+    pub confidence: f64,
+}
+
+/// Request body for `POST /api/v1/markets/:marketId/sentiment`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoteMarketSentimentParams {
     pub direction: String,
     pub confidence: f64,
 }
