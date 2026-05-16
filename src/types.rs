@@ -289,11 +289,18 @@ pub struct Strategy {
     pub created_at: Option<String>,
     #[serde(default)]
     pub updated_at: Option<String>,
-    /// Kalshi subaccount ID (0–99) for P&L attribution.
-    #[serde(default)]
-    pub kalshi_subaccount: Option<u64>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+impl Strategy {
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    ///
+    /// Read from the `extra` field at key `kalshiSubaccount` to preserve
+    /// semver compatibility of the `Strategy` struct layout.
+    pub fn kalshi_subaccount(&self) -> Option<u64> {
+        self.extra.get("kalshiSubaccount").and_then(|v| v.as_u64())
+    }
 }
 
 /// Response from strategy lifecycle operations (start/stop/pause/resume).

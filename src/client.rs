@@ -5712,14 +5712,14 @@ mod tests {
             "kalshiSubaccount": 7
         }"#;
         let strategy: Strategy = serde_json::from_str(json).unwrap();
-        assert_eq!(strategy.kalshi_subaccount, Some(7));
+        assert_eq!(strategy.kalshi_subaccount(), Some(7));
     }
 
     #[test]
     fn test_strategy_omits_kalshi_subaccount_when_absent() {
         let json = r#"{"id": "strat-1", "name": "My Strategy"}"#;
         let strategy: Strategy = serde_json::from_str(json).unwrap();
-        assert_eq!(strategy.kalshi_subaccount, None);
+        assert_eq!(strategy.kalshi_subaccount(), None);
     }
 
     #[test]
