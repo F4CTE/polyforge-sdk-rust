@@ -333,21 +333,23 @@ pub struct StrategyTemplate {
 ///
 /// All fields except `name` are `Option` and default to `None`.
 /// This struct is **exhaustive** — adding a new field is a breaking change
-/// (covered by the 2.0.0 major version bump).
+/// (covered by the 3.0.0 major version bump). Use [`Default`] + struct-update
+/// syntax for forward-compatible construction.
 ///
-/// Construct with a struct literal and `..Default::default()`:
+/// Use [`CreateStrategyParams::new`] for construction, or [`Default`] + struct-update:
 ///
 /// ```ignore
-/// let params = CreateStrategyParams {
+/// CreateStrategyParams {
 ///     name: "My Strategy".into(),
 ///     kalshi_subaccount: Some(42),
 ///     ..Default::default()
 /// };
 /// ```
+///
 /// Or use the convenience constructor [`CreateStrategyParams::new`].
 ///
-/// ## Migration from 1.x
-/// Users upgrading from 1.x must use `..Default::default()` or
+/// ## Migration from 2.x
+/// Users upgrading from 2.x must use `..Default::default()` or
 /// `CreateStrategyParams::new(...)` instead of bare struct literals.
 /// The new `kalshi_subaccount` field defaults to `None` and is omitted
 /// from serialized JSON when `None`.
@@ -1669,8 +1671,10 @@ pub struct CreateConditionalOrderParams {
     pub outcome: String,
     pub size: f64,
     pub trigger_price: f64,
+    /// Limit price as a number string (e.g. `"0.67"`).  The platform
+    /// validates this field with `@IsNumberString()`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit_price: Option<f64>,
+    pub limit_price: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trailing_pct: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2048,21 +2052,40 @@ pub struct SearchMarketsParams {
     pub limit: Option<u32>,
 }
 
-/// Response from `GET /api/v1/markets/search`.
+/// Response from the market search endpoint.
 ///
-/// The platform wraps search results in a `{ "results": [...] }` envelope
-/// rather than the paginated `{ "data": [...] }` shape used by list endpoints.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchMarketsResponse {
-    #[serde(default)]
-    pub results: Vec<Market>,
+/// The platform returns `{ results: [...] }`, not the standard paginated
+/// envelope.  `search_markets()` deserializes into this type internally and
+/// then converts to `PaginatedResponse<Market>` so the public API stays
+/// backward-compatible.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    bound(deserialize = "T: serde::de::DeserializeOwned")
+)]
+pub struct SearchResults<T> {
+    pub results: Vec<T>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
 
-#[deprecated(note = "use SearchMarketsResponse instead")]
-pub use self::SearchMarketsResponse as MarketSearchResponse;
+impl<T> SearchResults<T> {
+    /// Convert into a `PaginatedResponse` using the caller-requested page
+    /// size so the `limit` metadata reflects the original request, not the
+    /// raw result count.
+    pub fn into_paginated_response(self, limit: u32) -> PaginatedResponse<T> {
+        let total = self.results.len() as u64;
+        let limit = u64::from(limit);
+        PaginatedResponse {
+            data: self.results,
+            total,
+            page: 1,
+            limit,
+            total_pages: if total > 0 { 1 } else { 0 },
+            has_next: false,
+        }
+    }
+}
 
 /// Tick-size for a market token (minimum price increment).
 #[derive(Debug, Clone, Serialize, Deserialize)]

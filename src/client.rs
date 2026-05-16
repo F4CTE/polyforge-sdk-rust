@@ -875,11 +875,15 @@ impl PolyforgeClient {
     }
 
     /// Full-text search across all markets.
-    /// Returns a flat `results` list (not a paginated envelope).
+    ///
+    /// The platform returns `{ results: [...] }` rather than the standard
+    /// paginated envelope.  The SDK deserializes into `SearchResults<Market>`
+    /// internally and converts to `PaginatedResponse<Market>` so callers see
+    /// a uniform paginated shape.
     pub async fn search_markets(
         &self,
         params: &SearchMarketsParams,
-    ) -> Result<SearchMarketsResponse> {
+    ) -> Result<PaginatedResponse<Market>> {
         let mut qp: Vec<(&str, String)> = vec![("q", params.q.clone())];
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
@@ -889,7 +893,9 @@ impl PolyforgeClient {
             .map(|(k, v)| format!("{}={}", k, encode(v)))
             .collect();
         let qs = format!("?{}", pairs.join("&"));
-        self.get(&format!("/api/v1/markets/search{qs}")).await
+        let results: SearchResults<Market> =
+            self.get(&format!("/api/v1/markets/search{qs}")).await?;
+        Ok(results.into_paginated_response(params.limit.unwrap_or(20)))
     }
 
     /// Get the minimum price tick size for a market token.
@@ -2607,14 +2613,23 @@ impl PolyforgeClient {
     ///
     /// # Errors
     /// Returns [`PolyforgeError::Validation`] if `size` or `trigger_price` is
-    /// NaN, infinite, zero, or negative.
+    /// NaN, infinite, zero, or negative, or if `limit_price` is provided but
+    /// is not a valid numeric string or is non-positive/non-finite.
     pub async fn create_conditional_order(
         &self,
         params: &CreateConditionalOrderParams,
     ) -> Result<ConditionalOrder> {
         validate_financial_param("size", params.size)?;
         validate_financial_param("trigger_price", params.trigger_price)?;
-        validate_optional_financial_param("limit_price", params.limit_price)?;
+        if let Some(ref lp) = params.limit_price {
+            let price: f64 = lp.parse().map_err(|_| {
+                PolyforgeError::Validation(format!(
+                    "limit_price must be a numeric string, got {:?}",
+                    lp
+                ))
+            })?;
+            validate_financial_param("limit_price", price)?;
+        }
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.post_idempotent("/api/v1/orders/conditional", &body)
             .await
@@ -4013,7 +4028,7 @@ mod tests {
                 outcome: "YES".into(),
                 size: 10.0,
                 trigger_price: 0.55,
-                limit_price: Some(0.56),
+                limit_price: Some("0.56".into()),
                 trailing_pct: None,
                 expires_at: None,
             };
@@ -4108,9 +4123,9 @@ mod tests {
                 );
                 let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
                     r#"[]"#
-                } else if request.contains("/api/v1/scores/") {
-                    r#"{}"#
-                } else if request.contains("/api/v1/profile/") {
+                } else if request.contains("/api/v1/scores/")
+                    || request.contains("/api/v1/profile/")
+                {
                     r#"{}"#
                 } else if request.contains("/api/v1/actions") {
                     r#"{"version":"1.0","actions":[]}"#
@@ -5602,18 +5617,29 @@ mod tests {
             tags: Some(vec!["test".into()]),
             variables: None,
             canvas: None,
-            kalshi_subaccount: Some(42),
+            kalshi_subaccount: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["name"], "My Strategy");
         assert_eq!(json["visibility"], "PUBLIC");
         assert_eq!(json["execMode"], "TICK");
         assert_eq!(json["tickMs"], 5000);
-        assert_eq!(json["kalshiSubaccount"], 42);
         assert!(json["triggers"].is_array());
         assert!(json["tags"].is_array());
-        // logicBlocks and calcBlocks omitted when None
+        // logicBlocks, calcBlocks, and kalshiSubaccount omitted when None
         assert!(json.get("logicBlocks").is_none());
+        assert!(json.get("kalshiSubaccount").is_none());
+    }
+
+    #[test]
+    fn test_create_strategy_params_kalshi_subaccount_serializes() {
+        let params = CreateStrategyParams {
+            name: "Test".into(),
+            kalshi_subaccount: Some(42),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["kalshiSubaccount"], 42);
     }
 
     #[test]
@@ -6457,7 +6483,7 @@ mod tests {
             outcome: "YES".into(),
             size: 50.0,
             trigger_price: 0.65,
-            limit_price: Some(0.67),
+            limit_price: Some("0.67".into()),
             trailing_pct: None,
             expires_at: None,
         };
@@ -6466,7 +6492,7 @@ mod tests {
         assert_eq!(json["tokenId"], "tok-1");
         assert_eq!(json["type"], "STOP_LOSS");
         assert_eq!(json["triggerPrice"], 0.65);
-        assert_eq!(json["limitPrice"], 0.67);
+        assert_eq!(json["limitPrice"], "0.67");
         assert!(json.get("expiresAt").is_none());
         assert!(json.get("trailingPct").is_none());
     }
@@ -6518,7 +6544,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_conditional_order_validation_rejects_nan_limit_price() {
+    fn test_create_conditional_order_validation_rejects_invalid_limit_price_string() {
         let params = CreateConditionalOrderParams {
             market_id: "mkt-1".into(),
             token_id: "tok-1".into(),
@@ -6527,7 +6553,7 @@ mod tests {
             outcome: "YES".into(),
             size: 10.0,
             trigger_price: 0.5,
-            limit_price: Some(f64::NAN),
+            limit_price: Some("not-a-number".into()),
             trailing_pct: None,
             expires_at: None,
         };
@@ -7365,20 +7391,50 @@ mod tests {
     }
 
     #[test]
-    fn test_search_markets_response_deserializes() {
+    fn test_search_results_deserializes_markets() {
         let json = r#"{"results": [{"id": "m1", "title": "Market One"}, {"id": "m2", "title": "Market Two"}]}"#;
-        let resp: SearchMarketsResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.results.len(), 2);
-        assert_eq!(resp.results[0].id, "m1");
-        assert_eq!(resp.results[0].title, "Market One");
-        assert_eq!(resp.results[1].id, "m2");
+        let sr: SearchResults<Market> = serde_json::from_str(json).unwrap();
+        assert_eq!(sr.results.len(), 2);
+        assert_eq!(sr.results[0].id, "m1");
+        assert_eq!(sr.results[0].title, "Market One");
+        assert_eq!(sr.results[1].id, "m2");
     }
 
     #[test]
-    fn test_search_markets_response_deserializes_empty() {
-        let json = r#"{"results": []}"#;
-        let resp: SearchMarketsResponse = serde_json::from_str(json).unwrap();
-        assert!(resp.results.is_empty());
+    fn test_search_results_into_paginated_response() {
+        let json = r#"{"results": [{"id": "m1", "title": "Market One"}, {"id": "m2", "title": "Market Two"}]}"#;
+        let sr: SearchResults<Market> = serde_json::from_str(json).unwrap();
+        let pr: PaginatedResponse<Market> = sr.into_paginated_response(10);
+        assert_eq!(pr.data.len(), 2);
+        assert_eq!(pr.total, 2);
+        assert_eq!(pr.page, 1);
+        assert_eq!(pr.limit, 10);
+        assert_eq!(pr.total_pages, 1);
+        assert!(!pr.has_next);
+        assert_eq!(pr.data[0].id, "m1");
+    }
+
+    #[test]
+    fn test_search_results_empty_into_paginated_response() {
+        let json = r#"{"results":[]}"#;
+        let sr: SearchResults<Market> = serde_json::from_str(json).unwrap();
+        let pr: PaginatedResponse<Market> = sr.into_paginated_response(20);
+        assert_eq!(pr.data.len(), 0);
+        assert_eq!(pr.total, 0);
+        assert_eq!(pr.limit, 20);
+        assert_eq!(pr.total_pages, 0);
+        assert!(!pr.has_next);
+    }
+
+    #[test]
+    fn test_search_results_missing_results_field_is_error() {
+        let json = r#"{"other":"stuff"}"#;
+        let result: std::result::Result<SearchResults<Market>, serde_json::Error> =
+            serde_json::from_str(json);
+        assert!(
+            result.is_err(),
+            "missing `results` field should be a decode error"
+        );
     }
 
     #[test]
