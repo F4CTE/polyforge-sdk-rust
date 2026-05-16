@@ -6986,6 +6986,60 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_non_human_readable_round_trip_preserves_extra() {
+        // Regression: non-human-readable serde (bincode, etc.) must
+        // preserve extra fields through round-trips.
+        let co = ConditionalOrder {
+            id: "co-nhr".into(),
+            token_id: None,
+            side: Some("BUY".into()),
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::json!({"customField": 42, "otherField": "hello"}),
+        };
+        let config = bincode::config::standard();
+        let bytes = bincode::serde::encode_to_vec(&co, config).expect("bincode serialize");
+        let (roundtripped, _): (ConditionalOrder, _) =
+            bincode::serde::decode_from_slice(&bytes, config).expect("bincode deserialize");
+        assert_eq!(roundtripped.id, "co-nhr");
+        assert_eq!(roundtripped.extra["customField"], serde_json::json!(42));
+        assert_eq!(roundtripped.extra["otherField"], serde_json::json!("hello"));
+    }
+
+    #[test]
+    fn test_conditional_order_non_human_readable_round_trip_empty_extra() {
+        // Empty extra should round-trip as an empty object.
+        let co = ConditionalOrder {
+            id: "co-nhr-empty".into(),
+            token_id: None,
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Object(serde_json::Map::new()),
+        };
+        let config = bincode::config::standard();
+        let bytes = bincode::serde::encode_to_vec(&co, config).expect("bincode serialize");
+        let (roundtripped, _): (ConditionalOrder, _) =
+            bincode::serde::decode_from_slice(&bytes, config).expect("bincode deserialize");
+        assert_eq!(roundtripped.id, "co-nhr-empty");
+        assert_eq!(roundtripped.extra, serde_json::json!({}));
+    }
+
+    #[test]
     fn test_alert_direction_serializes() {
         // Platform expects lowercase: "above" / "below" (not "ABOVE" / "BELOW")
         let above = serde_json::to_value(AlertDirection::Above).unwrap();
@@ -9706,7 +9760,6 @@ mod tests {
         assert!(params.limit.is_none());
         assert!(params.page.is_none());
         assert!(params.offset.is_none());
-
     }
 
     #[test]

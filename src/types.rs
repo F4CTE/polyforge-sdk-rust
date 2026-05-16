@@ -1225,7 +1225,6 @@ pub struct AccuracyLeaderboardParams {
     pub page: Option<u32>,
     /// Zero-based row offset. Converted to the platform page/limit contract.
     pub offset: Option<u32>,
-
 }
 
 /// A single entry in the accuracy leaderboard.
@@ -1416,7 +1415,9 @@ pub enum ConditionalOrderType {
 ///
 /// **Non-human-readable deserialization** (bincode, …): falls back to
 /// derive-based struct deserialization. The type alias is not
-/// supported in this mode, and no extra-field capture is performed.
+/// supported in this mode. The `extra` map is serialized as a JSON
+/// string to avoid `deserialize_any` (unsupported in compact/binary
+/// formats) and is reconstructed on deserialization.
 ///
 /// **Serialization**: uses canonical `conditionType` (camelCase).
 #[derive(Debug, Clone)]
@@ -1486,7 +1487,9 @@ impl Serialize for ConditionalOrder {
             s.serialize_field("createdAt", &self.created_at)?;
             s.serialize_field("triggeredAt", &self.triggered_at)?;
             s.serialize_field("expiresAt", &self.expires_at)?;
-            s.serialize_field("extra", &self.extra)?;
+            let extra_json =
+                serde_json::to_string(&self.extra).map_err(serde::ser::Error::custom)?;
+            s.serialize_field("extra", &Some(&extra_json))?;
             s.end()
         }
     }
@@ -1517,9 +1520,13 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                 triggered_at: Option<String>,
                 expires_at: Option<String>,
                 #[serde(default)]
-                extra: Option<serde_json::Value>,
+                extra: Option<String>,
             }
             let h = Helper::deserialize(deserializer)?;
+            let extra = match h.extra {
+                Some(s) => serde_json::from_str(&s).map_err(serde::de::Error::custom)?,
+                None => serde_json::Value::Object(serde_json::Map::new()),
+            };
             Ok(ConditionalOrder {
                 id: h.id,
                 token_id: h.token_id,
@@ -1533,7 +1540,7 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                 created_at: h.created_at,
                 triggered_at: h.triggered_at,
                 expires_at: h.expires_at,
-                extra: h.extra.unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+                extra,
             })
         }
     }
