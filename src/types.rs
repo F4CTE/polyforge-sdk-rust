@@ -1451,7 +1451,7 @@ impl Serialize for ConditionalOrder {
                 ));
             }
         };
-        let mut map = serializer.serialize_map(Some(11 + extra_entries))?;
+        let mut map = serializer.serialize_map(Some(12 + extra_entries))?;
         map.serialize_entry("id", &self.id)?;
         map.serialize_entry("tokenId", &self.token_id)?;
         map.serialize_entry("side", &self.side)?;
