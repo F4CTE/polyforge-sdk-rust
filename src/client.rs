@@ -4123,9 +4123,9 @@ mod tests {
                 );
                 let body = if request.contains("/api/v1/scores/") && request.contains("/badges") {
                     r#"[]"#
-                } else if request.contains("/api/v1/scores/") {
-                    r#"{}"#
-                } else if request.contains("/api/v1/profile/") {
+                } else if request.contains("/api/v1/scores/")
+                    || request.contains("/api/v1/profile/")
+                {
                     r#"{}"#
                 } else if request.contains("/api/v1/actions") {
                     r#"{"version":"1.0","actions":[]}"#
