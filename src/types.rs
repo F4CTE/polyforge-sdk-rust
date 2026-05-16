@@ -1394,7 +1394,7 @@ pub struct ConditionalOrder {
     pub outcome: Option<String>,
     pub size: Option<String>,
     pub trigger_price: Option<String>,
-    pub limit_price: Option<String>,
+    pub limit_price: Option<f64>,
     pub condition_type: Option<String>,
     pub status: Option<ConditionalOrderStatus>,
     pub created_at: Option<String>,
@@ -1447,7 +1447,7 @@ impl Serialize for ConditionalOrder {
                 outcome: &'a Option<String>,
                 size: &'a Option<String>,
                 trigger_price: &'a Option<String>,
-                limit_price: &'a Option<String>,
+                limit_price: &'a Option<f64>,
                 condition_type: &'a Option<String>,
                 status: &'a Option<ConditionalOrderStatus>,
                 created_at: &'a Option<String>,
@@ -1490,7 +1490,7 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                 outcome: Option<String>,
                 size: Option<String>,
                 trigger_price: Option<String>,
-                limit_price: Option<String>,
+                limit_price: Option<f64>,
                 condition_type: Option<String>,
                 status: Option<ConditionalOrderStatus>,
                 created_at: Option<String>,
@@ -1546,7 +1546,7 @@ impl<'de> serde::de::Visitor<'de> for ConditionalOrderVisitor {
         let mut outcome: Option<Option<String>> = None;
         let mut size: Option<Option<String>> = None;
         let mut trigger_price: Option<Option<String>> = None;
-        let mut limit_price: Option<Option<String>> = None;
+        let mut limit_price: Option<Option<f64>> = None;
         let mut condition_type: Option<String> = None;
         let mut condition_type_priority: u8 = 0;
         let mut seen_condition_type: bool = false;
@@ -1600,7 +1600,27 @@ impl<'de> serde::de::Visitor<'de> for ConditionalOrderVisitor {
                     if limit_price.is_some() {
                         return Err(serde::de::Error::duplicate_field("limitPrice"));
                     }
-                    limit_price = Some(map_field_value(&mut map, "limitPrice")?);
+                    let raw: serde_json::Value = map_field_value(&mut map, "limitPrice")?;
+                    limit_price = Some(match raw {
+                        serde_json::Value::Null => None,
+                        serde_json::Value::Number(n) => {
+                            Some(n.as_f64().unwrap_or(0.0))
+                        }
+                        serde_json::Value::String(s) if s.is_empty() => None,
+                        serde_json::Value::String(s) => Some(
+                            s.parse::<f64>().map_err(|_| {
+                                serde::de::Error::invalid_value(
+                                    serde::de::Unexpected::Str(&s),
+                                    &"a numeric string",
+                                )
+                            })?,
+                        ),
+                        _ => {
+                            return Err(serde::de::Error::custom(
+                                "expected null, number, or numeric string for limitPrice",
+                            ));
+                        }
+                    });
                 }
                 "conditionType" => {
                     if seen_condition_type {
