@@ -1441,35 +1441,53 @@ impl Serialize for ConditionalOrder {
     where
         S: serde::Serializer,
     {
-        use serde::ser::SerializeMap;
-        let extra_entries = match &self.extra {
-            serde_json::Value::Object(obj) => obj.len(),
-            serde_json::Value::Null => 0,
-            _ => {
-                return Err(serde::ser::Error::custom(
-                    "ConditionalOrder::extra must be an Object or Null",
-                ));
+        if serializer.is_human_readable() {
+            use serde::ser::SerializeMap;
+            let extra_entries = match &self.extra {
+                serde_json::Value::Object(obj) => obj.len(),
+                serde_json::Value::Null => 0,
+                _ => {
+                    return Err(serde::ser::Error::custom(
+                        "ConditionalOrder::extra must be an Object or Null",
+                    ));
+                }
+            };
+            let mut map = serializer.serialize_map(Some(12 + extra_entries))?;
+            map.serialize_entry("id", &self.id)?;
+            map.serialize_entry("tokenId", &self.token_id)?;
+            map.serialize_entry("side", &self.side)?;
+            map.serialize_entry("outcome", &self.outcome)?;
+            map.serialize_entry("size", &self.size)?;
+            map.serialize_entry("triggerPrice", &self.trigger_price)?;
+            map.serialize_entry("limitPrice", &self.limit_price)?;
+            map.serialize_entry("conditionType", &self.condition_type)?;
+            map.serialize_entry("status", &self.status)?;
+            map.serialize_entry("createdAt", &self.created_at)?;
+            map.serialize_entry("triggeredAt", &self.triggered_at)?;
+            map.serialize_entry("expiresAt", &self.expires_at)?;
+            if let serde_json::Value::Object(obj) = &self.extra {
+                for (k, v) in obj {
+                    map.serialize_entry(k, v)?;
+                }
             }
-        };
-        let mut map = serializer.serialize_map(Some(12 + extra_entries))?;
-        map.serialize_entry("id", &self.id)?;
-        map.serialize_entry("tokenId", &self.token_id)?;
-        map.serialize_entry("side", &self.side)?;
-        map.serialize_entry("outcome", &self.outcome)?;
-        map.serialize_entry("size", &self.size)?;
-        map.serialize_entry("triggerPrice", &self.trigger_price)?;
-        map.serialize_entry("limitPrice", &self.limit_price)?;
-        map.serialize_entry("conditionType", &self.condition_type)?;
-        map.serialize_entry("status", &self.status)?;
-        map.serialize_entry("createdAt", &self.created_at)?;
-        map.serialize_entry("triggeredAt", &self.triggered_at)?;
-        map.serialize_entry("expiresAt", &self.expires_at)?;
-        if let serde_json::Value::Object(obj) = &self.extra {
-            for (k, v) in obj {
-                map.serialize_entry(k, v)?;
-            }
+            map.end()
+        } else {
+            use serde::ser::SerializeStruct;
+            let mut s = serializer.serialize_struct("ConditionalOrder", 12)?;
+            s.serialize_field("id", &self.id)?;
+            s.serialize_field("tokenId", &self.token_id)?;
+            s.serialize_field("side", &self.side)?;
+            s.serialize_field("outcome", &self.outcome)?;
+            s.serialize_field("size", &self.size)?;
+            s.serialize_field("triggerPrice", &self.trigger_price)?;
+            s.serialize_field("limitPrice", &self.limit_price)?;
+            s.serialize_field("conditionType", &self.condition_type)?;
+            s.serialize_field("status", &self.status)?;
+            s.serialize_field("createdAt", &self.created_at)?;
+            s.serialize_field("triggeredAt", &self.triggered_at)?;
+            s.serialize_field("expiresAt", &self.expires_at)?;
+            s.end()
         }
-        map.end()
     }
 }
 
