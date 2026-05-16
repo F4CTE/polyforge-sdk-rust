@@ -348,16 +348,14 @@ pub struct StrategyTemplate {
 /// ```ignore
 /// CreateStrategyParams {
 ///     name: "My Strategy".into(),
-///     kalshi_subaccount: Some(42),
 ///     ..Default::default()
 /// };
 /// ```
 ///
 /// Or use the convenience constructor [`CreateStrategyParams::new`].
 ///
-/// The new `kalshi_subaccount` field defaults to `None` and is omitted
-/// from serialized JSON when `None`. Use `..Default::default()` to fill
-/// remaining fields.
+/// For `kalshi_subaccount` support, use [`CreateStrategyWithParams`] and
+/// [`PolyforgeClient::create_strategy_with`](crate::PolyforgeClient::create_strategy_with).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateStrategyParams {
@@ -390,9 +388,6 @@ pub struct CreateStrategyParams {
     pub variables: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canvas: Option<serde_json::Value>,
-    /// Kalshi subaccount ID (0–99) for P&L attribution.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub kalshi_subaccount: Option<u64>,
 }
 
 impl CreateStrategyParams {
@@ -406,6 +401,29 @@ impl CreateStrategyParams {
             ..Default::default()
         }
     }
+}
+
+/// Parameters for creating a strategy with advanced fields.
+///
+/// Wraps [`CreateStrategyParams`] and adds `kalshi_subaccount` to preserve
+/// semver compatibility of the base struct. Use with
+/// [`PolyforgeClient::create_strategy_with`](crate::PolyforgeClient::create_strategy_with).
+///
+/// ```ignore
+/// CreateStrategyWithParams {
+///     base: CreateStrategyParams::new("My Strategy"),
+///     kalshi_subaccount: Some(42),
+///     ..Default::default()
+/// };
+/// ```
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateStrategyWithParams {
+    #[serde(flatten)]
+    pub base: CreateStrategyParams,
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kalshi_subaccount: Option<u64>,
 }
 
 /// Parameters for updating a strategy's mutable fields.

@@ -1006,6 +1006,19 @@ impl PolyforgeClient {
         self.post("/api/v1/strategies", &body).await
     }
 
+    /// Create a strategy with advanced fields.
+    ///
+    /// Prefer [`create_strategy`](Self::create_strategy) for common cases;
+    /// use this method when you need `kalshi_subaccount` or plan to reuse
+    /// a constructed [`CreateStrategyWithParams`].
+    pub async fn create_strategy_with(
+        &self,
+        params: &CreateStrategyWithParams,
+    ) -> Result<Strategy> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/strategies", &body).await
+    }
+
     /// Create a strategy from a natural-language description (AI-powered).
     pub async fn create_strategy_from_description(
         &self,
@@ -5679,7 +5692,6 @@ mod tests {
             tags: Some(vec!["test".into()]),
             variables: None,
             canvas: None,
-            kalshi_subaccount: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["name"], "My Strategy");
@@ -5688,7 +5700,7 @@ mod tests {
         assert_eq!(json["tickMs"], 5000);
         assert!(json["triggers"].is_array());
         assert!(json["tags"].is_array());
-        // logicBlocks, calcBlocks, and kalshiSubaccount omitted when None
+        // logicBlocks, calcBlocks omitted when None; kalshiSubaccount not on CreateStrategyParams
         assert!(json.get("logicBlocks").is_none());
         assert!(json.get("calcBlocks").is_none());
         assert!(json.get("kalshiSubaccount").is_none());
@@ -5696,13 +5708,14 @@ mod tests {
     }
 
     #[test]
-    fn test_create_strategy_params_kalshi_subaccount_serializes() {
-        let params = CreateStrategyParams {
-            name: "Test".into(),
+    fn test_create_strategy_with_params_serializes_kalshi_subaccount() {
+        let params = CreateStrategyWithParams {
+            base: CreateStrategyParams::new("Test"),
             kalshi_subaccount: Some(42),
             ..Default::default()
         };
         let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["name"], "Test");
         assert_eq!(json["kalshiSubaccount"], 42);
     }
 
