@@ -1089,10 +1089,11 @@ impl PolyforgeClient {
             .await
     }
 
-    /// Update a strategy's name and/or description.
+    /// Update a strategy's mutable fields.
     ///
     /// This is a convenience wrapper around [`update_strategy_with`](Self::update_strategy_with)
-    /// that preserves backward compatibility with the original call signature.
+    /// that covers the most common fields. Use [`update_strategy_with`](Self::update_strategy_with)
+    /// directly for advanced fields like `kalshi_subaccount`.
     pub async fn update_strategy(
         &self,
         id: &str,
@@ -1112,11 +1113,11 @@ impl PolyforgeClient {
         .await
     }
 
-    /// Update a strategy's name, description, market, or Kalshi subaccount.
+    /// Update a strategy's mutable fields with full [`UpdateStrategyParams`] control.
     ///
-    /// Accepts an [`UpdateStrategyParams`] for full field coverage, including the
-    /// `kalshi_subaccount` field that is not available through the original
-    /// [`update_strategy`](Self::update_strategy) method.
+    /// Prefer the convenience wrapper [`update_strategy`](Self::update_strategy)
+    /// for common updates; use this method when you need a constructed
+    /// [`UpdateStrategyParams`] or plan to reuse the same params object.
     pub async fn update_strategy_with(
         &self,
         id: &str,
@@ -5794,27 +5795,64 @@ mod tests {
         assert_eq!(json["tickMs"], 5000);
         assert!(json["triggers"].is_array());
         assert!(json["tags"].is_array());
-        // logicBlocks, calcBlocks, and kalshiSubaccount omitted when None
+        // logicBlocks, calcBlocks, kalshiSubaccount omitted when None
         assert!(json.get("logicBlocks").is_none());
+        assert!(json.get("calcBlocks").is_none());
         assert!(json.get("kalshiSubaccount").is_none());
+
     }
 
     #[test]
-    fn test_create_strategy_params_kalshi_subaccount_serializes() {
+    fn test_create_strategy_params_serializes_kalshi_subaccount() {
         let params = CreateStrategyParams {
             name: "Test".into(),
             kalshi_subaccount: Some(42),
             ..Default::default()
         };
         let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["name"], "Test");
         assert_eq!(json["kalshiSubaccount"], 42);
     }
 
     #[test]
-    fn test_create_strategy_params_omits_kalshi_subaccount_when_none() {
-        let params = CreateStrategyParams::new("S");
+    fn test_strategy_deserializes_kalshi_subaccount() {
+        let json = r#"{
+            "id": "strat-1",
+            "name": "My Strategy",
+            "kalshiSubaccount": 7
+        }"#;
+        let strategy: Strategy = serde_json::from_str(json).unwrap();
+        assert_eq!(strategy.kalshi_subaccount(), Some(7));
+    }
+
+    #[test]
+    fn test_strategy_omits_kalshi_subaccount_when_absent() {
+        let json = r#"{"id": "strat-1", "name": "My Strategy"}"#;
+        let strategy: Strategy = serde_json::from_str(json).unwrap();
+        assert_eq!(strategy.kalshi_subaccount(), None);
+    }
+
+    #[test]
+    fn test_update_strategy_params_serializes_kalshi_subaccount() {
+        let params = UpdateStrategyParams {
+            name: Some("Updated".into()),
+            kalshi_subaccount: Some(42),
+            ..Default::default()
+        };
         let json = serde_json::to_value(&params).unwrap();
-        assert_eq!(json["name"], "S");
+        assert_eq!(json["name"], "Updated");
+        assert_eq!(json["kalshiSubaccount"], 42);
+        assert!(json.get("description").is_none());
+    }
+
+    #[test]
+    fn test_update_strategy_params_omits_kalshi_subaccount_when_none() {
+        let params = UpdateStrategyParams {
+            name: Some("Updated".into()),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["name"], "Updated");
         assert!(json.get("kalshiSubaccount").is_none());
     }
 
