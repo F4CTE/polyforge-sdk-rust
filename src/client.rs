@@ -5617,18 +5617,29 @@ mod tests {
             tags: Some(vec!["test".into()]),
             variables: None,
             canvas: None,
-            kalshi_subaccount: Some(42),
+            kalshi_subaccount: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["name"], "My Strategy");
         assert_eq!(json["visibility"], "PUBLIC");
         assert_eq!(json["execMode"], "TICK");
         assert_eq!(json["tickMs"], 5000);
-        assert_eq!(json["kalshiSubaccount"], 42);
         assert!(json["triggers"].is_array());
         assert!(json["tags"].is_array());
-        // logicBlocks and calcBlocks omitted when None
+        // logicBlocks, calcBlocks, and kalshiSubaccount omitted when None
         assert!(json.get("logicBlocks").is_none());
+        assert!(json.get("kalshiSubaccount").is_none());
+    }
+
+    #[test]
+    fn test_create_strategy_params_kalshi_subaccount_serializes() {
+        let params = CreateStrategyParams {
+            name: "Test".into(),
+            kalshi_subaccount: Some(42),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["kalshiSubaccount"], 42);
     }
 
     #[test]

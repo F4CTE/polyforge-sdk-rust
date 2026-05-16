@@ -1,6 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [3.0.0] — 2026-05-13
+
+### Breaking
+- **`CreateStrategyParams` new field** — `kalshi_subaccount: Option<u64>` added. Any code that constructs `CreateStrategyParams` with an exhaustive struct literal without `..Default::default()` must add the new field. Use [`CreateStrategyParams::new`] or `..Default::default()` for forward-compatible construction.
 
 ### Fixed
 - **search_markets response shape** — `search_markets()` now returns `SearchMarketsResponse { results: Vec<Market> }` instead of `PaginatedResponse<Market>`, matching the platform's actual `{ "results": [...] }` envelope. `MarketSearchResponse` is retained as a deprecated alias for backward compatibility. (#253)
@@ -20,6 +23,7 @@
 - **vote_market_sentiment params** — `vote_market_sentiment()` now accepts `VoteMarketSentimentParams` with `direction` and `confidence` fields instead of sending an empty JSON body, matching the platform's expected request schema for `POST /api/v1/markets/:marketId/sentiment`. (POLA-5122)
 
 ### Added
+- **`CreateStrategyParams.kalshi_subaccount`** — adds an optional `kalshi_subaccount: Option<u64>` field to `CreateStrategyParams`, serialized as `kalshiSubaccount` (camelCase) and omitted when `None`. Enables passing a Kalshi subaccount identifier when creating strategies. `CreateStrategyParams` has a `new(name)` constructor and derives `Default` for forward-compatible construction. (closes #4178)
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
 - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
@@ -39,7 +43,6 @@
   of inventing strict shapes.
 - **UpdateProfileParams** — add `UpdateProfileParams::to_value()` and `PolyforgeClient::update_my_profile_raw()` so callers can set platform fields not covered by the typed struct (e.g. `"twitterHandle"`) without changing `UpdateProfileParams`' public surface. The typed `update_my_profile()` method is unchanged. Use `UpdateProfileParams::default().to_value()` with `body["twitterHandle"] = json!(...)` to reach feature parity with `polyforge-sdk-python` and `polyforge-mcp`. (closes #255)
 - **UpdateSettingsProfileParams.twitter_handle** — add optional `twitter_handle: Option<String>` field. Serializes as `twitterHandle` (camelCase) to match the platform's `UpdateProfileDto` and reach feature parity with `polyforge-sdk-python` and `polyforge-mcp`. (closes #185)
-- **CreateStrategyParams.kalshi_subaccount** — add optional `kalshi_subaccount: Option<u64>` field (0–99) for Kalshi P&L attribution. Serializes as `kalshiSubaccount` (camelCase) to match the platform's `CreateStrategyDto`. New `UpdateStrategyParams` struct and `update_strategy_with()` method offer the same field coverage for `PATCH /api/v1/strategies/:id`. A convenience constructor `CreateStrategyParams::new(name)` is provided; callers may also use struct literal syntax with `..Default::default()`. Version bumped to 2.0.0 for the struct field addition. (POLA-4510)
 - **Misc public utility endpoints (POLA-1858)** — 18 read/write methods that close the SDK gap matrix from POLA-1845 and bring the Rust SDK to parity with the platform's miscellaneous user/markets/fees/analytics surface:
   - `get_accuracy_overview()` → `GET /api/v1/accuracy` — companion to `get_accuracy()` (`/accuracy/me`); both return the same `AccuracyScore` shape.
   - `get_feed(Option<&GetWhaleFeedParams>)` → `GET /api/v1/feed` — paged whale-trade feed (reuses existing `WhaleTrade` and `GetWhaleFeedParams` types since the controller delegates to `WhalesService.getFeed`).
