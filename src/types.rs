@@ -1473,7 +1473,7 @@ impl Serialize for ConditionalOrder {
             map.end()
         } else {
             use serde::ser::SerializeStruct;
-            let mut s = serializer.serialize_struct("ConditionalOrder", 12)?;
+            let mut s = serializer.serialize_struct("ConditionalOrder", 13)?;
             s.serialize_field("id", &self.id)?;
             s.serialize_field("tokenId", &self.token_id)?;
             s.serialize_field("side", &self.side)?;
@@ -1486,6 +1486,7 @@ impl Serialize for ConditionalOrder {
             s.serialize_field("createdAt", &self.created_at)?;
             s.serialize_field("triggeredAt", &self.triggered_at)?;
             s.serialize_field("expiresAt", &self.expires_at)?;
+            s.serialize_field("extra", &self.extra)?;
             s.end()
         }
     }
@@ -1515,6 +1516,8 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                 created_at: Option<String>,
                 triggered_at: Option<String>,
                 expires_at: Option<String>,
+                #[serde(default)]
+                extra: Option<serde_json::Value>,
             }
             let h = Helper::deserialize(deserializer)?;
             Ok(ConditionalOrder {
@@ -1530,7 +1533,7 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                 created_at: h.created_at,
                 triggered_at: h.triggered_at,
                 expires_at: h.expires_at,
-                extra: serde_json::Value::Object(serde_json::Map::new()),
+                extra: h.extra.unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
             })
         }
     }
