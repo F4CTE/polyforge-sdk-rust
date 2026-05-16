@@ -2847,6 +2847,67 @@ impl PolyforgeClient {
         self.get("/api/v1/accuracy/me").await
     }
 
+    /// Get the accuracy leaderboard ranked by prediction accuracy.
+    ///
+    /// Returns a paginated list of traders with their accuracy stats.
+    /// When `offset` is provided without `page`, it is converted to the
+    /// platform's page-based contract.
+    ///
+    /// Returns [`PolyforgeError::Validation`] if the offset is too large
+    /// to represent as a page number for the given limit.
+    pub async fn get_accuracy_leaderboard(
+        &self,
+        params: Option<&AccuracyLeaderboardParams>,
+    ) -> Result<PaginatedResponse<AccuracyLeaderboardEntry>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(ref period) = p.period {
+                qp.push(("period", period.clone()));
+            }
+            let effective_limit = p.limit.filter(|&l| l > 0).unwrap_or(20);
+            let page = match p.page {
+                Some(0) => {
+                    return Err(PolyforgeError::Validation(
+                        "page must be >= 1 (1-based pagination)".into(),
+                    ));
+                }
+                Some(pg) => Some(pg),
+                None => {
+                    if let Some(offset) = p.offset {
+                        let raw = (offset as u64 / effective_limit as u64) + 1;
+                        if raw > u32::MAX as u64 {
+                            return Err(PolyforgeError::Validation(format!(
+                                "offset {} with limit {} produces page {}, which exceeds the maximum page {}",
+                                offset, effective_limit, raw, u32::MAX
+                            )));
+                        }
+                        Some(raw as u32)
+                    } else {
+                        None
+                    }
+                }
+            };
+            if let Some(page) = page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                if limit > 0 {
+                    qp.push(("limit", limit.to_string()));
+                }
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/accuracy/leaderboard{qs}")).await
+    }
+
     /// Get AI-generated portfolio review and optimization suggestions.
     pub async fn get_portfolio_review(&self) -> Result<PortfolioReview> {
         self.get("/api/v1/ai/portfolio-review").await
@@ -9102,6 +9163,146 @@ mod tests {
         let client = PolyforgeClient::new("k").unwrap();
         let url = client.url("/api/v1/accuracy");
         assert!(url.ends_with("/api/v1/accuracy"));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/accuracy/leaderboard");
+        assert!(url.ends_with("/api/v1/accuracy/leaderboard"));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_entry_deserializes() {
+        let json = r#"{
+            "rank": 51,
+            "userId": "u-1",
+            "username": "alice",
+            "displayName": "Alice",
+            "avatarUrl": "https://example.com/avatar.png",
+            "pnl": "12.50",
+            "winRate": "55.0",
+            "tradeCount": 42
+        }"#;
+        let entry: AccuracyLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.rank, 51);
+        assert_eq!(entry.user_id, "u-1");
+        assert_eq!(entry.username, "alice");
+        assert_eq!(entry.display_name.as_deref(), Some("Alice"));
+        assert_eq!(
+            entry.avatar_url.as_deref(),
+            Some("https://example.com/avatar.png")
+        );
+        assert_eq!(entry.pnl, "12.50");
+        assert_eq!(entry.win_rate, "55.0");
+        assert_eq!(entry.trade_count, 42);
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_entry_deserializes_with_nulls() {
+        let json = r#"{
+            "rank": 1,
+            "userId": "u-2",
+            "username": "bob",
+            "displayName": null,
+            "avatarUrl": null,
+            "pnl": "100.00",
+            "winRate": "80.0",
+            "tradeCount": 5
+        }"#;
+        let entry: AccuracyLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.rank, 1);
+        assert_eq!(entry.display_name, None);
+        assert_eq!(entry.avatar_url, None);
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_default() {
+        let params = AccuracyLeaderboardParams::default();
+        assert!(params.period.is_none());
+        assert!(params.limit.is_none());
+        assert!(params.page.is_none());
+        assert!(params.offset.is_none());
+
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_has_offset() {
+        let params = AccuracyLeaderboardParams {
+            period: Some("30d".to_string()),
+            limit: Some(25),
+            offset: Some(50),
+            ..Default::default()
+        };
+        assert_eq!(params.period.as_deref(), Some("30d"));
+        assert_eq!(params.limit, Some(25));
+        assert_eq!(params.offset, Some(50));
+        assert!(params.page.is_none());
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_zero_limit() {
+        let params = AccuracyLeaderboardParams {
+            limit: Some(0),
+            offset: Some(50),
+            ..Default::default()
+        };
+        assert_eq!(params.limit, Some(0));
+        assert_eq!(params.offset, Some(50));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_page_zero_is_allowed_for_construction() {
+        let params = AccuracyLeaderboardParams {
+            page: Some(0),
+            offset: Some(50),
+            limit: Some(25),
+            ..Default::default()
+        };
+        assert_eq!(params.page, Some(0));
+        assert_eq!(params.offset, Some(50));
+    }
+
+    #[tokio::test]
+    async fn test_accuracy_leaderboard_rejects_page_zero() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let params = AccuracyLeaderboardParams {
+            page: Some(0),
+            limit: Some(25),
+            ..Default::default()
+        };
+        let result = client.get_accuracy_leaderboard(Some(&params)).await;
+        assert!(result.is_err());
+        match result {
+            Err(PolyforgeError::Validation(msg)) => {
+                assert!(
+                    msg.contains("page must be >= 1"),
+                    "expected page-zero rejection, got: {msg}"
+                );
+            }
+            other => panic!("expected Validation error for page=0, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_accuracy_leaderboard_offset_overflow_rejected() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let params = AccuracyLeaderboardParams {
+            offset: Some(u32::MAX),
+            limit: Some(1),
+            ..Default::default()
+        };
+        let result = client.get_accuracy_leaderboard(Some(&params)).await;
+        assert!(result.is_err());
+        match result {
+            Err(PolyforgeError::Validation(msg)) => {
+                assert!(
+                    msg.contains("exceeds the maximum page"),
+                    "unexpected message: {msg}"
+                );
+            }
+            other => panic!("expected Validation error, got {other:?}"),
+        }
     }
 
     #[test]
