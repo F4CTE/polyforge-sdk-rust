@@ -1441,68 +1441,35 @@ impl Serialize for ConditionalOrder {
     where
         S: serde::Serializer,
     {
-        if serializer.is_human_readable() {
-            use serde::ser::SerializeMap;
-            let mut map = serializer.serialize_map(None)?;
-            map.serialize_entry("id", &self.id)?;
-            map.serialize_entry("tokenId", &self.token_id)?;
-            map.serialize_entry("side", &self.side)?;
-            map.serialize_entry("outcome", &self.outcome)?;
-            map.serialize_entry("size", &self.size)?;
-            map.serialize_entry("triggerPrice", &self.trigger_price)?;
-            map.serialize_entry("limitPrice", &self.limit_price)?;
-            map.serialize_entry("conditionType", &self.condition_type)?;
-            map.serialize_entry("status", &self.status)?;
-            map.serialize_entry("createdAt", &self.created_at)?;
-            map.serialize_entry("triggeredAt", &self.triggered_at)?;
-            map.serialize_entry("expiresAt", &self.expires_at)?;
-            match &self.extra {
-                serde_json::Value::Object(obj) => {
-                    for (k, v) in obj {
-                        map.serialize_entry(k, v)?;
-                    }
-                }
-                serde_json::Value::Null => {}
-                _ => {
-                    return Err(serde::ser::Error::custom(
-                        "ConditionalOrder::extra must be an Object or Null",
-                    ));
-                }
+        use serde::ser::SerializeMap;
+        let extra_entries = match &self.extra {
+            serde_json::Value::Object(obj) => obj.len(),
+            serde_json::Value::Null => 0,
+            _ => {
+                return Err(serde::ser::Error::custom(
+                    "ConditionalOrder::extra must be an Object or Null",
+                ));
             }
-            map.end()
-        } else {
-            #[derive(Serialize)]
-            #[serde(rename_all = "camelCase")]
-            struct Helper<'a> {
-                id: &'a str,
-                token_id: &'a Option<String>,
-                side: &'a Option<String>,
-                outcome: &'a Option<String>,
-                size: &'a Option<String>,
-                trigger_price: &'a Option<String>,
-                limit_price: &'a Option<String>,
-                condition_type: &'a Option<String>,
-                status: &'a Option<ConditionalOrderStatus>,
-                created_at: &'a Option<String>,
-                triggered_at: &'a Option<String>,
-                expires_at: &'a Option<String>,
+        };
+        let mut map = serializer.serialize_map(Some(11 + extra_entries))?;
+        map.serialize_entry("id", &self.id)?;
+        map.serialize_entry("tokenId", &self.token_id)?;
+        map.serialize_entry("side", &self.side)?;
+        map.serialize_entry("outcome", &self.outcome)?;
+        map.serialize_entry("size", &self.size)?;
+        map.serialize_entry("triggerPrice", &self.trigger_price)?;
+        map.serialize_entry("limitPrice", &self.limit_price)?;
+        map.serialize_entry("conditionType", &self.condition_type)?;
+        map.serialize_entry("status", &self.status)?;
+        map.serialize_entry("createdAt", &self.created_at)?;
+        map.serialize_entry("triggeredAt", &self.triggered_at)?;
+        map.serialize_entry("expiresAt", &self.expires_at)?;
+        if let serde_json::Value::Object(obj) = &self.extra {
+            for (k, v) in obj {
+                map.serialize_entry(k, v)?;
             }
-            Helper {
-                id: &self.id,
-                token_id: &self.token_id,
-                side: &self.side,
-                outcome: &self.outcome,
-                size: &self.size,
-                trigger_price: &self.trigger_price,
-                limit_price: &self.limit_price,
-                condition_type: &self.condition_type,
-                status: &self.status,
-                created_at: &self.created_at,
-                triggered_at: &self.triggered_at,
-                expires_at: &self.expires_at,
-            }
-            .serialize(serializer)
         }
+        map.end()
     }
 }
 
@@ -1524,6 +1491,7 @@ impl<'de> Deserialize<'de> for ConditionalOrder {
                 size: Option<String>,
                 trigger_price: Option<String>,
                 limit_price: Option<String>,
+                #[serde(alias = "type")]
                 condition_type: Option<String>,
                 status: Option<ConditionalOrderStatus>,
                 created_at: Option<String>,
