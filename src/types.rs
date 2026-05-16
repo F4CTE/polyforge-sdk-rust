@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -1757,10 +1759,21 @@ pub struct RateListingParams {
 // Risk Settings
 // ---------------------------------------------------------------------------
 
+fn default_drawdown_lookback_hours() -> i32 {
+    24
+}
+
+fn default_drawdown_threshold_pct() -> f64 {
+    0.1
+}
+
 /// Current drawdown / circuit-breaker settings for the authenticated user.
 ///
-/// Field names and types match the platform `RiskSettings` contract
+/// Field names and types match the platform's `RiskSettings` contract
 /// exactly (camelCase on the wire).
+/// Unknown fields returned by the server (`userId`, `updatedAt`, ...)
+/// are preserved in `extra` so that callers using a newer platform
+/// release do not lose data on round-trip.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RiskSettings {
@@ -1779,6 +1792,10 @@ pub struct RiskSettings {
     /// ISO-8601 timestamp of when the circuit breaker tripped, or `None`.
     #[serde(default)]
     pub circuit_breaker_tripped_at: Option<String>,
+    /// Forward-compat bucket for any additional fields the platform
+    /// returns (e.g. `userId`, `updatedAt`).
+    #[serde(default, flatten)]
+    pub extra: HashMap<String, serde_json::Value>,
 }
 
 impl RiskSettings {
@@ -1793,20 +1810,13 @@ impl Default for RiskSettings {
     fn default() -> Self {
         Self {
             drawdown_enabled: false,
-            drawdown_lookback_hours: 24,
-            drawdown_threshold_pct: 0.1,
+            drawdown_lookback_hours: default_drawdown_lookback_hours(),
+            drawdown_threshold_pct: default_drawdown_threshold_pct(),
             circuit_breaker_tripped: false,
             circuit_breaker_tripped_at: None,
+            extra: HashMap::new(),
         }
     }
-}
-
-fn default_drawdown_lookback_hours() -> i32 {
-    24
-}
-
-fn default_drawdown_threshold_pct() -> f64 {
-    0.1
 }
 
 /// Parameters for updating risk settings. Only supplied fields are changed.
@@ -1821,6 +1831,12 @@ pub struct UpdateRiskSettingsParams {
     /// Drawdown threshold as a decimal, e.g. 0.10 = 10 % (0.01–0.99).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub drawdown_threshold_pct: Option<f64>,
+}
+
+/// Response from the circuit breaker reset endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CircuitBreakerResetResponse {
+    pub reset: bool,
 }
 
 // ---------------------------------------------------------------------------

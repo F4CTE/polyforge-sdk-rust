@@ -153,6 +153,35 @@ fn validate_optional_financial_param(name: &str, value: Option<f64>) -> Result<(
     Ok(())
 }
 
+/// Validate drawdown threshold percentage is in `0.01..=0.99`.
+///
+/// Mirrors `@Min(0.01) @Max(0.99)` on the platform DTO.
+fn validate_drawdown_threshold(value: f64) -> Result<()> {
+    if value.is_nan() || value.is_infinite() {
+        return Err(PolyforgeError::Validation(format!(
+            "drawdown_threshold_pct must be a finite number, got {value}"
+        )));
+    }
+    if !(0.01..=0.99).contains(&value) {
+        return Err(PolyforgeError::Validation(format!(
+            "drawdown_threshold_pct must be between 0.01 and 0.99, got {value}"
+        )));
+    }
+    Ok(())
+}
+
+/// Validate drawdown lookback hours is in `1..=168`.
+///
+/// Mirrors `@Min(1) @Max(168)` on the platform DTO.
+fn validate_drawdown_lookback(hours: i32) -> Result<()> {
+    if !(1..=168).contains(&hours) {
+        return Err(PolyforgeError::Validation(format!(
+            "drawdown_lookback_hours must be between 1 and 168, got {hours}"
+        )));
+    }
+    Ok(())
+}
+
 /// Reject arb sizes outside the server-enforced `1..=10000` USDC range.
 ///
 /// Mirrors `class-validator` bounds in `ExecuteArbDto` so the SDK rejects bad
@@ -2001,18 +2030,28 @@ impl PolyforgeClient {
     }
 
     /// Update risk settings. Only supplied fields are changed.
+    ///
+    /// Client-side validation mirrors the platform's `class-validator` rules:
+    /// - `drawdown_threshold_pct`: 0.01–0.99
+    /// - `drawdown_lookback_hours`: 1–168
     pub async fn update_risk_settings(
         &self,
         params: &UpdateRiskSettingsParams,
     ) -> Result<RiskSettings> {
+        if let Some(v) = params.drawdown_threshold_pct {
+            validate_drawdown_threshold(v)?;
+        }
+        if let Some(v) = params.drawdown_lookback_hours {
+            validate_drawdown_lookback(v)?;
+        }
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.patch("/api/v1/settings/risk", &body).await
     }
 
     /// Reset the circuit breaker after it has been triggered.
     ///
-    /// Returns the updated risk settings with `circuit_breaker_tripped: false`.
-    pub async fn reset_circuit_breaker(&self) -> Result<RiskSettings> {
+    /// Returns a result containing `reset: true` on success.
+    pub async fn reset_circuit_breaker(&self) -> Result<CircuitBreakerResetResponse> {
         self.post(
             "/api/v1/settings/risk/reset",
             &serde_json::Value::Object(Default::default()),
@@ -5274,6 +5313,74 @@ mod tests {
         assert!(matches!(err, PolyforgeError::Validation(_)));
     }
 
+    // ── Drawdown validation (#262) ──────────────────────────────────────────
+
+    #[test]
+    fn test_validate_drawdown_threshold_rejects_nan() {
+        let err = validate_drawdown_threshold(f64::NAN).unwrap_err();
+        assert!(err.to_string().contains("finite"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_rejects_infinite() {
+        let err = validate_drawdown_threshold(f64::INFINITY).unwrap_err();
+        assert!(err.to_string().contains("finite"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_rejects_zero() {
+        let err = validate_drawdown_threshold(0.0).unwrap_err();
+        assert!(err.to_string().contains("0.01"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_rejects_one() {
+        let err = validate_drawdown_threshold(1.0).unwrap_err();
+        assert!(err.to_string().contains("0.99"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_accepts_0_01() {
+        assert!(validate_drawdown_threshold(0.01).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_accepts_0_99() {
+        assert!(validate_drawdown_threshold(0.99).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_accepts_0_5() {
+        assert!(validate_drawdown_threshold(0.5).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_rejects_zero() {
+        let err = validate_drawdown_lookback(0).unwrap_err();
+        assert!(err.to_string().contains("between 1 and 168"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_rejects_169() {
+        let err = validate_drawdown_lookback(169).unwrap_err();
+        assert!(err.to_string().contains("between 1 and 168"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_accepts_1() {
+        assert!(validate_drawdown_lookback(1).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_accepts_168() {
+        assert!(validate_drawdown_lookback(168).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_accepts_24() {
+        assert!(validate_drawdown_lookback(24).is_ok());
+    }
+
     #[test]
     fn test_place_order_params_validation_rejects_nan_size() {
         let params = PlaceOrderParams {
@@ -6953,21 +7060,21 @@ mod tests {
         assert_eq!(body["review"], "Excellent!");
     }
 
-    // ── Risk Settings (#147) ─────────────────────────────────────────────────
+    // ── Risk Settings (#147, #248, #249) ─────────────────────────────────────
 
     #[test]
     fn test_risk_settings_deserializes_full() {
         let json = r#"{
-            "drawdownEnabled": false,
-            "drawdownLookbackHours": 72,
-            "drawdownThresholdPct": 0.15,
+            "drawdownEnabled": true,
+            "drawdownLookbackHours": 24,
+            "drawdownThresholdPct": 0.1,
             "circuitBreakerTripped": false,
             "circuitBreakerTrippedAt": null
         }"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
-        assert!(!rs.drawdown_enabled);
-        assert_eq!(rs.drawdown_lookback_hours, 72);
-        assert!((rs.drawdown_threshold_pct - 0.15).abs() < f64::EPSILON);
+        assert!(rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 24);
+        assert!((rs.drawdown_threshold_pct - 0.1).abs() < f64::EPSILON);
         assert!(!rs.circuit_breaker_tripped);
         assert!(rs.circuit_breaker_tripped_at.is_none());
     }
@@ -6984,19 +7091,19 @@ mod tests {
     }
 
     #[test]
-    fn test_risk_settings_circuit_breaker_triggered() {
+    fn test_risk_settings_circuit_breaker_tripped() {
         let json = r#"{
             "drawdownEnabled": true,
             "drawdownLookbackHours": 48,
-            "drawdownThresholdPct": 0.05,
+            "drawdownThresholdPct": 0.15,
             "circuitBreakerTripped": true,
-            "circuitBreakerTrippedAt": "2025-01-15T12:00:00Z"
+            "circuitBreakerTrippedAt": "2025-04-15T12:00:00Z"
         }"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
         assert!(rs.circuit_breaker_tripped);
         assert_eq!(
             rs.circuit_breaker_tripped_at.as_deref(),
-            Some("2025-01-15T12:00:00Z")
+            Some("2025-04-15T12:00:00Z")
         );
     }
 
@@ -7015,13 +7122,13 @@ mod tests {
     #[test]
     fn test_update_risk_settings_params_all_fields() {
         let params = UpdateRiskSettingsParams {
-            drawdown_enabled: Some(true),
-            drawdown_lookback_hours: Some(96),
+            drawdown_enabled: Some(false),
+            drawdown_lookback_hours: Some(72),
             drawdown_threshold_pct: Some(0.25),
         };
         let body = serde_json::to_value(&params).unwrap();
-        assert_eq!(body["drawdownEnabled"], true);
-        assert_eq!(body["drawdownLookbackHours"], 96);
+        assert_eq!(body["drawdownEnabled"], false);
+        assert_eq!(body["drawdownLookbackHours"], 72);
         assert!((body["drawdownThresholdPct"].as_f64().unwrap() - 0.25).abs() < f64::EPSILON);
     }
 
@@ -7040,11 +7147,30 @@ mod tests {
         assert!((rs.drawdown_threshold_pct - 0.1).abs() < f64::EPSILON);
         assert!(!rs.circuit_breaker_tripped);
         assert!(rs.circuit_breaker_tripped_at.is_none());
+        assert!(rs.extra.is_empty());
+
+        let from_empty: RiskSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(from_empty.drawdown_enabled, rs.drawdown_enabled);
+        assert_eq!(
+            from_empty.drawdown_lookback_hours,
+            rs.drawdown_lookback_hours
+        );
+        assert!(
+            (from_empty.drawdown_threshold_pct - rs.drawdown_threshold_pct).abs() < f64::EPSILON
+        );
+        assert_eq!(
+            from_empty.circuit_breaker_tripped,
+            rs.circuit_breaker_tripped
+        );
+        assert_eq!(
+            from_empty.circuit_breaker_tripped_at,
+            rs.circuit_breaker_tripped_at
+        );
+        assert!(from_empty.extra.is_empty());
     }
 
     #[test]
     fn test_risk_settings_deprecated_circuit_breaker_triggered() {
-        // Deprecated accessor delegates to circuit_breaker_tripped.
         let json = r#"{
             "drawdownEnabled": false,
             "drawdownLookbackHours": 24,
@@ -7056,6 +7182,30 @@ mod tests {
         let triggered = rs.circuit_breaker_triggered();
         assert!(triggered);
         assert_eq!(triggered, rs.circuit_breaker_tripped);
+    }
+
+    /// #249: Platform returns server-side fields (`userId`, `updatedAt`)
+    /// alongside the risk-settings fields. Without the `extra` flatten
+    /// bucket serde would reject the response with "unknown field".
+    #[test]
+    fn test_risk_settings_deserializes_server_side_fields() {
+        let json = r#"{
+            "drawdownEnabled": true,
+            "drawdownLookbackHours": 48,
+            "drawdownThresholdPct": 0.2,
+            "circuitBreakerTripped": false,
+            "circuitBreakerTrippedAt": null,
+            "userId": "user_abc123",
+            "updatedAt": "2026-05-01T12:00:00Z"
+        }"#;
+        let rs: RiskSettings = serde_json::from_str(json).unwrap();
+        assert!(rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 48);
+        assert!((rs.drawdown_threshold_pct - 0.2).abs() < f64::EPSILON);
+        assert!(!rs.circuit_breaker_tripped);
+        assert!(rs.circuit_breaker_tripped_at.is_none());
+        assert_eq!(rs.extra["userId"], "user_abc123");
+        assert_eq!(rs.extra["updatedAt"], "2026-05-01T12:00:00Z");
     }
 
     // ── Market title field (#141) ────────────────────────────────────────────
