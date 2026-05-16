@@ -5690,6 +5690,8 @@ mod tests {
         assert!(json["tags"].is_array());
         // logicBlocks, calcBlocks, and kalshiSubaccount omitted when None
         assert!(json.get("logicBlocks").is_none());
+        assert!(json.get("calcBlocks").is_none());
+        assert!(json.get("kalshiSubaccount").is_none());
 
     }
 
