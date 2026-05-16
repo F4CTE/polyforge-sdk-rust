@@ -295,6 +295,16 @@ pub struct Strategy {
     pub extra: serde_json::Value,
 }
 
+impl Strategy {
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    ///
+    /// Read from the `extra` field at key `kalshiSubaccount` to preserve
+    /// semver compatibility of the `Strategy` struct layout.
+    pub fn kalshi_subaccount(&self) -> Option<u64> {
+        self.extra.get("kalshiSubaccount").and_then(|v| v.as_u64())
+    }
+}
+
 /// Response from strategy lifecycle operations (start/stop/pause/resume).
 ///
 /// The platform returns a minimal status object rather than the full `Strategy`.
@@ -334,9 +344,6 @@ pub struct StrategyTemplate {
 /// Parameters for creating a strategy with full block configuration.
 ///
 /// All fields except `name` are `Option` and default to `None`.
-/// This struct is **exhaustive** — adding a new field is a breaking change
-/// (covered by the 3.0.0 major version bump). Use [`Default`] + struct-update
-/// syntax for forward-compatible construction.
 ///
 /// Use [`CreateStrategyParams::new`] for construction, or [`Default`] + struct-update:
 ///
@@ -349,12 +356,6 @@ pub struct StrategyTemplate {
 /// ```
 ///
 /// Or use the convenience constructor [`CreateStrategyParams::new`].
-///
-/// ## Migration from 2.x
-/// Users upgrading from 2.x must use `..Default::default()` or
-/// `CreateStrategyParams::new(...)` instead of bare struct literals.
-/// The new `kalshi_subaccount` field defaults to `None` and is omitted
-/// from serialized JSON when `None`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateStrategyParams {
