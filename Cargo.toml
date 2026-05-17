@@ -22,6 +22,7 @@ zeroize = "1"
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 http = "1"
+bincode = { version = "2", features = ["serde"] }
 
 [features]
 default = ["rustls-tls"]

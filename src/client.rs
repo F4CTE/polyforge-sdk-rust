@@ -153,6 +153,35 @@ fn validate_optional_financial_param(name: &str, value: Option<f64>) -> Result<(
     Ok(())
 }
 
+/// Validate drawdown threshold percentage is in `0.01..=0.99`.
+///
+/// Mirrors `@Min(0.01) @Max(0.99)` on the platform DTO.
+fn validate_drawdown_threshold(value: f64) -> Result<()> {
+    if value.is_nan() || value.is_infinite() {
+        return Err(PolyforgeError::Validation(format!(
+            "drawdown_threshold_pct must be a finite number, got {value}"
+        )));
+    }
+    if !(0.01..=0.99).contains(&value) {
+        return Err(PolyforgeError::Validation(format!(
+            "drawdown_threshold_pct must be between 0.01 and 0.99, got {value}"
+        )));
+    }
+    Ok(())
+}
+
+/// Validate drawdown lookback hours is in `1..=168`.
+///
+/// Mirrors `@Min(1) @Max(168)` on the platform DTO.
+fn validate_drawdown_lookback(hours: i32) -> Result<()> {
+    if !(1..=168).contains(&hours) {
+        return Err(PolyforgeError::Validation(format!(
+            "drawdown_lookback_hours must be between 1 and 168, got {hours}"
+        )));
+    }
+    Ok(())
+}
+
 /// Reject arb sizes outside the server-enforced `1..=10000` USDC range.
 ///
 /// Mirrors `class-validator` bounds in `ExecuteArbDto` so the SDK rejects bad
@@ -1060,10 +1089,11 @@ impl PolyforgeClient {
             .await
     }
 
-    /// Update a strategy's name and/or description.
+    /// Update a strategy's mutable fields.
     ///
     /// This is a convenience wrapper around [`update_strategy_with`](Self::update_strategy_with)
-    /// that preserves backward compatibility with the original call signature.
+    /// that covers the most common fields. Use [`update_strategy_with`](Self::update_strategy_with)
+    /// directly for advanced fields like `kalshi_subaccount`.
     pub async fn update_strategy(
         &self,
         id: &str,
@@ -1083,11 +1113,11 @@ impl PolyforgeClient {
         .await
     }
 
-    /// Update a strategy's name, description, market, or Kalshi subaccount.
+    /// Update a strategy's mutable fields with full [`UpdateStrategyParams`] control.
     ///
-    /// Accepts an [`UpdateStrategyParams`] for full field coverage, including the
-    /// `kalshi_subaccount` field that is not available through the original
-    /// [`update_strategy`](Self::update_strategy) method.
+    /// Prefer the convenience wrapper [`update_strategy`](Self::update_strategy)
+    /// for common updates; use this method when you need a constructed
+    /// [`UpdateStrategyParams`] or plan to reuse the same params object.
     pub async fn update_strategy_with(
         &self,
         id: &str,
@@ -2001,18 +2031,28 @@ impl PolyforgeClient {
     }
 
     /// Update risk settings. Only supplied fields are changed.
+    ///
+    /// Client-side validation mirrors the platform's `class-validator` rules:
+    /// - `drawdown_threshold_pct`: 0.01–0.99
+    /// - `drawdown_lookback_hours`: 1–168
     pub async fn update_risk_settings(
         &self,
         params: &UpdateRiskSettingsParams,
     ) -> Result<RiskSettings> {
+        if let Some(v) = params.drawdown_threshold_pct {
+            validate_drawdown_threshold(v)?;
+        }
+        if let Some(v) = params.drawdown_lookback_hours {
+            validate_drawdown_lookback(v)?;
+        }
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
         self.patch("/api/v1/settings/risk", &body).await
     }
 
     /// Reset the circuit breaker after it has been triggered.
     ///
-    /// Returns the updated risk settings with `circuit_breaker_tripped: false`.
-    pub async fn reset_circuit_breaker(&self) -> Result<RiskSettings> {
+    /// Returns a result containing `reset: true` on success.
+    pub async fn reset_circuit_breaker(&self) -> Result<CircuitBreakerResetResponse> {
         self.post(
             "/api/v1/settings/risk/reset",
             &serde_json::Value::Object(Default::default()),
@@ -2845,6 +2885,67 @@ impl PolyforgeClient {
     /// Get prediction accuracy and calibration score for the authenticated user.
     pub async fn get_accuracy(&self) -> Result<AccuracyScore> {
         self.get("/api/v1/accuracy/me").await
+    }
+
+    /// Get the accuracy leaderboard ranked by prediction accuracy.
+    ///
+    /// Returns a paginated list of traders with their accuracy stats.
+    /// When `offset` is provided without `page`, it is converted to the
+    /// platform's page-based contract.
+    ///
+    /// Returns [`PolyforgeError::Validation`] if the offset is too large
+    /// to represent as a page number for the given limit.
+    pub async fn get_accuracy_leaderboard(
+        &self,
+        params: Option<&AccuracyLeaderboardParams>,
+    ) -> Result<PaginatedResponse<AccuracyLeaderboardEntry>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(ref period) = p.period {
+                qp.push(("period", period.clone()));
+            }
+            let effective_limit = p.limit.filter(|&l| l > 0).unwrap_or(20);
+            let page = match p.page {
+                Some(0) => {
+                    return Err(PolyforgeError::Validation(
+                        "page must be >= 1 (1-based pagination)".into(),
+                    ));
+                }
+                Some(pg) => Some(pg),
+                None => {
+                    if let Some(offset) = p.offset {
+                        let raw = (offset as u64 / effective_limit as u64) + 1;
+                        if raw > u32::MAX as u64 {
+                            return Err(PolyforgeError::Validation(format!(
+                                "offset {} with limit {} produces page {}, which exceeds the maximum page {}",
+                                offset, effective_limit, raw, u32::MAX
+                            )));
+                        }
+                        Some(raw as u32)
+                    } else {
+                        None
+                    }
+                }
+            };
+            if let Some(page) = page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                if limit > 0 {
+                    qp.push(("limit", limit.to_string()));
+                }
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/accuracy/leaderboard{qs}")).await
     }
 
     /// Get AI-generated portfolio review and optimization suggestions.
@@ -5213,6 +5314,74 @@ mod tests {
         assert!(matches!(err, PolyforgeError::Validation(_)));
     }
 
+    // ── Drawdown validation (#262) ──────────────────────────────────────────
+
+    #[test]
+    fn test_validate_drawdown_threshold_rejects_nan() {
+        let err = validate_drawdown_threshold(f64::NAN).unwrap_err();
+        assert!(err.to_string().contains("finite"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_rejects_infinite() {
+        let err = validate_drawdown_threshold(f64::INFINITY).unwrap_err();
+        assert!(err.to_string().contains("finite"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_rejects_zero() {
+        let err = validate_drawdown_threshold(0.0).unwrap_err();
+        assert!(err.to_string().contains("0.01"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_rejects_one() {
+        let err = validate_drawdown_threshold(1.0).unwrap_err();
+        assert!(err.to_string().contains("0.99"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_accepts_0_01() {
+        assert!(validate_drawdown_threshold(0.01).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_accepts_0_99() {
+        assert!(validate_drawdown_threshold(0.99).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_threshold_accepts_0_5() {
+        assert!(validate_drawdown_threshold(0.5).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_rejects_zero() {
+        let err = validate_drawdown_lookback(0).unwrap_err();
+        assert!(err.to_string().contains("between 1 and 168"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_rejects_169() {
+        let err = validate_drawdown_lookback(169).unwrap_err();
+        assert!(err.to_string().contains("between 1 and 168"));
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_accepts_1() {
+        assert!(validate_drawdown_lookback(1).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_accepts_168() {
+        assert!(validate_drawdown_lookback(168).is_ok());
+    }
+
+    #[test]
+    fn test_validate_drawdown_lookback_accepts_24() {
+        assert!(validate_drawdown_lookback(24).is_ok());
+    }
+
     #[test]
     fn test_place_order_params_validation_rejects_nan_size() {
         let params = PlaceOrderParams {
@@ -5626,27 +5795,63 @@ mod tests {
         assert_eq!(json["tickMs"], 5000);
         assert!(json["triggers"].is_array());
         assert!(json["tags"].is_array());
-        // logicBlocks, calcBlocks, and kalshiSubaccount omitted when None
+        // logicBlocks, calcBlocks, kalshiSubaccount omitted when None
         assert!(json.get("logicBlocks").is_none());
+        assert!(json.get("calcBlocks").is_none());
         assert!(json.get("kalshiSubaccount").is_none());
     }
 
     #[test]
-    fn test_create_strategy_params_kalshi_subaccount_serializes() {
+    fn test_create_strategy_params_serializes_kalshi_subaccount() {
         let params = CreateStrategyParams {
             name: "Test".into(),
             kalshi_subaccount: Some(42),
             ..Default::default()
         };
         let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["name"], "Test");
         assert_eq!(json["kalshiSubaccount"], 42);
     }
 
     #[test]
-    fn test_create_strategy_params_omits_kalshi_subaccount_when_none() {
-        let params = CreateStrategyParams::new("S");
+    fn test_strategy_deserializes_kalshi_subaccount() {
+        let json = r#"{
+            "id": "strat-1",
+            "name": "My Strategy",
+            "kalshiSubaccount": 7
+        }"#;
+        let strategy: Strategy = serde_json::from_str(json).unwrap();
+        assert_eq!(strategy.kalshi_subaccount(), Some(7));
+    }
+
+    #[test]
+    fn test_strategy_omits_kalshi_subaccount_when_absent() {
+        let json = r#"{"id": "strat-1", "name": "My Strategy"}"#;
+        let strategy: Strategy = serde_json::from_str(json).unwrap();
+        assert_eq!(strategy.kalshi_subaccount(), None);
+    }
+
+    #[test]
+    fn test_update_strategy_params_serializes_kalshi_subaccount() {
+        let params = UpdateStrategyParams {
+            name: Some("Updated".into()),
+            kalshi_subaccount: Some(42),
+            ..Default::default()
+        };
         let json = serde_json::to_value(&params).unwrap();
-        assert_eq!(json["name"], "S");
+        assert_eq!(json["name"], "Updated");
+        assert_eq!(json["kalshiSubaccount"], 42);
+        assert!(json.get("description").is_none());
+    }
+
+    #[test]
+    fn test_update_strategy_params_omits_kalshi_subaccount_when_none() {
+        let params = UpdateStrategyParams {
+            name: Some("Updated".into()),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["name"], "Updated");
         assert!(json.get("kalshiSubaccount").is_none());
     }
 
@@ -6304,6 +6509,7 @@ mod tests {
         assert_eq!(co.id, "co-1");
         assert_eq!(co.token_id.as_deref(), Some("tok-abc"));
         assert_eq!(co.trigger_price.as_deref(), Some("0.60"));
+        assert_eq!(co.condition_type.as_deref(), Some("STOP"));
         assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
         assert_eq!(co.expires_at.as_deref(), Some("2026-04-20T10:00:00Z"));
     }
@@ -6359,17 +6565,15 @@ mod tests {
 
     #[test]
     fn test_conditional_order_rejects_conflicting_alias_values() {
+        // conditionType has priority 3 > type (priority 2) —
+        // conflicting values are resolved by precedence, not rejected.
         let json = r#"{
             "id": "co-8",
             "conditionType": "LIMIT",
             "type": "STOP"
         }"#;
-        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("conflicting"),
-            "expected conflicting value error, got: {msg}"
-        );
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
     }
 
     #[test]
@@ -6471,6 +6675,300 @@ mod tests {
     #[test]
     fn test_smoke() {
         let _client = PolyforgeClient::new("test-api-key").unwrap();
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_with_type_field() {
+        let json = r#"{
+            "id": "co-3",
+            "tokenId": "tok-xyz",
+            "side": "SELL",
+            "outcome": "NO",
+            "size": "200",
+            "triggerPrice": "0.40",
+            "limitPrice": "0.42",
+            "type": "LIMIT",
+            "status": "TRIGGERED",
+            "createdAt": "2026-04-14T10:00:00Z",
+            "triggeredAt": "2026-04-14T12:00:00Z",
+            "expiresAt": null
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-3");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Triggered));
+        assert_eq!(co.trigger_price.as_deref(), Some("0.40"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_with_condition_type_snake_case() {
+        let json = r#"{
+            "id": "co-4",
+            "tokenId": "tok-abc",
+            "condition_type": "TAKE_PROFIT",
+            "status": "CANCELLED"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-4");
+        assert_eq!(co.condition_type.as_deref(), Some("TAKE_PROFIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Cancelled));
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_duplicate_type_keys_gracefully() {
+        let json = r#"{
+            "id": "co-5",
+            "conditionType": "LIMIT",
+            "type": "STOP",
+            "condition_type": "TAKE_PROFIT",
+            "status": "PENDING"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-5");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_invalid_status() {
+        let json = r#"{"id": "co-bad-status", "status": "INVALID_STATUS"}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("INVALID_STATUS"),
+            "expected error mentioning the invalid variant, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_non_string_status() {
+        let json = r#"{"id": "co-bad-type", "status": 123}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        assert!(err.to_string().contains("status"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_non_string_known_field() {
+        let json = r#"{"id": "co-bad-field", "tokenId": 123}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("tokenId"),
+            "expected error mentioning tokenId, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_accepts_null_status() {
+        let json = r#"{"id": "co-null-status", "status": null}"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-null-status");
+        assert!(co.status.is_none());
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_preserves_unknown_keys_in_extra() {
+        let json = r#"{
+            "id": "co-extra",
+            "customField": 123,
+            "anotherField": true
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-extra");
+        assert_eq!(co.extra["customField"], serde_json::json!(123));
+        assert_eq!(co.extra["anotherField"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_does_not_leak_alias_keys_into_extra() {
+        // Non-string values for known keys are now rejected — this
+        // prevents silent data loss on schema/type mismatches. Unknown
+        // keys with any value type are still captured in extra.
+        let json = r#"{
+            "id": "co-roundtrip",
+            "conditionType": 123,
+            "type": "LIMIT"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("conditionType"),
+            "expected error mentioning conditionType, got: {msg}"
+        );
+        // Unknown keys should still be captured.
+        let json2 = r#"{"id": "co-unk", "customField": 42}"#;
+        let co2: ConditionalOrder = serde_json::from_str(json2).unwrap();
+        assert_eq!(co2.extra["customField"], serde_json::json!(42));
+    }
+
+    #[test]
+    fn test_conditional_order_serialization_rejects_non_object_extra() {
+        let co = ConditionalOrder {
+            id: "co-non-obj".into(),
+            token_id: None,
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::json!("not-an-object"),
+        };
+        let err = serde_json::to_value(&co).unwrap_err();
+        assert!(err.to_string().contains("extra"));
+    }
+
+    #[test]
+    fn test_conditional_order_serialization_allows_null_extra() {
+        let co = ConditionalOrder {
+            id: "co-null-extra".into(),
+            token_id: None,
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Null,
+        };
+        let json = serde_json::to_value(&co).unwrap();
+        assert_eq!(json["id"], "co-null-extra");
+    }
+
+    #[test]
+    fn test_conditional_order_serialization_emits_null_for_none_fields() {
+        let co = ConditionalOrder {
+            id: "co-serial".into(),
+            token_id: None,
+            side: Some("BUY".into()),
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Null,
+        };
+        let json = serde_json::to_value(&co).unwrap();
+        assert_eq!(json["id"], "co-serial");
+        assert!(json["tokenId"].is_null());
+        assert_eq!(json["side"], "BUY");
+        assert!(json["outcome"].is_null());
+        assert!(json["size"].is_null());
+        assert!(json["triggerPrice"].is_null());
+        assert!(json["limitPrice"].is_null());
+        assert!(json["conditionType"].is_null());
+        assert!(json["status"].is_null());
+        assert!(json["createdAt"].is_null());
+        assert!(json["triggeredAt"].is_null());
+        assert!(json["expiresAt"].is_null());
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_id() {
+        // serde_json itself collapses duplicate keys, but serde's
+        // derive-based deserialization would reject them. We use a
+        // custom serializer to inject a genuine duplicate in the
+        // stream.
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup","id":"co-dup2","size":"100"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_status() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-st","status":"PENDING","status":"CANCELLED"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_condition_type_key() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-ct","conditionType":"LIMIT","conditionType":"STOP_LOSS"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_type_key() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-t","type":"LIMIT","type":"STOP_LOSS"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_condition_type_snake_key() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-cts","condition_type":"LIMIT","condition_type":"STOP_LOSS"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_accepts_null_condition_type_alias() {
+        // conditionType: null should not prevent type from filling in
+        let json = r#"{
+            "id": "co-null-alias",
+            "conditionType": null,
+            "type": "LIMIT"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-null-alias");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_null_type_with_condition_type_fallback() {
+        // type: null should not prevent condition_type (snake_case) from filling in
+        let json = r#"{
+            "id": "co-null-type",
+            "conditionType": null,
+            "type": null,
+            "condition_type": "TAKE_PROFIT"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-null-type");
+        assert_eq!(co.condition_type.as_deref(), Some("TAKE_PROFIT"));
     }
 
     #[test]
@@ -6608,6 +7106,60 @@ mod tests {
             serde_json::to_value(ConditionalOrderType::Pegged).unwrap(),
             serde_json::Value::String("PEGGED".to_string())
         );
+    }
+
+    #[test]
+    fn test_conditional_order_non_human_readable_round_trip_preserves_extra() {
+        // Regression: non-human-readable serde (bincode, etc.) must
+        // preserve extra fields through round-trips.
+        let co = ConditionalOrder {
+            id: "co-nhr".into(),
+            token_id: None,
+            side: Some("BUY".into()),
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::json!({"customField": 42, "otherField": "hello"}),
+        };
+        let config = bincode::config::standard();
+        let bytes = bincode::serde::encode_to_vec(&co, config).expect("bincode serialize");
+        let (roundtripped, _): (ConditionalOrder, _) =
+            bincode::serde::decode_from_slice(&bytes, config).expect("bincode deserialize");
+        assert_eq!(roundtripped.id, "co-nhr");
+        assert_eq!(roundtripped.extra["customField"], serde_json::json!(42));
+        assert_eq!(roundtripped.extra["otherField"], serde_json::json!("hello"));
+    }
+
+    #[test]
+    fn test_conditional_order_non_human_readable_round_trip_empty_extra() {
+        // Empty extra should round-trip as an empty object.
+        let co = ConditionalOrder {
+            id: "co-nhr-empty".into(),
+            token_id: None,
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Object(serde_json::Map::new()),
+        };
+        let config = bincode::config::standard();
+        let bytes = bincode::serde::encode_to_vec(&co, config).expect("bincode serialize");
+        let (roundtripped, _): (ConditionalOrder, _) =
+            bincode::serde::decode_from_slice(&bytes, config).expect("bincode deserialize");
+        assert_eq!(roundtripped.id, "co-nhr-empty");
+        assert_eq!(roundtripped.extra, serde_json::json!({}));
     }
 
     #[test]
@@ -7018,21 +7570,21 @@ mod tests {
         assert_eq!(body["review"], "Excellent!");
     }
 
-    // ── Risk Settings (#147) ─────────────────────────────────────────────────
+    // ── Risk Settings (#147, #248, #249) ─────────────────────────────────────
 
     #[test]
     fn test_risk_settings_deserializes_full() {
         let json = r#"{
-            "drawdownEnabled": false,
-            "drawdownLookbackHours": 72,
-            "drawdownThresholdPct": 0.15,
+            "drawdownEnabled": true,
+            "drawdownLookbackHours": 24,
+            "drawdownThresholdPct": 0.1,
             "circuitBreakerTripped": false,
             "circuitBreakerTrippedAt": null
         }"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
-        assert!(!rs.drawdown_enabled);
-        assert_eq!(rs.drawdown_lookback_hours, 72);
-        assert!((rs.drawdown_threshold_pct - 0.15).abs() < f64::EPSILON);
+        assert!(rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 24);
+        assert!((rs.drawdown_threshold_pct - 0.1).abs() < f64::EPSILON);
         assert!(!rs.circuit_breaker_tripped);
         assert!(rs.circuit_breaker_tripped_at.is_none());
     }
@@ -7049,19 +7601,19 @@ mod tests {
     }
 
     #[test]
-    fn test_risk_settings_circuit_breaker_triggered() {
+    fn test_risk_settings_circuit_breaker_tripped() {
         let json = r#"{
             "drawdownEnabled": true,
             "drawdownLookbackHours": 48,
-            "drawdownThresholdPct": 0.05,
+            "drawdownThresholdPct": 0.15,
             "circuitBreakerTripped": true,
-            "circuitBreakerTrippedAt": "2025-01-15T12:00:00Z"
+            "circuitBreakerTrippedAt": "2025-04-15T12:00:00Z"
         }"#;
         let rs: RiskSettings = serde_json::from_str(json).unwrap();
         assert!(rs.circuit_breaker_tripped);
         assert_eq!(
             rs.circuit_breaker_tripped_at.as_deref(),
-            Some("2025-01-15T12:00:00Z")
+            Some("2025-04-15T12:00:00Z")
         );
     }
 
@@ -7080,13 +7632,13 @@ mod tests {
     #[test]
     fn test_update_risk_settings_params_all_fields() {
         let params = UpdateRiskSettingsParams {
-            drawdown_enabled: Some(true),
-            drawdown_lookback_hours: Some(96),
+            drawdown_enabled: Some(false),
+            drawdown_lookback_hours: Some(72),
             drawdown_threshold_pct: Some(0.25),
         };
         let body = serde_json::to_value(&params).unwrap();
-        assert_eq!(body["drawdownEnabled"], true);
-        assert_eq!(body["drawdownLookbackHours"], 96);
+        assert_eq!(body["drawdownEnabled"], false);
+        assert_eq!(body["drawdownLookbackHours"], 72);
         assert!((body["drawdownThresholdPct"].as_f64().unwrap() - 0.25).abs() < f64::EPSILON);
     }
 
@@ -7105,11 +7657,30 @@ mod tests {
         assert!((rs.drawdown_threshold_pct - 0.1).abs() < f64::EPSILON);
         assert!(!rs.circuit_breaker_tripped);
         assert!(rs.circuit_breaker_tripped_at.is_none());
+        assert!(rs.extra.is_empty());
+
+        let from_empty: RiskSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(from_empty.drawdown_enabled, rs.drawdown_enabled);
+        assert_eq!(
+            from_empty.drawdown_lookback_hours,
+            rs.drawdown_lookback_hours
+        );
+        assert!(
+            (from_empty.drawdown_threshold_pct - rs.drawdown_threshold_pct).abs() < f64::EPSILON
+        );
+        assert_eq!(
+            from_empty.circuit_breaker_tripped,
+            rs.circuit_breaker_tripped
+        );
+        assert_eq!(
+            from_empty.circuit_breaker_tripped_at,
+            rs.circuit_breaker_tripped_at
+        );
+        assert!(from_empty.extra.is_empty());
     }
 
     #[test]
     fn test_risk_settings_deprecated_circuit_breaker_triggered() {
-        // Deprecated accessor delegates to circuit_breaker_tripped.
         let json = r#"{
             "drawdownEnabled": false,
             "drawdownLookbackHours": 24,
@@ -7121,6 +7692,30 @@ mod tests {
         let triggered = rs.circuit_breaker_triggered();
         assert!(triggered);
         assert_eq!(triggered, rs.circuit_breaker_tripped);
+    }
+
+    /// #249: Platform returns server-side fields (`userId`, `updatedAt`)
+    /// alongside the risk-settings fields. Without the `extra` flatten
+    /// bucket serde would reject the response with "unknown field".
+    #[test]
+    fn test_risk_settings_deserializes_server_side_fields() {
+        let json = r#"{
+            "drawdownEnabled": true,
+            "drawdownLookbackHours": 48,
+            "drawdownThresholdPct": 0.2,
+            "circuitBreakerTripped": false,
+            "circuitBreakerTrippedAt": null,
+            "userId": "user_abc123",
+            "updatedAt": "2026-05-01T12:00:00Z"
+        }"#;
+        let rs: RiskSettings = serde_json::from_str(json).unwrap();
+        assert!(rs.drawdown_enabled);
+        assert_eq!(rs.drawdown_lookback_hours, 48);
+        assert!((rs.drawdown_threshold_pct - 0.2).abs() < f64::EPSILON);
+        assert!(!rs.circuit_breaker_tripped);
+        assert!(rs.circuit_breaker_tripped_at.is_none());
+        assert_eq!(rs.extra["userId"], "user_abc123");
+        assert_eq!(rs.extra["updatedAt"], "2026-05-01T12:00:00Z");
     }
 
     // ── Market title field (#141) ────────────────────────────────────────────
@@ -9228,6 +9823,145 @@ mod tests {
         let client = PolyforgeClient::new("k").unwrap();
         let url = client.url("/api/v1/accuracy");
         assert!(url.ends_with("/api/v1/accuracy"));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_path() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let url = client.url("/api/v1/accuracy/leaderboard");
+        assert!(url.ends_with("/api/v1/accuracy/leaderboard"));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_entry_deserializes() {
+        let json = r#"{
+            "rank": 51,
+            "userId": "u-1",
+            "username": "alice",
+            "displayName": "Alice",
+            "avatarUrl": "https://example.com/avatar.png",
+            "pnl": "12.50",
+            "winRate": "55.0",
+            "tradeCount": 42
+        }"#;
+        let entry: AccuracyLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.rank, 51);
+        assert_eq!(entry.user_id, "u-1");
+        assert_eq!(entry.username, "alice");
+        assert_eq!(entry.display_name.as_deref(), Some("Alice"));
+        assert_eq!(
+            entry.avatar_url.as_deref(),
+            Some("https://example.com/avatar.png")
+        );
+        assert_eq!(entry.pnl, "12.50");
+        assert_eq!(entry.win_rate, "55.0");
+        assert_eq!(entry.trade_count, 42);
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_entry_deserializes_with_nulls() {
+        let json = r#"{
+            "rank": 1,
+            "userId": "u-2",
+            "username": "bob",
+            "displayName": null,
+            "avatarUrl": null,
+            "pnl": "100.00",
+            "winRate": "80.0",
+            "tradeCount": 5
+        }"#;
+        let entry: AccuracyLeaderboardEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(entry.rank, 1);
+        assert_eq!(entry.display_name, None);
+        assert_eq!(entry.avatar_url, None);
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_default() {
+        let params = AccuracyLeaderboardParams::default();
+        assert!(params.period.is_none());
+        assert!(params.limit.is_none());
+        assert!(params.page.is_none());
+        assert!(params.offset.is_none());
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_has_offset() {
+        let params = AccuracyLeaderboardParams {
+            period: Some("30d".to_string()),
+            limit: Some(25),
+            offset: Some(50),
+            ..Default::default()
+        };
+        assert_eq!(params.period.as_deref(), Some("30d"));
+        assert_eq!(params.limit, Some(25));
+        assert_eq!(params.offset, Some(50));
+        assert!(params.page.is_none());
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_zero_limit() {
+        let params = AccuracyLeaderboardParams {
+            limit: Some(0),
+            offset: Some(50),
+            ..Default::default()
+        };
+        assert_eq!(params.limit, Some(0));
+        assert_eq!(params.offset, Some(50));
+    }
+
+    #[test]
+    fn test_accuracy_leaderboard_params_page_zero_is_allowed_for_construction() {
+        let params = AccuracyLeaderboardParams {
+            page: Some(0),
+            offset: Some(50),
+            limit: Some(25),
+            ..Default::default()
+        };
+        assert_eq!(params.page, Some(0));
+        assert_eq!(params.offset, Some(50));
+    }
+
+    #[tokio::test]
+    async fn test_accuracy_leaderboard_rejects_page_zero() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let params = AccuracyLeaderboardParams {
+            page: Some(0),
+            limit: Some(25),
+            ..Default::default()
+        };
+        let result = client.get_accuracy_leaderboard(Some(&params)).await;
+        assert!(result.is_err());
+        match result {
+            Err(PolyforgeError::Validation(msg)) => {
+                assert!(
+                    msg.contains("page must be >= 1"),
+                    "expected page-zero rejection, got: {msg}"
+                );
+            }
+            other => panic!("expected Validation error for page=0, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_accuracy_leaderboard_offset_overflow_rejected() {
+        let client = PolyforgeClient::new("k").unwrap();
+        let params = AccuracyLeaderboardParams {
+            offset: Some(u32::MAX),
+            limit: Some(1),
+            ..Default::default()
+        };
+        let result = client.get_accuracy_leaderboard(Some(&params)).await;
+        assert!(result.is_err());
+        match result {
+            Err(PolyforgeError::Validation(msg)) => {
+                assert!(
+                    msg.contains("exceeds the maximum page"),
+                    "unexpected message: {msg}"
+                );
+            }
+            other => panic!("expected Validation error, got {other:?}"),
+        }
     }
 
     #[test]
