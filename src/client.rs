@@ -5799,7 +5799,6 @@ mod tests {
         assert!(json.get("logicBlocks").is_none());
         assert!(json.get("calcBlocks").is_none());
         assert!(json.get("kalshiSubaccount").is_none());
-
     }
 
     #[test]
@@ -6541,12 +6540,136 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_order_deserializes_dual_type_keys() {
+        // Regression: during backend transition windows, payloads may include
+        // both conditionType and type keys. The deserializer must not fail.
+        let json = r#"{
+            "id": "co-4",
+            "tokenId": "tok-abc",
+            "side": "BUY",
+            "outcome": "YES",
+            "size": "500",
+            "triggerPrice": "0.90",
+            "limitPrice": "0.88",
+            "conditionType": "LIMIT",
+            "type": "LIMIT",
+            "status": "PENDING",
+            "createdAt": "2026-05-10T08:00:00Z"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-4");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+        assert_eq!(co.trigger_price.as_deref(), Some("0.90"));
+        assert_eq!(co.limit_price.as_deref(), Some("0.88"));
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_conflicting_alias_values() {
+        // conditionType has priority 3 > type (priority 2) —
+        // conflicting values are resolved by precedence, not rejected.
+        let json = r#"{
+            "id": "co-8",
+            "conditionType": "LIMIT",
+            "type": "STOP"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_duplicate_condition_type_key() {
+        let json = r#"{
+            "id": "co-9",
+            "conditionType": "LIMIT",
+            "conditionType": "STOP"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate"),
+            "expected duplicate field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_duplicate_type_key() {
+        let json = r#"{
+            "id": "co-10",
+            "type": "LIMIT",
+            "type": "STOP"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate"),
+            "expected duplicate field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_dual_keys_with_null_fallback() {
+        let json = r#"{
+            "id": "co-11",
+            "conditionType": null,
+            "type": "LIMIT"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-11");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+    }
+
+    #[test]
     fn test_conditional_order_deserializes_minimal() {
         let json = r#"{"id": "co-2"}"#;
         let co: ConditionalOrder = serde_json::from_str(json).unwrap();
         assert_eq!(co.id, "co-2");
         assert!(co.token_id.is_none());
         assert!(co.status.is_none());
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_duplicate_optional_field_null_first() {
+        let json = r#"{
+            "id": "co-5",
+            "tokenId": null,
+            "tokenId": "tok-abc"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate"),
+            "expected duplicate field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_duplicate_field_with_value_first() {
+        let json = r#"{
+            "id": "co-6",
+            "side": "BUY",
+            "side": "SELL"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate"),
+            "expected duplicate field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_rejects_duplicate_status_null_first() {
+        let json = r#"{
+            "id": "co-7",
+            "status": null,
+            "status": "PENDING"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate"),
+            "expected duplicate field error, got: {msg}"
+        );
     }
 
     #[test]
