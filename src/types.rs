@@ -1225,7 +1225,6 @@ pub struct AccuracyLeaderboardParams {
     pub page: Option<u32>,
     /// Zero-based row offset. Converted to the platform page/limit contract.
     pub offset: Option<u32>,
-
 }
 
 /// A single entry in the accuracy leaderboard.
@@ -1406,34 +1405,325 @@ pub enum ConditionalOrderType {
 }
 
 /// A conditional order (limit, stop, trailing-stop, etc.).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+///
+/// **Human-readable deserialization** (JSON, YAML, …): accepts
+/// `conditionType` (canonical), `type` (platform alias), and
+/// `condition_type` (snake_case) as field names for
+/// [`condition_type`](Self::condition_type). When multiple aliases
+/// appear, precedence is `conditionType` > `type` > `condition_type`.
+/// Unknown keys are collected into [`extra`](Self::extra).
+///
+/// **Non-human-readable deserialization** (bincode, …): falls back to
+/// derive-based struct deserialization. The type alias is not
+/// supported in this mode. The `extra` map is serialized as a JSON
+/// string to avoid `deserialize_any` (unsupported in compact/binary
+/// formats) and is reconstructed on deserialization.
+///
+/// **Serialization**: uses canonical `conditionType` (camelCase).
+#[derive(Debug, Clone)]
 pub struct ConditionalOrder {
     pub id: String,
-    #[serde(default)]
     pub token_id: Option<String>,
-    #[serde(default)]
     pub side: Option<String>,
-    #[serde(default)]
     pub outcome: Option<String>,
-    #[serde(default)]
     pub size: Option<String>,
-    #[serde(default)]
     pub trigger_price: Option<String>,
-    #[serde(default)]
     pub limit_price: Option<String>,
-    #[serde(default, alias = "type")]
     pub condition_type: Option<String>,
-    #[serde(default)]
     pub status: Option<ConditionalOrderStatus>,
-    #[serde(default)]
     pub created_at: Option<String>,
-    #[serde(default)]
     pub triggered_at: Option<String>,
-    #[serde(default)]
     pub expires_at: Option<String>,
-    #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+impl Serialize for ConditionalOrder {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            use serde::ser::SerializeMap;
+            let extra_entries = match &self.extra {
+                serde_json::Value::Object(obj) => obj.len(),
+                serde_json::Value::Null => 0,
+                _ => {
+                    return Err(serde::ser::Error::custom(
+                        "ConditionalOrder::extra must be an Object or Null",
+                    ));
+                }
+            };
+            let mut map = serializer.serialize_map(Some(12 + extra_entries))?;
+            map.serialize_entry("id", &self.id)?;
+            map.serialize_entry("tokenId", &self.token_id)?;
+            map.serialize_entry("side", &self.side)?;
+            map.serialize_entry("outcome", &self.outcome)?;
+            map.serialize_entry("size", &self.size)?;
+            map.serialize_entry("triggerPrice", &self.trigger_price)?;
+            map.serialize_entry("limitPrice", &self.limit_price)?;
+            map.serialize_entry("conditionType", &self.condition_type)?;
+            map.serialize_entry("status", &self.status)?;
+            map.serialize_entry("createdAt", &self.created_at)?;
+            map.serialize_entry("triggeredAt", &self.triggered_at)?;
+            map.serialize_entry("expiresAt", &self.expires_at)?;
+            if let serde_json::Value::Object(obj) = &self.extra {
+                for (k, v) in obj {
+                    map.serialize_entry(k, v)?;
+                }
+            }
+            map.end()
+        } else {
+            use serde::ser::SerializeStruct;
+            let mut s = serializer.serialize_struct("ConditionalOrder", 13)?;
+            s.serialize_field("id", &self.id)?;
+            s.serialize_field("tokenId", &self.token_id)?;
+            s.serialize_field("side", &self.side)?;
+            s.serialize_field("outcome", &self.outcome)?;
+            s.serialize_field("size", &self.size)?;
+            s.serialize_field("triggerPrice", &self.trigger_price)?;
+            s.serialize_field("limitPrice", &self.limit_price)?;
+            s.serialize_field("conditionType", &self.condition_type)?;
+            s.serialize_field("status", &self.status)?;
+            s.serialize_field("createdAt", &self.created_at)?;
+            s.serialize_field("triggeredAt", &self.triggered_at)?;
+            s.serialize_field("expiresAt", &self.expires_at)?;
+            let extra_json =
+                serde_json::to_string(&self.extra).map_err(serde::ser::Error::custom)?;
+            s.serialize_field("extra", &Some(&extra_json))?;
+            s.end()
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ConditionalOrder {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_map(ConditionalOrderVisitor)
+        } else {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Helper {
+                id: String,
+                token_id: Option<String>,
+                side: Option<String>,
+                outcome: Option<String>,
+                size: Option<String>,
+                trigger_price: Option<String>,
+                limit_price: Option<String>,
+                #[serde(alias = "type")]
+                condition_type: Option<String>,
+                status: Option<ConditionalOrderStatus>,
+                created_at: Option<String>,
+                triggered_at: Option<String>,
+                expires_at: Option<String>,
+                #[serde(default)]
+                extra: Option<String>,
+            }
+            let h = Helper::deserialize(deserializer)?;
+            let extra = match h.extra {
+                Some(s) => serde_json::from_str(&s).map_err(serde::de::Error::custom)?,
+                None => serde_json::Value::Object(serde_json::Map::new()),
+            };
+            Ok(ConditionalOrder {
+                id: h.id,
+                token_id: h.token_id,
+                side: h.side,
+                outcome: h.outcome,
+                size: h.size,
+                trigger_price: h.trigger_price,
+                limit_price: h.limit_price,
+                condition_type: h.condition_type,
+                status: h.status,
+                created_at: h.created_at,
+                triggered_at: h.triggered_at,
+                expires_at: h.expires_at,
+                extra,
+            })
+        }
+    }
+}
+
+fn map_field_value<'de, A, T>(map: &mut A, name: &'static str) -> Result<T, A::Error>
+where
+    A: serde::de::MapAccess<'de>,
+    T: serde::de::Deserialize<'de>,
+{
+    map.next_value::<T>().map_err(|e| {
+        <A::Error as serde::de::Error>::custom(format!("invalid value for field `{name}`: {e}"))
+    })
+}
+
+struct ConditionalOrderVisitor;
+
+impl<'de> serde::de::Visitor<'de> for ConditionalOrderVisitor {
+    type Value = ConditionalOrder;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a ConditionalOrder object")
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::MapAccess<'de>,
+    {
+        let mut id: Option<String> = None;
+        let mut token_id: Option<Option<String>> = None;
+        let mut side: Option<Option<String>> = None;
+        let mut outcome: Option<Option<String>> = None;
+        let mut size: Option<Option<String>> = None;
+        let mut trigger_price: Option<Option<String>> = None;
+        let mut limit_price: Option<Option<String>> = None;
+        let mut condition_type: Option<String> = None;
+        let mut condition_type_priority: u8 = 0;
+        let mut seen_condition_type: bool = false;
+        let mut seen_type: bool = false;
+        let mut seen_condition_type_snake: bool = false;
+        let mut status: Option<Option<ConditionalOrderStatus>> = None;
+        let mut created_at: Option<Option<String>> = None;
+        let mut triggered_at: Option<Option<String>> = None;
+        let mut expires_at: Option<Option<String>> = None;
+        let mut extra_map = serde_json::Map::new();
+
+        while let Some(key) = map.next_key::<String>()? {
+            match key.as_str() {
+                "id" => {
+                    if id.is_some() {
+                        return Err(serde::de::Error::duplicate_field("id"));
+                    }
+                    id = Some(map_field_value(&mut map, "id")?);
+                }
+                "tokenId" => {
+                    if token_id.is_some() {
+                        return Err(serde::de::Error::duplicate_field("tokenId"));
+                    }
+                    token_id = Some(map_field_value(&mut map, "tokenId")?);
+                }
+                "side" => {
+                    if side.is_some() {
+                        return Err(serde::de::Error::duplicate_field("side"));
+                    }
+                    side = Some(map_field_value(&mut map, "side")?);
+                }
+                "outcome" => {
+                    if outcome.is_some() {
+                        return Err(serde::de::Error::duplicate_field("outcome"));
+                    }
+                    outcome = Some(map_field_value(&mut map, "outcome")?);
+                }
+                "size" => {
+                    if size.is_some() {
+                        return Err(serde::de::Error::duplicate_field("size"));
+                    }
+                    size = Some(map_field_value(&mut map, "size")?);
+                }
+                "triggerPrice" => {
+                    if trigger_price.is_some() {
+                        return Err(serde::de::Error::duplicate_field("triggerPrice"));
+                    }
+                    trigger_price = Some(map_field_value(&mut map, "triggerPrice")?);
+                }
+                "limitPrice" => {
+                    if limit_price.is_some() {
+                        return Err(serde::de::Error::duplicate_field("limitPrice"));
+                    }
+                    limit_price = Some(map_field_value(&mut map, "limitPrice")?);
+                }
+                "conditionType" => {
+                    if seen_condition_type {
+                        return Err(serde::de::Error::duplicate_field("conditionType"));
+                    }
+                    seen_condition_type = true;
+                    if condition_type_priority < 3 {
+                        let val: Option<String> = map_field_value(&mut map, "conditionType")?;
+                        if let Some(v) = val {
+                            condition_type = Some(v);
+                            condition_type_priority = 3;
+                        }
+                    } else {
+                        let _: serde::de::IgnoredAny = map.next_value()?;
+                    }
+                }
+                "type" => {
+                    if seen_type {
+                        return Err(serde::de::Error::duplicate_field("type"));
+                    }
+                    seen_type = true;
+                    if condition_type_priority < 2 {
+                        let val: Option<String> = map_field_value(&mut map, "type")?;
+                        if let Some(v) = val {
+                            condition_type = Some(v);
+                            condition_type_priority = 2;
+                        }
+                    } else {
+                        let _: serde::de::IgnoredAny = map.next_value()?;
+                    }
+                }
+                "condition_type" => {
+                    if seen_condition_type_snake {
+                        return Err(serde::de::Error::duplicate_field("condition_type"));
+                    }
+                    seen_condition_type_snake = true;
+                    if condition_type_priority < 1 {
+                        let val: Option<String> = map_field_value(&mut map, "condition_type")?;
+                        if let Some(v) = val {
+                            condition_type = Some(v);
+                            condition_type_priority = 1;
+                        }
+                    } else {
+                        let _: serde::de::IgnoredAny = map.next_value()?;
+                    }
+                }
+                "status" => {
+                    if status.is_some() {
+                        return Err(serde::de::Error::duplicate_field("status"));
+                    }
+                    status = Some(map_field_value(&mut map, "status")?);
+                }
+                "createdAt" => {
+                    if created_at.is_some() {
+                        return Err(serde::de::Error::duplicate_field("createdAt"));
+                    }
+                    created_at = Some(map_field_value(&mut map, "createdAt")?);
+                }
+                "triggeredAt" => {
+                    if triggered_at.is_some() {
+                        return Err(serde::de::Error::duplicate_field("triggeredAt"));
+                    }
+                    triggered_at = Some(map_field_value(&mut map, "triggeredAt")?);
+                }
+                "expiresAt" => {
+                    if expires_at.is_some() {
+                        return Err(serde::de::Error::duplicate_field("expiresAt"));
+                    }
+                    expires_at = Some(map_field_value(&mut map, "expiresAt")?);
+                }
+                _ => {
+                    extra_map.insert(key, map.next_value::<serde_json::Value>()?);
+                }
+            }
+        }
+
+        let id = id.ok_or_else(|| serde::de::Error::missing_field("id"))?;
+
+        Ok(ConditionalOrder {
+            id,
+            token_id: token_id.unwrap_or(None),
+            side: side.unwrap_or(None),
+            outcome: outcome.unwrap_or(None),
+            size: size.unwrap_or(None),
+            trigger_price: trigger_price.unwrap_or(None),
+            limit_price: limit_price.unwrap_or(None),
+            condition_type,
+            status: status.unwrap_or(None),
+            created_at: created_at.unwrap_or(None),
+            triggered_at: triggered_at.unwrap_or(None),
+            expires_at: expires_at.unwrap_or(None),
+            extra: serde_json::Value::Object(extra_map),
+        })
+    }
 }
 
 /// Parameters for listing conditional orders.

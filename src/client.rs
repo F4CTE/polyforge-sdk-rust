@@ -6510,6 +6510,7 @@ mod tests {
         assert_eq!(co.id, "co-1");
         assert_eq!(co.token_id.as_deref(), Some("tok-abc"));
         assert_eq!(co.trigger_price.as_deref(), Some("0.60"));
+        assert_eq!(co.condition_type.as_deref(), Some("STOP"));
         assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
         assert_eq!(co.expires_at.as_deref(), Some("2026-04-20T10:00:00Z"));
     }
@@ -6551,6 +6552,300 @@ mod tests {
     #[test]
     fn test_smoke() {
         let _client = PolyforgeClient::new("test-api-key").unwrap();
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_with_type_field() {
+        let json = r#"{
+            "id": "co-3",
+            "tokenId": "tok-xyz",
+            "side": "SELL",
+            "outcome": "NO",
+            "size": "200",
+            "triggerPrice": "0.40",
+            "limitPrice": "0.42",
+            "type": "LIMIT",
+            "status": "TRIGGERED",
+            "createdAt": "2026-04-14T10:00:00Z",
+            "triggeredAt": "2026-04-14T12:00:00Z",
+            "expiresAt": null
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-3");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Triggered));
+        assert_eq!(co.trigger_price.as_deref(), Some("0.40"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_with_condition_type_snake_case() {
+        let json = r#"{
+            "id": "co-4",
+            "tokenId": "tok-abc",
+            "condition_type": "TAKE_PROFIT",
+            "status": "CANCELLED"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-4");
+        assert_eq!(co.condition_type.as_deref(), Some("TAKE_PROFIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Cancelled));
+    }
+
+    #[test]
+    fn test_conditional_order_deserializes_duplicate_type_keys_gracefully() {
+        let json = r#"{
+            "id": "co-5",
+            "conditionType": "LIMIT",
+            "type": "STOP",
+            "condition_type": "TAKE_PROFIT",
+            "status": "PENDING"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-5");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+        assert_eq!(co.status, Some(ConditionalOrderStatus::Pending));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_invalid_status() {
+        let json = r#"{"id": "co-bad-status", "status": "INVALID_STATUS"}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("INVALID_STATUS"),
+            "expected error mentioning the invalid variant, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_non_string_status() {
+        let json = r#"{"id": "co-bad-type", "status": 123}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        assert!(err.to_string().contains("status"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_non_string_known_field() {
+        let json = r#"{"id": "co-bad-field", "tokenId": 123}"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("tokenId"),
+            "expected error mentioning tokenId, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_accepts_null_status() {
+        let json = r#"{"id": "co-null-status", "status": null}"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-null-status");
+        assert!(co.status.is_none());
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_preserves_unknown_keys_in_extra() {
+        let json = r#"{
+            "id": "co-extra",
+            "customField": 123,
+            "anotherField": true
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-extra");
+        assert_eq!(co.extra["customField"], serde_json::json!(123));
+        assert_eq!(co.extra["anotherField"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_does_not_leak_alias_keys_into_extra() {
+        // Non-string values for known keys are now rejected — this
+        // prevents silent data loss on schema/type mismatches. Unknown
+        // keys with any value type are still captured in extra.
+        let json = r#"{
+            "id": "co-roundtrip",
+            "conditionType": 123,
+            "type": "LIMIT"
+        }"#;
+        let err = serde_json::from_str::<ConditionalOrder>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("conditionType"),
+            "expected error mentioning conditionType, got: {msg}"
+        );
+        // Unknown keys should still be captured.
+        let json2 = r#"{"id": "co-unk", "customField": 42}"#;
+        let co2: ConditionalOrder = serde_json::from_str(json2).unwrap();
+        assert_eq!(co2.extra["customField"], serde_json::json!(42));
+    }
+
+    #[test]
+    fn test_conditional_order_serialization_rejects_non_object_extra() {
+        let co = ConditionalOrder {
+            id: "co-non-obj".into(),
+            token_id: None,
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::json!("not-an-object"),
+        };
+        let err = serde_json::to_value(&co).unwrap_err();
+        assert!(err.to_string().contains("extra"));
+    }
+
+    #[test]
+    fn test_conditional_order_serialization_allows_null_extra() {
+        let co = ConditionalOrder {
+            id: "co-null-extra".into(),
+            token_id: None,
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Null,
+        };
+        let json = serde_json::to_value(&co).unwrap();
+        assert_eq!(json["id"], "co-null-extra");
+    }
+
+    #[test]
+    fn test_conditional_order_serialization_emits_null_for_none_fields() {
+        let co = ConditionalOrder {
+            id: "co-serial".into(),
+            token_id: None,
+            side: Some("BUY".into()),
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Null,
+        };
+        let json = serde_json::to_value(&co).unwrap();
+        assert_eq!(json["id"], "co-serial");
+        assert!(json["tokenId"].is_null());
+        assert_eq!(json["side"], "BUY");
+        assert!(json["outcome"].is_null());
+        assert!(json["size"].is_null());
+        assert!(json["triggerPrice"].is_null());
+        assert!(json["limitPrice"].is_null());
+        assert!(json["conditionType"].is_null());
+        assert!(json["status"].is_null());
+        assert!(json["createdAt"].is_null());
+        assert!(json["triggeredAt"].is_null());
+        assert!(json["expiresAt"].is_null());
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_id() {
+        // serde_json itself collapses duplicate keys, but serde's
+        // derive-based deserialization would reject them. We use a
+        // custom serializer to inject a genuine duplicate in the
+        // stream.
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup","id":"co-dup2","size":"100"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_status() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-st","status":"PENDING","status":"CANCELLED"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_condition_type_key() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-ct","conditionType":"LIMIT","conditionType":"STOP_LOSS"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_type_key() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-t","type":"LIMIT","type":"STOP_LOSS"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_rejects_duplicate_condition_type_snake_key() {
+        let err = serde_json::from_str::<ConditionalOrder>(
+            r#"{"id":"co-dup-cts","condition_type":"LIMIT","condition_type":"STOP_LOSS"}"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("duplicate field"),
+            "expected duplicate-field error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_accepts_null_condition_type_alias() {
+        // conditionType: null should not prevent type from filling in
+        let json = r#"{
+            "id": "co-null-alias",
+            "conditionType": null,
+            "type": "LIMIT"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-null-alias");
+        assert_eq!(co.condition_type.as_deref(), Some("LIMIT"));
+    }
+
+    #[test]
+    fn test_conditional_order_deserialization_null_type_with_condition_type_fallback() {
+        // type: null should not prevent condition_type (snake_case) from filling in
+        let json = r#"{
+            "id": "co-null-type",
+            "conditionType": null,
+            "type": null,
+            "condition_type": "TAKE_PROFIT"
+        }"#;
+        let co: ConditionalOrder = serde_json::from_str(json).unwrap();
+        assert_eq!(co.id, "co-null-type");
+        assert_eq!(co.condition_type.as_deref(), Some("TAKE_PROFIT"));
     }
 
     #[test]
@@ -6688,6 +6983,60 @@ mod tests {
             serde_json::to_value(ConditionalOrderType::Pegged).unwrap(),
             serde_json::Value::String("PEGGED".to_string())
         );
+    }
+
+    #[test]
+    fn test_conditional_order_non_human_readable_round_trip_preserves_extra() {
+        // Regression: non-human-readable serde (bincode, etc.) must
+        // preserve extra fields through round-trips.
+        let co = ConditionalOrder {
+            id: "co-nhr".into(),
+            token_id: None,
+            side: Some("BUY".into()),
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::json!({"customField": 42, "otherField": "hello"}),
+        };
+        let config = bincode::config::standard();
+        let bytes = bincode::serde::encode_to_vec(&co, config).expect("bincode serialize");
+        let (roundtripped, _): (ConditionalOrder, _) =
+            bincode::serde::decode_from_slice(&bytes, config).expect("bincode deserialize");
+        assert_eq!(roundtripped.id, "co-nhr");
+        assert_eq!(roundtripped.extra["customField"], serde_json::json!(42));
+        assert_eq!(roundtripped.extra["otherField"], serde_json::json!("hello"));
+    }
+
+    #[test]
+    fn test_conditional_order_non_human_readable_round_trip_empty_extra() {
+        // Empty extra should round-trip as an empty object.
+        let co = ConditionalOrder {
+            id: "co-nhr-empty".into(),
+            token_id: None,
+            side: None,
+            outcome: None,
+            size: None,
+            trigger_price: None,
+            limit_price: None,
+            condition_type: None,
+            status: None,
+            created_at: None,
+            triggered_at: None,
+            expires_at: None,
+            extra: serde_json::Value::Object(serde_json::Map::new()),
+        };
+        let config = bincode::config::standard();
+        let bytes = bincode::serde::encode_to_vec(&co, config).expect("bincode serialize");
+        let (roundtripped, _): (ConditionalOrder, _) =
+            bincode::serde::decode_from_slice(&bytes, config).expect("bincode deserialize");
+        assert_eq!(roundtripped.id, "co-nhr-empty");
+        assert_eq!(roundtripped.extra, serde_json::json!({}));
     }
 
     #[test]
@@ -9411,7 +9760,6 @@ mod tests {
         assert!(params.limit.is_none());
         assert!(params.page.is_none());
         assert!(params.offset.is_none());
-
     }
 
     #[test]
