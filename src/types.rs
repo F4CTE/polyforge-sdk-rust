@@ -1296,6 +1296,8 @@ pub enum ConditionalOrderStatus {
     Cancelled,
     Expired,
     Failed,
+    #[serde(other)]
+    Unknown,
 }
 
 /// Conditional order type.
@@ -1307,6 +1309,8 @@ pub enum ConditionalOrderType {
     TrailingStop,
     Limit,
     Pegged,
+    #[serde(other)]
+    Unknown,
 }
 
 /// A conditional order (limit, stop, trailing-stop, etc.).
