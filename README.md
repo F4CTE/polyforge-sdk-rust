@@ -6,7 +6,7 @@ Async Rust SDK for the [Polyforge](https://polyforge.io) trading platform REST A
 
 ```toml
 [dependencies]
-polyforge = "2.0"
+polyforge = "3.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -22,7 +22,7 @@ cargo add tokio --features full
 The crate uses `rustls` by default. To use the platform-native TLS instead:
 
 ```toml
-polyforge = { version = "2.0", default-features = false, features = ["native-tls"] }
+polyforge = { version = "3.0", default-features = false, features = ["native-tls"] }
 ```
 
 ## Quick Start
