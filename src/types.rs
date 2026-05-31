@@ -327,6 +327,24 @@ pub struct StrategyStatusResponse {
     pub extra: serde_json::Value,
 }
 
+/// Execution health metrics for a strategy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyHealth {
+    pub fill_rate: Option<f64>,
+    pub avg_latency_ms: u64,
+    pub error_count_24h: u64,
+    pub slippage_bps: f64,
+    pub win_rate: Option<f64>,
+    pub total_pnl: Option<f64>,
+    pub max_drawdown: Option<f64>,
+    pub total_orders: u64,
+    pub filled_orders: u64,
+    pub last_updated: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
 /// A strategy template with block configuration and popularity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

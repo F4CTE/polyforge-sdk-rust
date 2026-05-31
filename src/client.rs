@@ -1024,6 +1024,12 @@ impl PolyforgeClient {
             .await
     }
 
+    /// Get execution health metrics for a strategy.
+    pub async fn get_strategy_health(&self, id: &str) -> Result<StrategyHealth> {
+        self.get(&format!("/api/v1/strategies/{}/health", encode(id)))
+            .await
+    }
+
     /// Create a new strategy with full block configuration.
     ///
     /// Use [`CreateStrategyParams`] to specify blocks, visibility, execution mode,
@@ -5640,6 +5646,38 @@ mod tests {
     }
 
     #[test]
+    fn test_strategy_health_deserializes() {
+        let json = r#"{"fillRate":98.5,"avgLatencyMs":120,"errorCount24h":1,"slippageBps":2.5,"winRate":57.25,"totalPnl":1234.56,"maxDrawdown":-42.0,"totalOrders":20,"filledOrders":19,"lastUpdated":"2026-05-20T12:00:00Z"}"#;
+        let health: StrategyHealth = serde_json::from_str(json).unwrap();
+        assert_eq!(health.fill_rate, Some(98.5));
+        assert_eq!(health.avg_latency_ms, 120);
+        assert_eq!(health.error_count_24h, 1);
+        assert_eq!(health.slippage_bps, 2.5);
+        assert_eq!(health.win_rate, Some(57.25));
+        assert_eq!(health.total_pnl, Some(1234.56));
+        assert_eq!(health.max_drawdown, Some(-42.0));
+        assert_eq!(health.total_orders, 20);
+        assert_eq!(health.filled_orders, 19);
+        assert_eq!(health.last_updated.as_deref(), Some("2026-05-20T12:00:00Z"));
+    }
+
+    #[test]
+    fn test_strategy_health_deserializes_platform_placeholder_nulls() {
+        let json = r#"{"fillRate":null,"avgLatencyMs":0,"errorCount24h":0,"slippageBps":0,"winRate":null,"totalPnl":null,"maxDrawdown":null,"totalOrders":0,"filledOrders":0,"lastUpdated":null}"#;
+        let health: StrategyHealth = serde_json::from_str(json).unwrap();
+        assert_eq!(health.fill_rate, None);
+        assert_eq!(health.avg_latency_ms, 0);
+        assert_eq!(health.error_count_24h, 0);
+        assert_eq!(health.slippage_bps, 0.0);
+        assert_eq!(health.win_rate, None);
+        assert_eq!(health.total_pnl, None);
+        assert_eq!(health.max_drawdown, None);
+        assert_eq!(health.total_orders, 0);
+        assert_eq!(health.filled_orders, 0);
+        assert_eq!(health.last_updated, None);
+    }
+
+    #[test]
     fn test_paginated_response_deserializes_strategies() {
         let json = r#"{
             "data": [{"id":"s1","name":"Alpha"},{"id":"s2","name":"Beta"}],
@@ -9435,6 +9473,26 @@ mod tests {
         })
         .await;
         assert!(request.contains("GET /api/v1/status HTTP/1.1"));
+    }
+
+    #[tokio::test]
+    async fn test_get_strategy_health_path_and_auth() {
+        let response_json = r#"{"fillRate":null,"avgLatencyMs":0,"errorCount24h":0,"slippageBps":0,"winRate":null,"totalPnl":null,"maxDrawdown":null,"totalOrders":0,"filledOrders":0,"lastUpdated":null}"#;
+        let request = capture_request(response_json, |client| async move {
+            client.get_strategy_health("strategy/id").await.map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("GET /api/v1/strategies/strategy%2Fid/health HTTP/1.1"),
+            "request must hit encoded strategy health path; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        let auth = captured_header(&request, "Authorization")
+            .expect("get_strategy_health must include Authorization header");
+        assert!(
+            auth.starts_with("Bearer "),
+            "Authorization must be Bearer token"
+        );
     }
 
     #[tokio::test]

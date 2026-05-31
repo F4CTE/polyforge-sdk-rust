@@ -77,6 +77,7 @@ async fn main() -> polyforge::Result<()> {
 | `get_strategy(id)` | Get a strategy by ID |
 | `create_strategy(name, description)` | Create a new strategy |
 | `create_strategy_from_description(desc, market_id)` | AI-powered strategy creation |
+| `get_strategy_health(id)` | Get execution health metrics for a strategy |
 | `start_strategy(id, mode)` | Start a strategy (live or paper) |
 | `stop_strategy(id)` | Stop a running strategy |
 | `get_strategy_templates()` | List available templates |
