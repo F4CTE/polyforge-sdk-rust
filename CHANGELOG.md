@@ -6,6 +6,7 @@
 - **`CreateStrategyParams` new field** — `kalshi_subaccount: Option<u64>` added. Any code that constructs `CreateStrategyParams` with an exhaustive struct literal without `..Default::default()` must add the new field. Use [`CreateStrategyParams::new`] or `..Default::default()` for forward-compatible construction.
 
 ### Fixed
+- **Webhook active alias** — `Webhook.enabled` now deserializes from platform `"active"` responses, matching the actual webhook payload shape while preserving the Rust SDK field name. (closes #306)
 - **search_markets response shape** — `search_markets()` now returns `SearchMarketsResponse { results: Vec<Market> }` instead of `PaginatedResponse<Market>`, matching the platform's actual `{ "results": [...] }` envelope. `MarketSearchResponse` is retained as a deprecated alias for backward compatibility. (#253)
 - **ConditionalOrder type alias** — `ConditionalOrder.condition_type` now accepts `"type"` as a serde alias, matching the platform's actual field name in `GET /api/v1/conditional-orders` responses. (POLA-5122)
 
