@@ -922,7 +922,7 @@ pub struct Webhook {
     pub url: Option<String>,
     #[serde(default)]
     pub events: Vec<WebhookEvent>,
-    #[serde(default)]
+    #[serde(default, alias = "active")]
     pub enabled: Option<bool>,
     #[serde(default, skip_serializing)]
     pub secret: Option<String>,
