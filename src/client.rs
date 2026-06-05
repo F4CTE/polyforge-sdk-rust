@@ -1082,9 +1082,59 @@ impl PolyforgeClient {
         .await
     }
 
-    /// Get available strategy templates.
+    /// List available strategy templates with optional pagination.
+    pub async fn list_strategy_templates(
+        &self,
+        params: Option<&ListStrategyTemplatesParams>,
+    ) -> Result<PaginatedResponse<StrategyTemplate>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/strategies/templates{qs}")).await
+    }
+
+    /// Get the first page of available strategy templates.
     pub async fn get_strategy_templates(&self) -> Result<PaginatedResponse<StrategyTemplate>> {
-        self.get("/api/v1/strategies/templates").await
+        self.list_strategy_templates(None).await
+    }
+
+    /// Fetch the strategy builder capability manifest.
+    ///
+    /// Returns the platform-defined catalog of supported strategy primitives
+    /// for clients that need to discover builder capabilities dynamically.
+    pub async fn get_strategy_capabilities(&self) -> Result<serde_json::Value> {
+        self.get_with_optional_auth("/api/v1/strategies/capabilities")
+            .await
+    }
+
+    /// Fetch the strategy design-pattern catalog.
+    ///
+    /// Returns platform-defined strategy composition patterns for clients and
+    /// agents that generate or explain block-based strategies.
+    pub async fn get_strategy_design_patterns(&self) -> Result<serde_json::Value> {
+        self.get_with_optional_auth("/api/v1/strategies/design-patterns")
+            .await
+    }
+
+    /// Fetch example strategies for capability discovery and onboarding.
+    pub async fn get_strategy_examples(&self) -> Result<serde_json::Value> {
+        self.get_with_optional_auth("/api/v1/strategies/examples")
+            .await
     }
 
     /// Export a strategy configuration as JSON.
@@ -4310,6 +4360,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_strategy_capability_discovery_endpoints_dispatch_without_api_key() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let expected_paths = [
+                "/api/v1/strategies/capabilities",
+                "/api/v1/strategies/design-patterns",
+                "/api/v1/strategies/examples",
+            ];
+
+            for expected_path in expected_paths {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = vec![0_u8; 4096];
+                let n = socket.read(&mut request).await.unwrap();
+                let request = String::from_utf8_lossy(&request[..n]);
+
+                assert!(
+                    request.starts_with(&format!("GET {expected_path} ")),
+                    "unexpected strategy discovery request path: {request}"
+                );
+                assert!(
+                    !request.to_ascii_lowercase().contains("authorization:"),
+                    "strategy discovery with empty API key must not send Authorization header: {request}"
+                );
+
+                let body = r#"{"version":"1.0","items":[]}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                     content-type: application/json\r\n\
+                     content-length: {}\r\n\
+                     connection: close\r\n\
+                     \r\n\
+                     {}",
+                    body.len(),
+                    body
+                );
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+
+        let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        assert_eq!(
+            client.get_strategy_capabilities().await.unwrap()["version"],
+            "1.0"
+        );
+        assert_eq!(
+            client.get_strategy_design_patterns().await.unwrap()["version"],
+            "1.0"
+        );
+        assert_eq!(
+            client.get_strategy_examples().await.unwrap()["version"],
+            "1.0"
+        );
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn test_protected_user_endpoints_send_authorization_header() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -7373,6 +7484,16 @@ mod tests {
         assert_eq!(tmpl.name, Some("Mean Reversion".to_string()));
         assert_eq!(tmpl.blocks.len(), 1);
         assert_eq!(tmpl.popularity, 342);
+    }
+
+    #[test]
+    fn test_list_strategy_templates_params_supports_pagination() {
+        let params = ListStrategyTemplatesParams {
+            page: Some(2),
+            limit: Some(5),
+        };
+        assert_eq!(params.page, Some(2));
+        assert_eq!(params.limit, Some(5));
     }
 
     #[test]

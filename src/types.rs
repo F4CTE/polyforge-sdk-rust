@@ -157,6 +157,15 @@ pub struct ListStrategiesParams {
     pub limit: Option<u32>,
 }
 
+/// Parameters for listing strategy templates.
+#[derive(Debug, Default)]
+pub struct ListStrategyTemplatesParams {
+    /// Page number (1-based, default 1).
+    pub page: Option<u32>,
+    /// Items per page (default 20, max 100).
+    pub limit: Option<u32>,
+}
+
 /// Strategy visibility.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
