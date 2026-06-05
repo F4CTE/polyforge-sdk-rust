@@ -80,7 +80,11 @@ async fn main() -> polyforge::Result<()> {
 | `get_strategy_health(id)` | Get execution health metrics for a strategy |
 | `start_strategy(id, mode)` | Start a strategy (live or paper) |
 | `stop_strategy(id)` | Stop a running strategy |
-| `get_strategy_templates()` | List available templates |
+| `list_strategy_templates(params)` | List available templates with pagination |
+| `get_strategy_templates()` | List the first page of available templates |
+| `get_strategy_capabilities()` | Fetch the strategy builder capability manifest |
+| `get_strategy_design_patterns()` | Fetch strategy composition patterns |
+| `get_strategy_examples()` | Fetch example strategies for discovery and onboarding |
 | `export_strategy(id)` | Export strategy config as JSON |
 | `watch_strategy(id)` | Stream live execution events via SSE |
 
