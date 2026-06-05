@@ -6317,6 +6317,18 @@ mod tests {
         assert_eq!(result.extra["latencyMs"], 42);
     }
 
+    #[test]
+    fn test_webhook_active_alias_populates_enabled() {
+        let json = r#"{"id":"wh_1","url":"https://example.com/webhook","events":["ORDER_FILLED"],"active":true,"createdAt":"2026-06-01T00:00:00Z"}"#;
+        let webhook: Webhook = serde_json::from_str(json).unwrap();
+
+        assert_eq!(webhook.id, "wh_1");
+        assert_eq!(webhook.enabled, Some(true));
+        assert_eq!(webhook.events, vec![WebhookEvent::OrderFilled]);
+        assert_eq!(webhook.created_at.as_deref(), Some("2026-06-01T00:00:00Z"));
+        assert!(webhook.extra.get("active").is_none());
+    }
+
     // --- Price history & order book (closes #54) ---
 
     #[test]
