@@ -2158,7 +2158,7 @@ impl PolyforgeClient {
     }
 
     /// List your smart orders with child order progress.
-    pub async fn list_smart_orders(&self) -> Result<PaginatedResponse<SmartOrder>> {
+    pub async fn list_smart_orders(&self) -> Result<Vec<SmartOrder>> {
         self.get("/api/v1/orders/smart").await
     }
 
@@ -5811,6 +5811,41 @@ mod tests {
             result.is_err(),
             "bare array must not deserialize as PaginatedResponse"
         );
+    }
+
+    #[test]
+    fn test_smart_order_list_deserializes_bare_array() {
+        // #303: GET /api/v1/orders/smart returns a bare array, not PaginatedResponse.
+        let json = r#"[
+            {
+                "id": "so-1",
+                "type": "TWAP",
+                "status": "ACTIVE",
+                "marketId": "m-1",
+                "tokenId": "t-1",
+                "outcome": "YES",
+                "side": "BUY",
+                "totalSize": "10",
+                "slicesFilled": 1,
+                "slicesTotal": 5,
+                "nextExecuteAt": "2026-05-24T03:00:00Z",
+                "createdAt": "2026-05-24T02:00:00Z",
+                "orders": [
+                    {
+                        "id": "order-1",
+                        "status": "FILLED",
+                        "fillSize": "2",
+                        "fillPrice": "0.45",
+                        "createdAt": "2026-05-24T02:30:00Z"
+                    }
+                ]
+            }
+        ]"#;
+        let resp: Vec<SmartOrder> = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.len(), 1);
+        assert_eq!(resp[0].id, "so-1");
+        assert_eq!(resp[0].orders.len(), 1);
+        assert_eq!(resp[0].orders[0].id, "order-1");
     }
 
     // -----------------------------------------------------------------------
