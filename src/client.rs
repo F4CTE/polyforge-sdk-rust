@@ -3975,11 +3975,14 @@ impl PolyforgeClient {
 
     /// Attach or update the journal note + mood on one of the user's orders
     /// (`PATCH /api/v1/orders/:id/journal`).
+    ///
+    /// Returns the full updated order. Journal annotation fields returned by
+    /// the platform are preserved in [`Order::extra`].
     pub async fn update_order_journal(
         &self,
         order_id: &str,
         params: &UpdateOrderJournalParams,
-    ) -> Result<JournalEntry> {
+    ) -> Result<Order> {
         self.patch(
             &format!("/api/v1/orders/{}/journal", encode(order_id)),
             &serde_json::to_value(params)?,
@@ -10587,6 +10590,46 @@ mod tests {
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["mood"], "DISCIPLINED");
         assert!(v.get("note").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_update_order_journal_returns_updated_order() {
+        fn assert_returns_order<F>(_future: F)
+        where
+            F: Future<Output = Result<Order>>,
+        {
+        }
+
+        let client = PolyforgeClient::new("k").unwrap();
+        let params = UpdateOrderJournalParams {
+            mood: OrderJournalMood::Confident,
+            note: Some("High conviction".into()),
+        };
+        assert_returns_order(client.update_order_journal("order-1", &params));
+
+        let order: Order = serde_json::from_value(serde_json::json!({
+            "id": "order-1",
+            "marketId": "market-1",
+            "side": "BUY",
+            "size": "10",
+            "price": "0.55",
+            "status": "CONFIRMED",
+            "mood": "CONFIDENT",
+            "note": "High conviction"
+        }))
+        .unwrap();
+
+        assert_eq!(order.id, "order-1");
+        assert_eq!(order.market_id.as_deref(), Some("market-1"));
+        assert_eq!(order.status, Some(OrderStatus::Confirmed));
+        assert_eq!(
+            order.extra.get("mood").and_then(|value| value.as_str()),
+            Some("CONFIDENT")
+        );
+        assert_eq!(
+            order.extra.get("note").and_then(|value| value.as_str()),
+            Some("High conviction")
+        );
     }
 
     #[test]
