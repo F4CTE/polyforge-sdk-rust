@@ -63,7 +63,7 @@
   - `get_market_history(market_id, Option<MarketHistoryPeriod>)` → `GET /api/v1/markets/{marketId}/history` — `period` ∈ `1d | 7d | 30d | 90d`, defaults to `7d` server-side.
   - `get_market_sentiment_report(market_id)` → `GET /api/v1/markets/{marketId}/sentiment` — markets-controller sentiment report with `yesPercent`, `noPercent`, `totalVotes`, and nullable `userVote`. Method is named distinctly from the existing `get_market_sentiment(market_id)` (which still hits the news-controller `/news/sentiment/:marketId`) to avoid silently breaking callers.
   - `vote_market_sentiment(market_id)` → `POST /api/v1/markets/{marketId}/sentiment`.
-  - `update_order_journal(order_id, &UpdateOrderJournalParams)` → `PATCH /api/v1/orders/{id}/journal`.
+  - `update_order_journal(order_id, &UpdateOrderJournalParams)` → `PATCH /api/v1/orders/{id}/journal`, returning the full updated `Order`.
   - `list_combo_collections(Option<&ListComboCollectionsParams>)` → `GET /api/v1/markets/combo/collections` — Kalshi combo collections with optional `seriesTicker`/`limit`/`cursor` filters.
   - `get_combo_collection(ticker)` → `GET /api/v1/markets/combo/collections/{ticker}`.
   - `lookup_combo_market(&ComboLookupParams)` → `POST /api/v1/markets/combo/lookup` — `legs[].outcome` must be `"yes"` or `"no"` (lowercase) to match the server enum.
