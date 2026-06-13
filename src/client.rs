@@ -1759,11 +1759,6 @@ impl PolyforgeClient {
     /// Get a combo collection by ticker.
     ///
     /// `GET /api/v1/sports/combos/:collectionTicker`
-    ///
-    /// **Server-side caveat:** at the time of writing the controller forwards
-    /// to `listComboCollections({page:1,limit:1})` and ignores the
-    /// `collectionTicker` path param. The SDK wraps the route as-is for
-    /// fidelity; a server-side fix is tracked separately.
     pub async fn get_sports_combo_collection(
         &self,
         collection_ticker: &str,
