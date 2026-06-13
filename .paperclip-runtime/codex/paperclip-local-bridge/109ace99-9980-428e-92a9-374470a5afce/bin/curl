@@ -1,0 +1,206 @@
+#!/usr/bin/env node
+const { randomUUID, timingSafeEqual } = require("node:crypto");
+const fs = require("node:fs/promises");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+
+const bridgeUrl = (process.env.PAPERCLIP_API_URL || "").replace(/\/+$/, "");
+const bridgeToken = process.env.PAPERCLIP_API_KEY || "";
+const queueDir = process.env.PAPERCLIP_BRIDGE_QUEUE_DIR || "";
+const realCurl = process.env.PAPERCLIP_REAL_CURL || "/usr/bin/curl";
+const responseTimeoutMs = Number(process.env.PAPERCLIP_BRIDGE_RESPONSE_TIMEOUT_MS || "30000");
+const pollIntervalMs = Number(process.env.PAPERCLIP_BRIDGE_POLL_INTERVAL_MS || "100");
+const maxBodyBytes = Number(process.env.PAPERCLIP_BRIDGE_MAX_BODY_BYTES || "262144");
+const allowedHeaders = new Set(["accept", "content-type", "if-match", "if-none-match"]);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function tokensMatch(received) {
+  const expected = Buffer.from(bridgeToken, "utf8");
+  const actual = Buffer.from(typeof received === "string" ? received : "", "utf8");
+  if (expected.length !== actual.length) return false;
+  return timingSafeEqual(expected, actual);
+}
+
+function delegate() {
+  const result = spawnSync(realCurl, process.argv.slice(2), { stdio: "inherit" });
+  if (result.error) {
+    console.error(result.error.message);
+    process.exit(127);
+  }
+  process.exit(result.status == null ? 1 : result.status);
+}
+
+function parseArgs(argv) {
+  const parsed = {
+    method: "",
+    headers: {},
+    bodyParts: [],
+    url: "",
+    failOnHttpError: false,
+    includeHeaders: false,
+    headOnly: false,
+    outputFile: "",
+    writeOut: "",
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-X" || arg === "--request") {
+      parsed.method = String(argv[++i] || "").toUpperCase();
+      continue;
+    }
+    if (arg.startsWith("-X") && arg.length > 2) {
+      parsed.method = arg.slice(2).toUpperCase();
+      continue;
+    }
+    if (arg === "-H" || arg === "--header") {
+      const header = String(argv[++i] || "");
+      const idx = header.indexOf(":");
+      if (idx > 0) parsed.headers[header.slice(0, idx).trim().toLowerCase()] = header.slice(idx + 1).trim();
+      continue;
+    }
+    if (arg === "-d" || arg === "--data" || arg === "--data-raw" || arg === "--data-binary" || arg === "--data-ascii") {
+      parsed.bodyParts.push(String(argv[++i] || ""));
+      if (!parsed.method) parsed.method = "POST";
+      continue;
+    }
+    if (arg.startsWith("--data=") || arg.startsWith("--data-raw=") || arg.startsWith("--data-binary=") || arg.startsWith("--data-ascii=")) {
+      parsed.bodyParts.push(arg.slice(arg.indexOf("=") + 1));
+      if (!parsed.method) parsed.method = "POST";
+      continue;
+    }
+    if (arg === "--json") {
+      parsed.bodyParts.push(String(argv[++i] || ""));
+      parsed.headers["content-type"] = parsed.headers["content-type"] || "application/json";
+      parsed.headers.accept = parsed.headers.accept || "application/json";
+      if (!parsed.method) parsed.method = "POST";
+      continue;
+    }
+    if (arg === "-I" || arg === "--head") {
+      parsed.headOnly = true;
+      parsed.method = "HEAD";
+      continue;
+    }
+    if (arg === "-i" || arg === "--include") {
+      parsed.includeHeaders = true;
+      continue;
+    }
+    if (arg === "-f" || arg === "--fail" || arg === "--fail-with-body") {
+      parsed.failOnHttpError = true;
+      continue;
+    }
+    if (arg === "-o" || arg === "--output") {
+      parsed.outputFile = String(argv[++i] || "");
+      continue;
+    }
+    if (arg === "-w" || arg === "--write-out") {
+      parsed.writeOut = String(argv[++i] || "");
+      continue;
+    }
+    if (arg === "--url") {
+      parsed.url = String(argv[++i] || "");
+      continue;
+    }
+    if (arg === "-s" || arg === "-S" || arg === "-sS" || arg === "-L" || arg === "--location" || arg === "--compressed" || arg === "--no-progress-meter") {
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      continue;
+    }
+    parsed.url = arg;
+  }
+  if (!parsed.method) parsed.method = "GET";
+  return parsed;
+}
+
+function shouldHandle(rawUrl) {
+  if (!queueDir || !bridgeToken || !bridgeUrl || !rawUrl) return false;
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.origin === bridgeUrl || parsed.hostname === "paperclip-bridge.local";
+  } catch {
+    return false;
+  }
+}
+
+async function waitForResponse(responsePath) {
+  const deadline = Date.now() + responseTimeoutMs;
+  while (Date.now() < deadline) {
+    const raw = await fs.readFile(responsePath, "utf8").catch(() => null);
+    if (raw != null) {
+      await fs.rm(responsePath, { force: true }).catch(() => undefined);
+      return JSON.parse(raw);
+    }
+    await sleep(pollIntervalMs);
+  }
+  throw new Error("Timed out waiting for host bridge response.");
+}
+
+async function main() {
+  const parsed = parseArgs(process.argv.slice(2));
+  if (!shouldHandle(parsed.url)) delegate();
+
+  const auth = parsed.headers.authorization || "";
+  const receivedToken = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+  if (!tokensMatch(receivedToken)) {
+    console.error(JSON.stringify({ error: "Invalid bridge token." }));
+    process.exit(22);
+  }
+
+  const url = new URL(parsed.url);
+  const body = parsed.bodyParts.join("&");
+  if (Buffer.byteLength(body, "utf8") > maxBodyBytes) {
+    console.error(JSON.stringify({ error: "Bridge request body exceeded the configured size limit." }));
+    process.exit(22);
+  }
+  const headers = {};
+  for (const [key, value] of Object.entries(parsed.headers)) {
+    if (allowedHeaders.has(key)) headers[key] = value;
+  }
+
+  const requestId = randomUUID();
+  const requestsDir = path.posix.join(queueDir, "requests");
+  const responsesDir = path.posix.join(queueDir, "responses");
+  await fs.mkdir(requestsDir, { recursive: true });
+  await fs.mkdir(responsesDir, { recursive: true });
+  const requestPath = path.posix.join(requestsDir, requestId + ".json");
+  const responsePath = path.posix.join(responsesDir, requestId + ".json");
+  const payload = {
+    id: requestId,
+    method: parsed.method,
+    path: url.pathname,
+    query: url.search,
+    headers,
+    body,
+    createdAt: new Date().toISOString(),
+  };
+  await fs.writeFile(requestPath + ".tmp", JSON.stringify(payload) + "\n", "utf8");
+  await fs.rename(requestPath + ".tmp", requestPath);
+
+  const response = await waitForResponse(responsePath);
+  const status = typeof response.status === "number" ? response.status : 200;
+  const responseBody = typeof response.body === "string" ? response.body : "";
+  if (parsed.includeHeaders || parsed.headOnly) {
+    process.stdout.write("HTTP/1.1 " + status + "\r\n");
+    for (const [key, value] of Object.entries(response.headers || {})) {
+      if (typeof value === "string") process.stdout.write(key + ": " + value + "\r\n");
+    }
+    process.stdout.write("\r\n");
+  }
+  if (!parsed.headOnly) {
+    if (parsed.outputFile) await fs.writeFile(parsed.outputFile, responseBody, "utf8");
+    else process.stdout.write(responseBody);
+  }
+  if (parsed.writeOut) {
+    process.stdout.write(parsed.writeOut.replace(/%\{http_code\}/g, String(status)).replace(/%\{response_code\}/g, String(status)));
+  }
+  if (parsed.failOnHttpError && status >= 400) process.exit(22);
+}
+
+main().catch((error) => {
+  console.error(error && error.message ? error.message : String(error));
+  process.exit(1);
+});

@@ -19,9 +19,12 @@
 pub mod client;
 pub mod errors;
 pub mod types;
+pub mod ws;
 
 pub use client::{PolyforgeClient, StrategyEventStream};
 pub use errors::{PolyforgeError, Result};
 pub use types::*;
+
+pub use ws::*;
 
 pub const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
