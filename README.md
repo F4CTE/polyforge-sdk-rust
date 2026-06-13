@@ -6,7 +6,7 @@ Async Rust SDK for the [Polyforge](https://polyforge.io) trading platform REST A
 
 ```toml
 [dependencies]
-polyforge = "2.0"
+polyforge = "3.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -22,7 +22,7 @@ cargo add tokio --features full
 The crate uses `rustls` by default. To use the platform-native TLS instead:
 
 ```toml
-polyforge = { version = "2.0", default-features = false, features = ["native-tls"] }
+polyforge = { version = "3.0", default-features = false, features = ["native-tls"] }
 ```
 
 ## Quick Start
@@ -77,9 +77,14 @@ async fn main() -> polyforge::Result<()> {
 | `get_strategy(id)` | Get a strategy by ID |
 | `create_strategy(name, description)` | Create a new strategy |
 | `create_strategy_from_description(desc, market_id)` | AI-powered strategy creation |
+| `get_strategy_health(id)` | Get execution health metrics for a strategy |
 | `start_strategy(id, mode)` | Start a strategy (live or paper) |
 | `stop_strategy(id)` | Stop a running strategy |
-| `get_strategy_templates()` | List available templates |
+| `list_strategy_templates(params)` | List available templates with pagination |
+| `get_strategy_templates()` | List the first page of available templates |
+| `get_strategy_capabilities()` | Fetch the strategy builder capability manifest |
+| `get_strategy_design_patterns()` | Fetch strategy composition patterns |
+| `get_strategy_examples()` | Fetch example strategies for discovery and onboarding |
 | `export_strategy(id)` | Export strategy config as JSON |
 | `watch_strategy(id)` | Stream live execution events via SSE |
 
@@ -215,6 +220,7 @@ async fn main() -> polyforge::Result<()> {
 | Method | Description |
 |--------|-------------|
 | `get_accuracy()` | Brier score, win rate, calibration buckets, and per-category breakdown |
+| `get_accuracy_leaderboard(params)` | Paginated accuracy leaderboard ranked by prediction accuracy with P&L, win rate, trade count |
 | `get_portfolio_review()` | AI-generated portfolio review with suggestions and score (1–10) |
 | `get_market_sentiment(market_id)` | Sentiment score (−100 to +100) with BULLISH / BEARISH / NEUTRAL label |
 
