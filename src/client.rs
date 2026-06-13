@@ -1,6 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use secrecy::{ExposeSecret, SecretBox};
 use serde_json::json;
+use sha3::{Digest, Keccak256};
 use url::Url;
 use urlencoding::encode;
 
@@ -75,7 +76,7 @@ impl StrategyEventStream {
                         return Some(
                             serde_json::from_str::<StrategyEvent>(raw)
                                 .map_err(PolyforgeError::from),
-                        );
+                       );
                     }
                 }
                 // Skip comment / heartbeat lines and loop
@@ -260,6 +261,29 @@ impl std::fmt::Debug for PolyforgeClient {
             .field("api_key", &"[REDACTED]")
             .finish()
     }
+}
+
+/// EIP-55 checksum address normalization.
+///
+/// Lowercases the input, strips the `0x` prefix, computes Keccak-256 of the
+/// lowercase hex string, then upper-cases each hex digit whose corresponding
+/// hash bit is 1.
+fn checksum_address(addr: &str) -> String {
+    let hex = addr.strip_prefix("0x").unwrap_or(addr);
+    let lower = hex.to_lowercase();
+    let hash = Keccak256::digest(lower.as_bytes());
+    let mut result = String::with_capacity(42);
+    result.push_str("0x");
+    for (i, byte) in hex.chars().enumerate() {
+        let bit = hash[i / 2] >> (4 - (i % 2) * 4);
+        let bit = (bit & 0x08) != 0;
+        if byte.is_ascii_digit() || (byte.is_ascii_alphabetic() && bit) {
+            result.push(byte.to_ascii_uppercase());
+        } else {
+            result.push(byte.to_ascii_lowercase());
+        }
+    }
+    result
 }
 
 impl PolyforgeClient {
@@ -1182,6 +1206,48 @@ impl PolyforgeClient {
             &serde_json::json!({}),
         )
         .await
+    }
+
+    // -----------------------------------------------------------------------
+    // MCP Strategy Discovery (POLA-12355)
+    // -----------------------------------------------------------------------
+
+    /// Get execution health metrics for a specific strategy.
+    ///
+    /// `GET /api/v1/strategies/{id}/health`
+    pub async fn get_strategy_health(&self, id: &str) -> Result<StrategyHealth> {
+        let path = format!("/api/v1/strategies/{}/health", encode(id));
+        self.get(&path).await
+    }
+
+    /// Get strategy capabilities for AI / tooling discovery.
+    ///
+    /// Returns a structured map of capability categories to individual
+    /// capability entries.  This endpoint is public — the client can be
+    /// constructed with an empty API key.
+    ///
+    /// `GET /api/v1/strategies/capabilities`
+    pub async fn get_strategy_capabilities(&self) -> Result<StrategyCapabilities> {
+        self.get_with_optional_auth("/api/v1/strategies/capabilities")
+            .await
+    }
+
+    /// Get strategy design patterns for AI / tooling discovery.
+    ///
+    /// `GET /api/v1/strategies/design-patterns`
+    pub async fn get_strategy_design_patterns(
+        &self,
+    ) -> Result<StrategyDesignPatterns> {
+        self.get_with_optional_auth("/api/v1/strategies/design-patterns")
+            .await
+    }
+
+    /// Get example strategy definitions for AI / tooling discovery.
+    ///
+    /// `GET /api/v1/strategies/examples`
+    pub async fn get_strategy_examples(&self) -> Result<StrategyExamples> {
+        self.get_with_optional_auth("/api/v1/strategies/examples")
+            .await
     }
 
     // -----------------------------------------------------------------------
@@ -2474,8 +2540,21 @@ impl PolyforgeClient {
 
     /// Create a new copy trading configuration.
     pub async fn create_copy_config(&self, params: &CreateCopyConfigParams) -> Result<CopyConfig> {
-        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        let body = Self::create_copy_config_body(params)?;
         self.post("/api/v1/copy", &body).await
+    }
+
+    /// Build the JSON body for `create_copy_config`, normalizing `target_wallet`
+    /// to EIP-55 checksummed format.
+    fn create_copy_config_body(params: &CreateCopyConfigParams) -> Result<serde_json::Value> {
+        let mut body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        if let Some(raw) = body
+            .get("targetWallet")
+            .and_then(serde_json::Value::as_str)
+        {
+            body["targetWallet"] = serde_json::Value::String(checksum_address(raw));
+        }
+        Ok(body)
     }
 
     /// Get a single copy trading configuration by ID.
@@ -7435,6 +7514,44 @@ mod tests {
         assert_eq!(body["sizeValue"], "100");
         assert!(body.get("sourceStrategyId").is_none());
         assert!(body.get("allocationPercent").is_none());
+    }
+
+    #[test]
+    fn test_checksum_address_eip55() {
+        // All-lowercase hex gets EIP-55 checksummed (mixed case)
+        let all_lower = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+        let cksummed = checksum_address(all_lower);
+        assert!(cksummed.starts_with("0x"));
+        assert_eq!(cksummed.len(), 42);
+        assert_ne!(cksummed, all_lower); // EIP-55 produces mixed case
+
+        // Mixed case input gets normalized to same EIP-55 checksum
+        let mixed = "0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf";
+        assert_eq!(checksum_address(mixed), cksummed);
+
+        // Verify known EIP-55 address: 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed
+        let known = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
+        assert_eq!(checksum_address(known), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+
+        // Already checksummed address stays unchanged (idempotent)
+        let already = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+        assert_eq!(checksum_address(already), already);
+    }
+
+    #[test]
+    fn test_create_copy_config_body_checksums_target_wallet() {
+        use crate::PolyforgeClient;
+
+        let params = CreateCopyConfigParams {
+            target_wallet: "0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf".to_string(),
+            mode: Some(CopyMode::Percentage),
+            size_value: Some("100".to_string()),
+            ..Default::default()
+        };
+
+        let body = PolyforgeClient::create_copy_config_body(&params).unwrap();
+        let checksummed = checksum_address("0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf");
+        assert_eq!(body["targetWallet"], checksummed);
     }
 
     #[test]
