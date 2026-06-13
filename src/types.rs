@@ -611,18 +611,15 @@ pub struct StrategyExamples {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Portfolio {
-    #[serde(rename = "availableBalance", default)]
-    pub available_balance: Option<String>,
     #[serde(default)]
     pub positions: Vec<Position>,
+    /// Total unrealized P&L as returned by GET /api/v1/portfolio.
     #[serde(default)]
-    pub total_value: Option<String>,
-    #[serde(rename = "unrealizedPnl", default)]
-    pub unrealized_pnl: Option<String>,
-    #[serde(rename = "realizedPnl", default)]
-    pub realized_pnl: Option<String>,
-    #[serde(rename = "updatedAt", default)]
-    pub updated_at: Option<String>,
+    pub total_unrealized_pnl: Option<String>,
+    /// Total realized P&L as returned by GET /api/v1/portfolio.
+    #[serde(default)]
+    pub total_realized_pnl: Option<String>,
+    /// Forward-compat: platform may add new aggregate fields later.
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
