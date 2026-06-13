@@ -6869,8 +6869,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_smoke() {
         let _client = PolyforgeClient::new("test-api-key").unwrap();
     }
 
@@ -7168,7 +7166,6 @@ mod tests {
         assert_eq!(co.condition_type.as_deref(), Some("TAKE_PROFIT"));
     }
 
-    #[test]
     fn test_create_conditional_order_params_serializes_camelcase() {
         let params = CreateConditionalOrderParams {
             market_id: "mkt-1".into(),
