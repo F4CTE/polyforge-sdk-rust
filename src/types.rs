@@ -2101,6 +2101,10 @@ pub struct PolymarketActivityResponse {
 pub struct GetPolymarketActivityParams {
     /// Activity type filter, e.g. `"TRADE"`, `"SPLIT"`, or `"REDEEM"`.
     pub activity_type: Option<String>,
+    /// Number of activity rows to skip before returning results.
+    pub offset: Option<u32>,
+    /// Maximum number of activity rows to return.
+    pub limit: Option<u32>,
 }
 
 // ---------------------------------------------------------------------------
