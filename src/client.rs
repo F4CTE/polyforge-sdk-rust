@@ -35,6 +35,31 @@ const MAX_GDPR_EXPORT_SIZE: usize = 500 * 1024 * 1024; // 500 MiB
 
 const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
 
+fn build_polymarket_activity_query(params: Option<&GetPolymarketActivityParams>) -> String {
+    let mut qp: Vec<(&str, String)> = Vec::new();
+    if let Some(p) = params {
+        if let Some(ref t) = p.activity_type {
+            qp.push(("type", t.clone()));
+        }
+        if let Some(offset) = p.offset {
+            qp.push(("offset", offset.to_string()));
+        }
+        if let Some(limit) = p.limit {
+            qp.push(("limit", limit.to_string()));
+        }
+    }
+
+    if qp.is_empty() {
+        String::new()
+    } else {
+        let pairs: Vec<String> = qp
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, encode(v)))
+            .collect();
+        format!("?{}", pairs.join("&"))
+    }
+}
+
 /// An open SSE connection to a strategy's execution event stream.
 ///
 /// Call [`StrategyEventStream::next`] in a loop to receive events one at a time.
@@ -2820,10 +2845,7 @@ impl PolyforgeClient {
         &self,
         params: Option<&GetPolymarketActivityParams>,
     ) -> Result<PolymarketActivityResponse> {
-        let qs = match params.and_then(|p| p.activity_type.as_deref()) {
-            Some(t) => format!("?type={}", encode(t)),
-            None => String::new(),
-        };
+        let qs = build_polymarket_activity_query(params);
         self.get(&format!("/api/v1/portfolio/polymarket/activity{qs}"))
             .await
     }
@@ -8250,6 +8272,19 @@ mod tests {
     fn test_get_polymarket_activity_params_default() {
         let params = GetPolymarketActivityParams::default();
         assert!(params.activity_type.is_none());
+        assert!(params.offset.is_none());
+        assert!(params.limit.is_none());
+    }
+
+    #[test]
+    fn test_get_polymarket_activity_query_includes_pagination_params() {
+        let qs = build_polymarket_activity_query(Some(&GetPolymarketActivityParams {
+            activity_type: Some("TRADE".to_string()),
+            offset: Some(100),
+            limit: Some(25),
+        }));
+
+        assert_eq!(qs, "?type=TRADE&offset=100&limit=25");
     }
 
     // ── Rewards types (#152) ────────────────────────────────────────────
