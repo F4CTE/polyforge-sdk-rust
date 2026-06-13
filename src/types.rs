@@ -315,6 +315,193 @@ pub struct StrategyStatusResponse {
     pub extra: serde_json::Value,
 }
 
+/// Execution health metrics for a strategy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyHealth {
+    pub fill_rate: Option<f64>,
+    pub avg_latency_ms: u64,
+    pub error_count_24h: u64,
+    pub slippage_bps: f64,
+    pub win_rate: Option<f64>,
+    pub total_pnl: Option<f64>,
+    pub max_drawdown: Option<f64>,
+    pub total_orders: u64,
+    pub filled_orders: u64,
+    pub last_updated: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// One issue returned by strategy validation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyValidationIssue {
+    #[serde(default)]
+    pub code: Option<String>,
+    #[serde(default)]
+    pub message: Option<String>,
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub block_id: Option<String>,
+    #[serde(default)]
+    pub severity: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Validation result for a strategy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyValidationResult {
+    pub valid: bool,
+    #[serde(default)]
+    pub errors: Vec<StrategyValidationIssue>,
+    #[serde(default)]
+    pub warnings: Vec<StrategyValidationIssue>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Strategy block groups for validation and preview endpoints.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyBlocksParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<Vec<Block>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conditions: Option<Vec<Block>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actions: Option<Vec<Block>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub safety: Option<Vec<Block>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logic_blocks: Option<Vec<LogicBlock>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub calc_blocks: Option<Vec<CalcBlock>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variables: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub canvas: Option<serde_json::Value>,
+}
+
+/// One strategy block type advertised by the platform.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyBlockType {
+    #[serde(rename = "type")]
+    pub block_type: String,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub schema: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Response from strategy block type discovery.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyBlockTypesResponse {
+    #[serde(default)]
+    pub block_types: Vec<StrategyBlockType>,
+    #[serde(default)]
+    pub categories: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// JSON schema and metadata for one strategy block type.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyBlockSchema {
+    #[serde(rename = "type")]
+    pub block_type: String,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub schema: serde_json::Value,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for previewing a strategy update before applying it.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewStrategyUpdateParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visibility: Option<Visibility>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exec_mode: Option<ExecMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tick_ms: Option<u64>,
+    #[serde(flatten)]
+    pub blocks: StrategyBlocksParams,
+}
+
+/// Preview result for a proposed strategy update.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyUpdatePreview {
+    #[serde(default)]
+    pub valid: Option<bool>,
+    #[serde(default)]
+    pub validation: Option<StrategyValidationResult>,
+    #[serde(default)]
+    pub diff: Option<serde_json::Value>,
+    #[serde(default)]
+    pub estimated_impact: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Parameters for asking the platform to explain a strategy decision.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ExplainStrategyDecisionParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub event_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<serde_json::Value>,
+}
+
+/// AI/operator explanation for a strategy decision.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyDecisionExplanation {
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub rationale: Option<String>,
+    #[serde(default)]
+    pub inputs: Option<serde_json::Value>,
+    #[serde(default)]
+    pub actions: Option<serde_json::Value>,
+    #[serde(default)]
+    pub confidence: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
 /// A strategy template with block configuration and popularity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

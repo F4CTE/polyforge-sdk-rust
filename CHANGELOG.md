@@ -19,6 +19,7 @@
 - **ConditionalOrder type alias** — `ConditionalOrder.condition_type` now accepts `"type"` as a serde alias, matching the platform's actual field name in `GET /api/v1/conditional-orders` responses. (POLA-5122)
 
 ### Added
+- **Strategy health, validation, and operator support (POLA-9851 / #304)** — added `get_strategy_health(id)`, `validate_strategy(id)`, `validate_strategy_blocks(params)`, `list_strategy_block_types()`, `get_block_schema(block_type)`, `preview_strategy_update(id, params)`, and `explain_strategy_decision(id, params)` for upcoming strategy AI/operator endpoints. New typed request/response models cover health metrics, validation issues/results, block discovery/schema metadata, update previews, and decision explanations.
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
 - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):

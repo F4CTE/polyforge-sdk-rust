@@ -991,6 +991,72 @@ impl PolyforgeClient {
             .await
     }
 
+    /// Get execution health metrics for a strategy.
+    pub async fn get_strategy_health(&self, id: &str) -> Result<StrategyHealth> {
+        self.get(&format!("/api/v1/strategies/{}/health", encode(id)))
+            .await
+    }
+
+    /// Validate a strategy configuration on the platform.
+    pub async fn validate_strategy(&self, id: &str) -> Result<StrategyValidationResult> {
+        self.post(
+            &format!("/api/v1/strategies/{}/validate", encode(id)),
+            &json!({}),
+        )
+        .await
+    }
+
+    /// Validate strategy block groups before creating or updating a strategy.
+    pub async fn validate_strategy_blocks(
+        &self,
+        params: &StrategyBlocksParams,
+    ) -> Result<StrategyValidationResult> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post("/api/v1/strategies/validate-blocks", &body).await
+    }
+
+    /// List strategy block types supported by the platform.
+    pub async fn list_strategy_block_types(&self) -> Result<StrategyBlockTypesResponse> {
+        self.get("/api/v1/strategies/block-types").await
+    }
+
+    /// Get the configuration schema for a strategy block type.
+    pub async fn get_block_schema(&self, block_type: &str) -> Result<StrategyBlockSchema> {
+        self.get(&format!(
+            "/api/v1/strategies/block-types/{}/schema",
+            encode(block_type)
+        ))
+        .await
+    }
+
+    /// Preview a strategy update without applying it.
+    pub async fn preview_strategy_update(
+        &self,
+        id: &str,
+        params: &PreviewStrategyUpdateParams,
+    ) -> Result<StrategyUpdatePreview> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post(
+            &format!("/api/v1/strategies/{}/preview-update", encode(id)),
+            &body,
+        )
+        .await
+    }
+
+    /// Explain an AI/operator decision made by a strategy.
+    pub async fn explain_strategy_decision(
+        &self,
+        id: &str,
+        params: &ExplainStrategyDecisionParams,
+    ) -> Result<StrategyDecisionExplanation> {
+        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        self.post(
+            &format!("/api/v1/strategies/{}/explain-decision", encode(id)),
+            &body,
+        )
+        .await
+    }
+
     /// Create a new strategy with full block configuration.
     ///
     /// Use [`CreateStrategyParams`] to specify blocks, visibility, execution mode,
@@ -5442,6 +5508,140 @@ mod tests {
     }
 
     #[test]
+    fn test_strategy_health_deserializes() {
+        let json = r#"{"fillRate":98.5,"avgLatencyMs":120,"errorCount24h":1,"slippageBps":2.5,"winRate":57.25,"totalPnl":1234.56,"maxDrawdown":-42.0,"totalOrders":20,"filledOrders":19,"lastUpdated":"2026-05-20T12:00:00Z"}"#;
+        let health: StrategyHealth = serde_json::from_str(json).unwrap();
+        assert_eq!(health.fill_rate, Some(98.5));
+        assert_eq!(health.avg_latency_ms, 120);
+        assert_eq!(health.error_count_24h, 1);
+        assert_eq!(health.slippage_bps, 2.5);
+        assert_eq!(health.win_rate, Some(57.25));
+        assert_eq!(health.total_pnl, Some(1234.56));
+        assert_eq!(health.max_drawdown, Some(-42.0));
+        assert_eq!(health.total_orders, 20);
+        assert_eq!(health.filled_orders, 19);
+        assert_eq!(health.last_updated.as_deref(), Some("2026-05-20T12:00:00Z"));
+    }
+
+    #[test]
+    fn test_strategy_health_deserializes_platform_placeholder_nulls() {
+        let json = r#"{"fillRate":null,"avgLatencyMs":0,"errorCount24h":0,"slippageBps":0,"winRate":null,"totalPnl":null,"maxDrawdown":null,"totalOrders":0,"filledOrders":0,"lastUpdated":null}"#;
+        let health: StrategyHealth = serde_json::from_str(json).unwrap();
+        assert_eq!(health.fill_rate, None);
+        assert_eq!(health.avg_latency_ms, 0);
+        assert_eq!(health.error_count_24h, 0);
+        assert_eq!(health.slippage_bps, 0.0);
+        assert_eq!(health.win_rate, None);
+        assert_eq!(health.total_pnl, None);
+        assert_eq!(health.max_drawdown, None);
+        assert_eq!(health.total_orders, 0);
+        assert_eq!(health.filled_orders, 0);
+        assert_eq!(health.last_updated, None);
+    }
+
+    #[test]
+    fn test_strategy_validation_result_deserializes() {
+        let json = r#"{"valid":false,"errors":[{"code":"MISSING_ACTION","message":"Add at least one action","path":"actions","blockId":"block-1","severity":"error"}],"warnings":[{"code":"NO_SAFETY","message":"Consider a safety block"}],"graph":{"nodes":3}}"#;
+        let result: StrategyValidationResult = serde_json::from_str(json).unwrap();
+        assert!(!result.valid);
+        assert_eq!(result.errors.len(), 1);
+        assert_eq!(result.errors[0].code.as_deref(), Some("MISSING_ACTION"));
+        assert_eq!(result.errors[0].block_id.as_deref(), Some("block-1"));
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.extra.get("graph").is_some());
+    }
+
+    #[test]
+    fn test_strategy_blocks_params_serializes_camelcase() {
+        let params = StrategyBlocksParams {
+            triggers: Some(vec![Block {
+                id: Some("trigger-1".into()),
+                block_type: Some("PRICE_ABOVE".into()),
+                label: None,
+                config: Some(serde_json::json!({ "price": "0.50" })),
+                connections: vec![],
+                extra: serde_json::Value::Null,
+            }]),
+            logic_blocks: Some(vec![LogicBlock {
+                id: Some("logic-1".into()),
+                block_type: Some("AND_GATE".into()),
+                config: None,
+                extra: serde_json::Value::Null,
+            }]),
+            ..Default::default()
+        };
+        let body = serde_json::to_value(params).unwrap();
+        assert!(body.get("triggers").is_some());
+        assert!(body.get("logicBlocks").is_some());
+        assert!(body.get("logic_blocks").is_none());
+    }
+
+    #[test]
+    fn test_strategy_block_types_response_deserializes() {
+        let json = r#"{"blockTypes":[{"type":"PRICE_ABOVE","category":"trigger","label":"Price above","parameters":[{"name":"price"}]}],"categories":["trigger"]}"#;
+        let response: StrategyBlockTypesResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.block_types.len(), 1);
+        assert_eq!(response.block_types[0].block_type, "PRICE_ABOVE");
+        assert_eq!(response.block_types[0].category.as_deref(), Some("trigger"));
+        assert!(response.block_types[0].extra.get("parameters").is_some());
+        assert!(response.categories.is_some());
+    }
+
+    #[test]
+    fn test_strategy_block_schema_deserializes() {
+        let json = r#"{"type":"BUY","category":"action","label":"Buy","schema":{"type":"object","required":["tokenId"]}}"#;
+        let schema: StrategyBlockSchema = serde_json::from_str(json).unwrap();
+        assert_eq!(schema.block_type, "BUY");
+        assert_eq!(schema.category.as_deref(), Some("action"));
+        assert_eq!(schema.schema["type"], "object");
+    }
+
+    #[test]
+    fn test_preview_strategy_update_params_serializes() {
+        let params = PreviewStrategyUpdateParams {
+            name: Some("Updated".into()),
+            exec_mode: Some(ExecMode::Hybrid),
+            blocks: StrategyBlocksParams {
+                actions: Some(vec![Block {
+                    id: None,
+                    block_type: Some("BUY".into()),
+                    label: None,
+                    config: None,
+                    connections: vec![],
+                    extra: serde_json::Value::Null,
+                }]),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let body = serde_json::to_value(params).unwrap();
+        assert_eq!(body["name"], "Updated");
+        assert_eq!(body["execMode"], "HYBRID");
+        assert!(body.get("actions").is_some());
+        assert!(body.get("blocks").is_none());
+    }
+
+    #[test]
+    fn test_strategy_update_preview_deserializes() {
+        let json = r#"{"valid":true,"validation":{"valid":true,"errors":[],"warnings":[]},"diff":{"actions":{"added":1}},"estimatedImpact":{"risk":"low"}}"#;
+        let preview: StrategyUpdatePreview = serde_json::from_str(json).unwrap();
+        assert_eq!(preview.valid, Some(true));
+        assert!(preview.validation.as_ref().unwrap().valid);
+        assert!(preview.diff.is_some());
+        assert!(preview.estimated_impact.is_some());
+    }
+
+    #[test]
+    fn test_strategy_decision_explanation_deserializes() {
+        let json = r#"{"summary":"Bought YES","rationale":"Price crossed threshold","inputs":{"price":0.42},"actions":[{"type":"BUY"}],"confidence":0.91}"#;
+        let explanation: StrategyDecisionExplanation = serde_json::from_str(json).unwrap();
+        assert_eq!(explanation.summary.as_deref(), Some("Bought YES"));
+        assert_eq!(explanation.confidence, Some(0.91));
+        assert!(explanation.inputs.is_some());
+        assert!(explanation.actions.is_some());
+    }
+
+    #[test]
     fn test_paginated_response_deserializes_strategies() {
         let json = r#"{
             "data": [{"id":"s1","name":"Alpha"},{"id":"s2","name":"Beta"}],
@@ -8627,6 +8827,130 @@ mod tests {
         })
         .await;
         assert!(request.contains("GET /api/v1/status HTTP/1.1"));
+    }
+
+    #[tokio::test]
+    async fn test_get_strategy_health_path_and_auth() {
+        let response_json = r#"{"fillRate":null,"avgLatencyMs":0,"errorCount24h":0,"slippageBps":0,"winRate":null,"totalPnl":null,"maxDrawdown":null,"totalOrders":0,"filledOrders":0,"lastUpdated":null}"#;
+        let request = capture_request(response_json, |client| async move {
+            client.get_strategy_health("strategy/id").await.map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("GET /api/v1/strategies/strategy%2Fid/health HTTP/1.1"),
+            "request must hit encoded strategy health path; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        let auth = captured_header(&request, "Authorization")
+            .expect("get_strategy_health must include Authorization header");
+        assert!(
+            auth.starts_with("Bearer "),
+            "Authorization must be Bearer token"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_validate_strategy_path_auth_and_body() {
+        let response_json = r#"{"valid":true,"errors":[],"warnings":[]}"#;
+        let request = capture_request(response_json, |client| async move {
+            client.validate_strategy("strategy/id").await.map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("POST /api/v1/strategies/strategy%2Fid/validate HTTP/1.1"),
+            "request must hit encoded strategy validation path; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        let auth = captured_header(&request, "Authorization")
+            .expect("validate_strategy must include Authorization header");
+        assert!(
+            auth.starts_with("Bearer "),
+            "Authorization must be Bearer token"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_validate_strategy_blocks_path_and_auth() {
+        let response_json = r#"{"valid":true,"errors":[],"warnings":[]}"#;
+        let request = capture_request(response_json, |client| async move {
+            client
+                .validate_strategy_blocks(&StrategyBlocksParams::default())
+                .await
+                .map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("POST /api/v1/strategies/validate-blocks HTTP/1.1"),
+            "request must hit strategy block validation path; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        assert!(captured_header(&request, "Authorization").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_list_strategy_block_types_path_and_auth() {
+        let response_json = r#"{"blockTypes":[]}"#;
+        let request = capture_request(response_json, |client| async move {
+            client.list_strategy_block_types().await.map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("GET /api/v1/strategies/block-types HTTP/1.1"),
+            "request must hit strategy block type discovery path; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        assert!(captured_header(&request, "Authorization").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_get_block_schema_path_and_auth() {
+        let response_json = r#"{"type":"BUY","schema":{}}"#;
+        let request = capture_request(response_json, |client| async move {
+            client.get_block_schema("BUY/YES").await.map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("GET /api/v1/strategies/block-types/BUY%2FYES/schema HTTP/1.1"),
+            "request must hit encoded strategy block schema path; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        assert!(captured_header(&request, "Authorization").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_preview_strategy_update_path_and_auth() {
+        let response_json = r#"{"valid":true}"#;
+        let request = capture_request(response_json, |client| async move {
+            client
+                .preview_strategy_update("strategy/id", &PreviewStrategyUpdateParams::default())
+                .await
+                .map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("POST /api/v1/strategies/strategy%2Fid/preview-update HTTP/1.1"),
+            "request must hit encoded strategy update preview path; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        assert!(captured_header(&request, "Authorization").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_explain_strategy_decision_path_and_auth() {
+        let response_json = r#"{"summary":"Bought YES"}"#;
+        let request = capture_request(response_json, |client| async move {
+            client
+                .explain_strategy_decision("strategy/id", &ExplainStrategyDecisionParams::default())
+                .await
+                .map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("POST /api/v1/strategies/strategy%2Fid/explain-decision HTTP/1.1"),
+            "request must hit encoded strategy decision explanation path; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        assert!(captured_header(&request, "Authorization").is_some());
     }
 
     #[tokio::test]
