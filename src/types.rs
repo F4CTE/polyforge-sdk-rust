@@ -528,36 +528,6 @@ pub struct Backtest {
     pub extra: serde_json::Value,
 }
 
-// ---------------------------------------------------------------------------
-// MCP Feature SDK Alignment — Strategy Discovery Types (POLA-12355)
-// ---------------------------------------------------------------------------
-
-/// Execution health metrics for a strategy.
-///
-/// Returned by `GET /api/v1/strategies/{id}/health`.
-/// Mirrors the TypeScript `StrategyHealth` interface.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyHealth {
-    pub fill_rate: Option<f64>,
-    pub avg_latency_ms: Option<f64>,
-    #[serde(rename = "errorCount24h", default)]
-    pub error_count_24h: Option<u64>,
-    #[serde(rename = "slippageBps", default)]
-    pub slippage_bps: Option<f64>,
-    pub win_rate: Option<f64>,
-    #[serde(rename = "totalPnl", default)]
-    pub total_pnl: Option<f64>,
-    #[serde(rename = "maxDrawdown", default)]
-    pub max_drawdown: Option<f64>,
-    #[serde(rename = "totalOrders", default)]
-    pub total_orders: Option<u64>,
-    #[serde(rename = "filledOrders", default)]
-    pub filled_orders: Option<u64>,
-    #[serde(rename = "lastUpdated", default)]
-    pub last_updated: Option<String>,
-}
-
 /// A single capability entry returned by the strategy capabilities endpoint.
 ///
 /// The platform groups capabilities by category; each category maps to a

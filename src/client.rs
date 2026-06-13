@@ -1288,13 +1288,13 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
-    // MCP Strategy Discovery (POLA-12355)
+    // MCP Strategy Discovery — Typed variants (POLA-12355)
     // -----------------------------------------------------------------------
 
     /// Get execution health metrics for a specific strategy.
     ///
     /// `GET /api/v1/strategies/{id}/health`
-    pub async fn get_strategy_health(&self, id: &str) -> Result<StrategyHealth> {
+    pub async fn get_strategy_health_typed(&self, id: &str) -> Result<StrategyHealth> {
         let path = format!("/api/v1/strategies/{}/health", encode(id));
         self.get(&path).await
     }
@@ -1302,11 +1302,10 @@ impl PolyforgeClient {
     /// Get strategy capabilities for AI / tooling discovery.
     ///
     /// Returns a structured map of capability categories to individual
-    /// capability entries.  This endpoint is public — the client can be
-    /// constructed with an empty API key.
+    /// capability entries.
     ///
     /// `GET /api/v1/strategies/capabilities`
-    pub async fn get_strategy_capabilities(&self) -> Result<StrategyCapabilities> {
+    pub async fn get_strategy_capabilities_typed(&self) -> Result<StrategyCapabilities> {
         self.get_with_optional_auth("/api/v1/strategies/capabilities")
             .await
     }
@@ -1314,7 +1313,7 @@ impl PolyforgeClient {
     /// Get strategy design patterns for AI / tooling discovery.
     ///
     /// `GET /api/v1/strategies/design-patterns`
-    pub async fn get_strategy_design_patterns(
+    pub async fn get_strategy_design_patterns_typed(
         &self,
     ) -> Result<StrategyDesignPatterns> {
         self.get_with_optional_auth("/api/v1/strategies/design-patterns")
@@ -1324,7 +1323,7 @@ impl PolyforgeClient {
     /// Get example strategy definitions for AI / tooling discovery.
     ///
     /// `GET /api/v1/strategies/examples`
-    pub async fn get_strategy_examples(&self) -> Result<StrategyExamples> {
+    pub async fn get_strategy_examples_typed(&self) -> Result<StrategyExamples> {
         self.get_with_optional_auth("/api/v1/strategies/examples")
             .await
     }
