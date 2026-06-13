@@ -6892,6 +6892,8 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_smoke() {
         let _client = PolyforgeClient::new("test-api-key").unwrap();
     }
 
