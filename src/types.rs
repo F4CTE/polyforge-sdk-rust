@@ -2985,12 +2985,11 @@ pub struct ArbitrageMatch {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct CreateArbitrageMatchParams {
+    #[serde(rename = "polymarketId")]
     pub polymarket_market_id: String,
+    #[serde(rename = "kalshiId")]
     pub kalshi_market_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub notes: Option<String>,
 }
 
 /// Bid/ask info for a single venue in a spread comparison.

@@ -8653,22 +8653,25 @@ mod tests {
         let p = CreateArbitrageMatchParams {
             polymarket_market_id: "poly-1".into(),
             kalshi_market_id: "kalshi-1".into(),
-            notes: Some("test".into()),
         };
         let v = serde_json::to_value(&p).unwrap();
-        assert_eq!(v["polymarketMarketId"], "poly-1");
-        assert_eq!(v["notes"], "test");
+        let obj = v.as_object().unwrap();
+        assert_eq!(v["polymarketId"], "poly-1");
+        assert_eq!(v["kalshiId"], "kalshi-1");
+        assert!(!obj.contains_key("notes"));
     }
 
     #[test]
-    fn test_create_arbitrage_match_params_omits_none_notes() {
+    fn test_create_arbitrage_match_params_has_correct_field_names() {
         let p = CreateArbitrageMatchParams {
-            polymarket_market_id: "poly-1".into(),
-            kalshi_market_id: "kalshi-1".into(),
-            notes: None,
+            polymarket_market_id: "poly-abc".into(),
+            kalshi_market_id: "kalshi-xyz".into(),
         };
         let v = serde_json::to_value(&p).unwrap();
-        assert!(v.get("notes").is_none());
+        let obj = v.as_object().unwrap();
+        assert_eq!(obj.len(), 2);
+        assert!(obj.contains_key("polymarketId"));
+        assert!(obj.contains_key("kalshiId"));
     }
 
     #[test]
