@@ -7802,7 +7802,7 @@ mod tests {
         };
 
         let body = PolyforgeClient::create_copy_config_body(&params).unwrap();
-        let checksummed = checksum_address("0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf");
+        let checksummed = checksum_address("0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf").unwrap();
         assert_eq!(body["targetWallet"], checksummed);
     }
 
