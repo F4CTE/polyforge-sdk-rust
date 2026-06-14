@@ -293,8 +293,24 @@ impl std::fmt::Debug for PolyforgeClient {
 /// Lowercases the input, strips the `0x` prefix, computes Keccak-256 of the
 /// lowercase hex string, then upper-cases each hex digit whose corresponding
 /// hash bit is 1.
-fn checksum_address(addr: &str) -> String {
+///
+/// # Errors
+/// Returns [`PolyforgeError::Validation`] if the address is not a valid hex
+/// string of at most 40 hex characters (with or without `0x` prefix).
+fn checksum_address(addr: &str) -> Result<String> {
     let hex = addr.strip_prefix("0x").unwrap_or(addr);
+    if hex.len() > 40 {
+        return Err(PolyforgeError::Validation(format!(
+            "address hex component too long: {} chars (max 40)",
+            hex.len()
+        )));
+    }
+    if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(PolyforgeError::Validation(format!(
+            "address contains non-hex characters: {}",
+            hex
+        )));
+    }
     let lower = hex.to_lowercase();
     let hash = Keccak256::digest(lower.as_bytes());
     let mut result = String::with_capacity(42);
@@ -308,7 +324,7 @@ fn checksum_address(addr: &str) -> String {
             result.push(byte.to_ascii_lowercase());
         }
     }
-    result
+    Ok(result)
 }
 
 impl PolyforgeClient {
@@ -2248,7 +2264,7 @@ impl PolyforgeClient {
     }
 
     /// List your smart orders with child order progress.
-    pub async fn list_smart_orders(&self) -> Result<Vec<SmartOrder>> {
+    pub async fn list_smart_orders(&self) -> Result<PaginatedResponse<SmartOrder>> {
         self.get("/api/v1/orders/smart").await
     }
 
@@ -2630,7 +2646,7 @@ impl PolyforgeClient {
             .get("targetWallet")
             .and_then(serde_json::Value::as_str)
         {
-            body["targetWallet"] = serde_json::Value::String(checksum_address(raw));
+            body["targetWallet"] = serde_json::Value::String(checksum_address(raw)?);
         }
         Ok(body)
     }
@@ -7748,22 +7764,30 @@ mod tests {
     fn test_checksum_address_eip55() {
         // All-lowercase hex gets EIP-55 checksummed (mixed case)
         let all_lower = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
-        let cksummed = checksum_address(all_lower);
+        let cksummed = checksum_address(all_lower).unwrap();
         assert!(cksummed.starts_with("0x"));
         assert_eq!(cksummed.len(), 42);
         assert_ne!(cksummed, all_lower); // EIP-55 produces mixed case
 
         // Mixed case input gets normalized to same EIP-55 checksum
         let mixed = "0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf";
-        assert_eq!(checksum_address(mixed), cksummed);
+        assert_eq!(checksum_address(mixed).unwrap(), cksummed);
 
         // Verify known EIP-55 address: 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed
         let known = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
-        assert_eq!(checksum_address(known), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+        assert_eq!(checksum_address(known).unwrap(), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
 
         // Already checksummed address stays unchanged (idempotent)
         let already = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
-        assert_eq!(checksum_address(already), already);
+        assert_eq!(checksum_address(already).unwrap(), already);
+
+        // Malformed long address returns validation error
+        let too_long = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+        assert!(checksum_address(too_long).is_err());
+
+        // Non-hex characters return validation error
+        let non_hex = "0xdeadbeefXYZdeadbeefdeadbeefdeadbeefdeadbee";
+        assert!(checksum_address(non_hex).is_err());
     }
 
     #[test]

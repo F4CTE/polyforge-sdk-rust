@@ -550,7 +550,10 @@ pub struct StrategyCapability {
 pub struct StrategyCapabilities {
     #[serde(default)]
     pub version: Option<String>,
+    #[serde(default)]
     pub capabilities: std::collections::HashMap<String, Vec<StrategyCapability>>,
+    #[serde(default)]
+    pub items: Vec<serde_json::Value>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -576,7 +579,10 @@ pub struct StrategyDesignPattern {
 pub struct StrategyDesignPatterns {
     #[serde(default)]
     pub version: Option<String>,
+    #[serde(default)]
     pub patterns: Vec<StrategyDesignPattern>,
+    #[serde(default)]
+    pub items: Vec<serde_json::Value>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -602,7 +608,10 @@ pub struct StrategyExample {
 pub struct StrategyExamples {
     #[serde(default)]
     pub version: Option<String>,
+    #[serde(default)]
     pub examples: Vec<StrategyExample>,
+    #[serde(default)]
+    pub items: Vec<serde_json::Value>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
