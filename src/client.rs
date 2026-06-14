@@ -10466,8 +10466,8 @@ mod tests {
             "noPercent": 40,
             "totalVotes": 5,
             "userVote": {
-                "direction": "BUY",
-                "confidence": 0.82
+                "direction": "YES",
+                "confidence": 82
             }
         });
         let report: MarketSentimentReport = serde_json::from_value(json).unwrap();
@@ -10475,8 +10475,8 @@ mod tests {
         assert_eq!(report.no_percent, 40);
         assert_eq!(report.total_votes, 5);
         let vote = report.user_vote.as_ref().unwrap();
-        assert_eq!(vote.direction, "BUY");
-        assert!((vote.confidence - 0.82).abs() < f64::EPSILON);
+        assert_eq!(vote.direction, MarketSentimentDirection::Yes);
+        assert_eq!(vote.confidence, 82);
     }
 
     #[test]
@@ -10495,14 +10495,15 @@ mod tests {
     }
 
     #[test]
-    fn test_vote_market_sentiment_params_preserves_fractional_confidence() {
+    fn test_vote_market_sentiment_params_serializes_backend_compatible() {
+        use crate::types::MarketSentimentDirection;
         let params = VoteMarketSentimentParams {
-            direction: "BUY".into(),
-            confidence: 0.82,
+            direction: MarketSentimentDirection::Yes,
+            confidence: 82,
         };
         let json = serde_json::to_value(&params).unwrap();
-        assert_eq!(json["direction"], "BUY");
-        assert_eq!(json["confidence"], serde_json::json!(0.82));
+        assert_eq!(json["direction"], "YES");
+        assert_eq!(json["confidence"], serde_json::json!(82));
     }
 
     #[test]

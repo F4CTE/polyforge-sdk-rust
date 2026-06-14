@@ -4321,16 +4321,26 @@ impl MarketHistoryPeriod {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketSentimentVote {
-    pub direction: String,
-    pub confidence: f64,
+    pub direction: MarketSentimentDirection,
+    pub confidence: i32,
+}
+
+/// Sentiment direction for `POST /api/v1/markets/:marketId/sentiment`.
+///
+/// Matches the backend `@IsIn(["YES", "NO"])` constraint.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MarketSentimentDirection {
+    Yes,
+    No,
 }
 
 /// Request body for `POST /api/v1/markets/:marketId/sentiment`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VoteMarketSentimentParams {
-    pub direction: String,
-    pub confidence: f64,
+    pub direction: MarketSentimentDirection,
+    pub confidence: i32,
 }
 
 /// Aggregated, market-controller-derived sentiment report.
