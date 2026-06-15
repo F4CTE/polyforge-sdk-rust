@@ -10,6 +10,7 @@
 - **list_smart_orders response type** — `list_smart_orders()` now returns `Vec<SmartOrder>` instead of `PaginatedResponse<SmartOrder>`, matching the bare array returned by `GET /api/v1/orders/smart`. (closes #303)
 - **search_markets response shape** — `search_markets()` now returns `SearchMarketsResponse { results: Vec<Market> }` instead of `PaginatedResponse<Market>`, matching the platform's actual `{ "results": [...] }` envelope. `MarketSearchResponse` is retained as a deprecated alias for backward compatibility. (#253)
 - **ConditionalOrder type alias** — `ConditionalOrder.condition_type` now accepts `"type"` as a serde alias, matching the platform's actual field name in `GET /api/v1/conditional-orders` responses. (POLA-5122)
+- **Position response schema** — `Position` now matches the platform portfolio payload by exposing `market_title`, `avg_entry_price`, `resolution_status`, and `market_category`, and by removing stale `avg_price`, `realized_pnl`, and `opened_at` fields. (closes #299)
 
 ### Changed
 - **report_strategy doc** — updated `report_strategy` doc comment to reference `"INAPPROPRIATE"` instead of `"HARMFUL"` to match the platform's current report reason values. (closes #227)

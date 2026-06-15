@@ -7609,25 +7609,30 @@ mod tests {
 
     #[test]
     fn test_position_has_platform_fields() {
-        // #108: Position must match platform response fields
         let json = r#"{
             "id": "pos-1",
             "marketId": "m1",
             "tokenId": "t1",
-            "side": "BUY",
+            "marketTitle": "Will BTC reach 100k?",
+            "side": "YES",
             "size": "100.5",
-            "avgPrice": "0.65",
+            "avgEntryPrice": "0.65",
             "currentPrice": "0.72",
             "unrealizedPnl": "7.035",
-            "realizedPnl": "12.50",
-            "openedAt": "2026-03-15T10:00:00Z"
+            "resolutionStatus": "UNRESOLVED",
+            "marketCategory": "CRYPTO"
         }"#;
         let pos: Position = serde_json::from_str(json).unwrap();
         assert_eq!(pos.id, Some("pos-1".to_string()));
-        assert_eq!(pos.side, Some("BUY".to_string()));
+        assert_eq!(pos.market_id, Some("m1".to_string()));
+        assert_eq!(pos.token_id, Some("t1".to_string()));
+        assert_eq!(pos.market_title, Some("Will BTC reach 100k?".to_string()));
+        assert_eq!(pos.side, Some("YES".to_string()));
+        assert_eq!(pos.avg_entry_price, Some("0.65".to_string()));
+        assert_eq!(pos.current_price, Some("0.72".to_string()));
         assert_eq!(pos.unrealized_pnl, Some("7.035".to_string()));
-        assert_eq!(pos.realized_pnl, Some("12.50".to_string()));
-        assert_eq!(pos.opened_at, Some("2026-03-15T10:00:00Z".to_string()));
+        assert_eq!(pos.resolution_status, Some("UNRESOLVED".to_string()));
+        assert_eq!(pos.market_category, Some("CRYPTO".to_string()));
     }
 
     #[test]

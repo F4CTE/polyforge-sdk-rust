@@ -643,8 +643,8 @@ pub struct Portfolio {
 /// A portfolio position.
 ///
 /// Field names match the platform position response: `id`, `marketId`,
-/// `tokenId`, `side`, `size`, `avgPrice`, `currentPrice`,
-/// `unrealizedPnl`, `realizedPnl`, `openedAt`.
+/// `tokenId`, `marketTitle`, `side`, `size`, `avgEntryPrice`,
+/// `currentPrice`, `unrealizedPnl`, `resolutionStatus`, `marketCategory`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Position {
@@ -654,21 +654,23 @@ pub struct Position {
     pub market_id: Option<String>,
     #[serde(default)]
     pub token_id: Option<String>,
-    /// Position direction: "BUY" or "SELL".
+    #[serde(default)]
+    pub market_title: Option<String>,
+    /// Position direction: "YES" or "NO".
     #[serde(default)]
     pub side: Option<String>,
     #[serde(default)]
     pub size: Option<String>,
     #[serde(default)]
-    pub avg_price: Option<String>,
+    pub avg_entry_price: Option<String>,
     #[serde(default)]
     pub current_price: Option<String>,
     #[serde(default)]
     pub unrealized_pnl: Option<String>,
     #[serde(default)]
-    pub realized_pnl: Option<String>,
+    pub resolution_status: Option<String>,
     #[serde(default)]
-    pub opened_at: Option<String>,
+    pub market_category: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
