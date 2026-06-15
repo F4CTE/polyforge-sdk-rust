@@ -617,6 +617,115 @@ pub struct StrategyExamples {
 }
 
 // ---------------------------------------------------------------------------
+// MCP Feature SDK Alignment — Strategy Discovery Types (POLA-12355)
+// ---------------------------------------------------------------------------
+
+/// Execution health metrics for a strategy.
+///
+/// Returned by `GET /api/v1/strategies/{id}/health`.
+/// Mirrors the TypeScript `StrategyHealth` interface.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyHealth {
+    pub fill_rate: Option<f64>,
+    pub avg_latency_ms: Option<f64>,
+    #[serde(rename = "errorCount24h", default)]
+    pub error_count_24h: Option<u64>,
+    #[serde(rename = "slippageBps", default)]
+    pub slippage_bps: Option<f64>,
+    pub win_rate: Option<f64>,
+    #[serde(rename = "totalPnl", default)]
+    pub total_pnl: Option<f64>,
+    #[serde(rename = "maxDrawdown", default)]
+    pub max_drawdown: Option<f64>,
+    #[serde(rename = "totalOrders", default)]
+    pub total_orders: Option<u64>,
+    #[serde(rename = "filledOrders", default)]
+    pub filled_orders: Option<u64>,
+    #[serde(rename = "lastUpdated", default)]
+    pub last_updated: Option<String>,
+}
+
+/// A single capability entry returned by the strategy capabilities endpoint.
+///
+/// The platform groups capabilities by category; each category maps to a
+/// list of capability identifiers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyCapability {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Strategy capabilities response from `GET /api/v1/strategies/capabilities`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyCapabilities {
+    #[serde(default)]
+    pub version: Option<String>,
+    pub capabilities: std::collections::HashMap<String, Vec<StrategyCapability>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A strategy design pattern for AI / tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyDesignPattern {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(rename = "useCases", default)]
+    pub use_cases: Option<Vec<String>>,
+    #[serde(default)]
+    pub blocks: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Design patterns response from `GET /api/v1/strategies/design-patterns`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyDesignPatterns {
+    #[serde(default)]
+    pub version: Option<String>,
+    pub patterns: Vec<StrategyDesignPattern>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// An example strategy definition for AI / tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyExample {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub strategy: Option<serde_json::Value>,
+    #[serde(default)]
+    pub blocks: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Examples response from `GET /api/v1/strategies/examples`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyExamples {
+    #[serde(default)]
+    pub version: Option<String>,
+    pub examples: Vec<StrategyExample>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
 // Portfolio & Orders
 // ---------------------------------------------------------------------------
 
@@ -624,18 +733,15 @@ pub struct StrategyExamples {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Portfolio {
-    #[serde(rename = "availableBalance", default)]
-    pub available_balance: Option<String>,
     #[serde(default)]
     pub positions: Vec<Position>,
+    /// Total unrealized P&L as returned by GET /api/v1/portfolio.
     #[serde(default)]
-    pub total_value: Option<String>,
-    #[serde(rename = "unrealizedPnl", default)]
-    pub unrealized_pnl: Option<String>,
-    #[serde(rename = "realizedPnl", default)]
-    pub realized_pnl: Option<String>,
-    #[serde(rename = "updatedAt", default)]
-    pub updated_at: Option<String>,
+    pub total_unrealized_pnl: Option<String>,
+    /// Total realized P&L as returned by GET /api/v1/portfolio.
+    #[serde(default)]
+    pub total_realized_pnl: Option<String>,
+    /// Forward-compat: platform may add new aggregate fields later.
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }

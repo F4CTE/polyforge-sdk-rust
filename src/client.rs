@@ -2285,7 +2285,7 @@ impl PolyforgeClient {
     }
 
     /// List your smart orders with child order progress.
-    pub async fn list_smart_orders(&self) -> Result<PaginatedResponse<SmartOrder>> {
+    pub async fn list_smart_orders(&self) -> Result<Vec<SmartOrder>> {
         self.get("/api/v1/orders/smart").await
     }
 
