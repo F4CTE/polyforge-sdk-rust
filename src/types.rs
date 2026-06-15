@@ -4344,6 +4344,14 @@ pub struct VoteMarketSentimentParams {
     pub confidence: i32,
 }
 
+/// Request body for `POST /api/v1/markets/:marketId/sentiment`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoteMarketSentimentParams {
+    pub direction: String,
+    pub confidence: i32,
+}
+
 /// Aggregated, market-controller-derived sentiment report.
 ///
 /// Distinct from [`MarketSentiment`], which is news-derived sentiment from
