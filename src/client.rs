@@ -1,6 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use secrecy::{ExposeSecret, SecretBox};
 use serde_json::json;
+use sha3::{Digest, Keccak256};
 use url::Url;
 use urlencoding::encode;
 
@@ -34,6 +35,31 @@ const MAX_RESPONSE_BODY_SIZE: usize = 1_048_576; // 1 MiB
 const MAX_GDPR_EXPORT_SIZE: usize = 500 * 1024 * 1024; // 500 MiB
 
 const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
+
+fn build_polymarket_activity_query(params: Option<&GetPolymarketActivityParams>) -> String {
+    let mut qp: Vec<(&str, String)> = Vec::new();
+    if let Some(p) = params {
+        if let Some(ref t) = p.activity_type {
+            qp.push(("type", t.clone()));
+        }
+        if let Some(offset) = p.offset {
+            qp.push(("offset", offset.to_string()));
+        }
+        if let Some(limit) = p.limit {
+            qp.push(("limit", limit.to_string()));
+        }
+    }
+
+    if qp.is_empty() {
+        String::new()
+    } else {
+        let pairs: Vec<String> = qp
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, encode(v)))
+            .collect();
+        format!("?{}", pairs.join("&"))
+    }
+}
 
 /// An open SSE connection to a strategy's execution event stream.
 ///
@@ -75,7 +101,7 @@ impl StrategyEventStream {
                         return Some(
                             serde_json::from_str::<StrategyEvent>(raw)
                                 .map_err(PolyforgeError::from),
-                        );
+                       );
                     }
                 }
                 // Skip comment / heartbeat lines and loop
@@ -231,6 +257,31 @@ fn is_uuid_like(value: &str) -> bool {
     })
 }
 
+fn build_polymarket_activity_query(params: Option<&GetPolymarketActivityParams>) -> String {
+    let mut qp: Vec<(&str, String)> = Vec::new();
+    if let Some(p) = params {
+        if let Some(ref t) = p.activity_type {
+            qp.push(("type", t.clone()));
+        }
+        if let Some(offset) = p.offset {
+            qp.push(("offset", offset.to_string()));
+        }
+        if let Some(limit) = p.limit {
+            qp.push(("limit", limit.to_string()));
+        }
+    }
+
+    if qp.is_empty() {
+        String::new()
+    } else {
+        let pairs: Vec<String> = qp
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, encode(v)))
+            .collect();
+        format!("?{}", pairs.join("&"))
+    }
+}
+
 /// Reject slippage outside the server-enforced `0..=5` percent range.
 fn validate_arb_slippage(value: f64) -> Result<()> {
     if value.is_nan() || value.is_infinite() {
@@ -260,6 +311,45 @@ impl std::fmt::Debug for PolyforgeClient {
             .field("api_key", &"[REDACTED]")
             .finish()
     }
+}
+
+/// EIP-55 checksum address normalization.
+///
+/// Lowercases the input, strips the `0x` prefix, computes Keccak-256 of the
+/// lowercase hex string, then upper-cases each hex digit whose corresponding
+/// hash bit is 1.
+///
+/// # Errors
+/// Returns [`PolyforgeError::Validation`] if the address is not a valid hex
+/// string of at most 40 hex characters (with or without `0x` prefix).
+fn checksum_address(addr: &str) -> Result<String> {
+    let hex = addr.strip_prefix("0x").unwrap_or(addr);
+    if hex.len() > 40 {
+        return Err(PolyforgeError::Validation(format!(
+            "address hex component too long: {} chars (max 40)",
+            hex.len()
+        )));
+    }
+    if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(PolyforgeError::Validation(format!(
+            "address contains non-hex characters: {}",
+            hex
+        )));
+    }
+    let lower = hex.to_lowercase();
+    let hash = Keccak256::digest(lower.as_bytes());
+    let mut result = String::with_capacity(42);
+    result.push_str("0x");
+    for (i, byte) in hex.chars().enumerate() {
+        let bit = hash[i / 2] >> (4 - (i % 2) * 4);
+        let bit = (bit & 0x08) != 0;
+        if byte.is_ascii_digit() || (byte.is_ascii_alphabetic() && bit) {
+            result.push(byte.to_ascii_uppercase());
+        } else {
+            result.push(byte.to_ascii_lowercase());
+        }
+    }
+    Ok(result)
 }
 
 impl PolyforgeClient {
@@ -1262,6 +1352,47 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
+    // MCP Strategy Discovery — Typed variants (POLA-12355)
+    // -----------------------------------------------------------------------
+
+    /// Get execution health metrics for a specific strategy.
+    ///
+    /// `GET /api/v1/strategies/{id}/health`
+    pub async fn get_strategy_health_typed(&self, id: &str) -> Result<StrategyHealth> {
+        let path = format!("/api/v1/strategies/{}/health", encode(id));
+        self.get(&path).await
+    }
+
+    /// Get strategy capabilities for AI / tooling discovery.
+    ///
+    /// Returns a structured map of capability categories to individual
+    /// capability entries.
+    ///
+    /// `GET /api/v1/strategies/capabilities`
+    pub async fn get_strategy_capabilities_typed(&self) -> Result<StrategyCapabilities> {
+        self.get_with_optional_auth("/api/v1/strategies/capabilities")
+            .await
+    }
+
+    /// Get strategy design patterns for AI / tooling discovery.
+    ///
+    /// `GET /api/v1/strategies/design-patterns`
+    pub async fn get_strategy_design_patterns_typed(
+        &self,
+    ) -> Result<StrategyDesignPatterns> {
+        self.get_with_optional_auth("/api/v1/strategies/design-patterns")
+            .await
+    }
+
+    /// Get example strategy definitions for AI / tooling discovery.
+    ///
+    /// `GET /api/v1/strategies/examples`
+    pub async fn get_strategy_examples_typed(&self) -> Result<StrategyExamples> {
+        self.get_with_optional_auth("/api/v1/strategies/examples")
+            .await
+    }
+
+    // -----------------------------------------------------------------------
     // Strategy Social
     // -----------------------------------------------------------------------
 
@@ -1881,10 +2012,6 @@ impl PolyforgeClient {
     ///
     /// `GET /api/v1/sports/combos/:collectionTicker`
     ///
-    /// **Server-side caveat:** at the time of writing the controller forwards
-    /// to `listComboCollections({page:1,limit:1})` and ignores the
-    /// `collectionTicker` path param. The SDK wraps the route as-is for
-    /// fidelity; a server-side fix is tracked separately.
     pub async fn get_sports_combo_collection(
         &self,
         collection_ticker: &str,
@@ -2551,8 +2678,21 @@ impl PolyforgeClient {
 
     /// Create a new copy trading configuration.
     pub async fn create_copy_config(&self, params: &CreateCopyConfigParams) -> Result<CopyConfig> {
-        let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        let body = Self::create_copy_config_body(params)?;
         self.post("/api/v1/copy", &body).await
+    }
+
+    /// Build the JSON body for `create_copy_config`, normalizing `target_wallet`
+    /// to EIP-55 checksummed format.
+    fn create_copy_config_body(params: &CreateCopyConfigParams) -> Result<serde_json::Value> {
+        let mut body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
+        if let Some(raw) = body
+            .get("targetWallet")
+            .and_then(serde_json::Value::as_str)
+        {
+            body["targetWallet"] = serde_json::Value::String(checksum_address(raw)?);
+        }
+        Ok(body)
     }
 
     /// Get a single copy trading configuration by ID.
@@ -2843,10 +2983,7 @@ impl PolyforgeClient {
         &self,
         params: Option<&GetPolymarketActivityParams>,
     ) -> Result<PolymarketActivityResponse> {
-        let qs = match params.and_then(|p| p.activity_type.as_deref()) {
-            Some(t) => format!("?type={}", encode(t)),
-            None => String::new(),
-        };
+        let qs = build_polymarket_activity_query(params);
         self.get(&format!("/api/v1/portfolio/polymarket/activity{qs}"))
             .await
     }
@@ -7515,25 +7652,30 @@ mod tests {
 
     #[test]
     fn test_position_has_platform_fields() {
-        // #108: Position must match platform response fields
         let json = r#"{
             "id": "pos-1",
             "marketId": "m1",
             "tokenId": "t1",
-            "side": "BUY",
+            "marketTitle": "Will BTC reach 100k?",
+            "side": "YES",
             "size": "100.5",
-            "avgPrice": "0.65",
+            "avgEntryPrice": "0.65",
             "currentPrice": "0.72",
             "unrealizedPnl": "7.035",
-            "realizedPnl": "12.50",
-            "openedAt": "2026-03-15T10:00:00Z"
+            "resolutionStatus": "UNRESOLVED",
+            "marketCategory": "CRYPTO"
         }"#;
         let pos: Position = serde_json::from_str(json).unwrap();
         assert_eq!(pos.id, Some("pos-1".to_string()));
-        assert_eq!(pos.side, Some("BUY".to_string()));
+        assert_eq!(pos.market_id, Some("m1".to_string()));
+        assert_eq!(pos.token_id, Some("t1".to_string()));
+        assert_eq!(pos.market_title, Some("Will BTC reach 100k?".to_string()));
+        assert_eq!(pos.side, Some("YES".to_string()));
+        assert_eq!(pos.avg_entry_price, Some("0.65".to_string()));
+        assert_eq!(pos.current_price, Some("0.72".to_string()));
         assert_eq!(pos.unrealized_pnl, Some("7.035".to_string()));
-        assert_eq!(pos.realized_pnl, Some("12.50".to_string()));
-        assert_eq!(pos.opened_at, Some("2026-03-15T10:00:00Z".to_string()));
+        assert_eq!(pos.resolution_status, Some("UNRESOLVED".to_string()));
+        assert_eq!(pos.market_category, Some("CRYPTO".to_string()));
     }
 
     #[test]
@@ -7664,6 +7806,52 @@ mod tests {
         assert_eq!(body["sizeValue"], "100");
         assert!(body.get("sourceStrategyId").is_none());
         assert!(body.get("allocationPercent").is_none());
+    }
+
+    #[test]
+    fn test_checksum_address_eip55() {
+        // All-lowercase hex gets EIP-55 checksummed (mixed case)
+        let all_lower = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+        let cksummed = checksum_address(all_lower).unwrap();
+        assert!(cksummed.starts_with("0x"));
+        assert_eq!(cksummed.len(), 42);
+        assert_ne!(cksummed, all_lower); // EIP-55 produces mixed case
+
+        // Mixed case input gets normalized to same EIP-55 checksum
+        let mixed = "0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf";
+        assert_eq!(checksum_address(mixed).unwrap(), cksummed);
+
+        // Verify known EIP-55 address: 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed
+        let known = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
+        assert_eq!(checksum_address(known).unwrap(), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+
+        // Already checksummed address stays unchanged (idempotent)
+        let already = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+        assert_eq!(checksum_address(already).unwrap(), already);
+
+        // Malformed long address returns validation error
+        let too_long = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+        assert!(checksum_address(too_long).is_err());
+
+        // Non-hex characters return validation error
+        let non_hex = "0xdeadbeefXYZdeadbeefdeadbeefdeadbeefdeadbee";
+        assert!(checksum_address(non_hex).is_err());
+    }
+
+    #[test]
+    fn test_create_copy_config_body_checksums_target_wallet() {
+        use crate::PolyforgeClient;
+
+        let params = CreateCopyConfigParams {
+            target_wallet: "0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf".to_string(),
+            mode: Some(CopyMode::Percentage),
+            size_value: Some("100".to_string()),
+            ..Default::default()
+        };
+
+        let body = PolyforgeClient::create_copy_config_body(&params).unwrap();
+        let checksummed = checksum_address("0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf").unwrap();
+        assert_eq!(body["targetWallet"], checksummed);
     }
 
     #[test]
@@ -8272,6 +8460,19 @@ mod tests {
     fn test_get_polymarket_activity_params_default() {
         let params = GetPolymarketActivityParams::default();
         assert!(params.activity_type.is_none());
+        assert!(params.offset.is_none());
+        assert!(params.limit.is_none());
+    }
+
+    #[test]
+    fn test_get_polymarket_activity_query_includes_pagination_params() {
+        let qs = build_polymarket_activity_query(Some(&GetPolymarketActivityParams {
+            activity_type: Some("TRADE".to_string()),
+            offset: Some(100),
+            limit: Some(25),
+        }));
+
+        assert_eq!(qs, "?type=TRADE&offset=100&limit=25");
     }
 
     // ── Rewards types (#152) ────────────────────────────────────────────
@@ -8500,22 +8701,25 @@ mod tests {
         let p = CreateArbitrageMatchParams {
             polymarket_market_id: "poly-1".into(),
             kalshi_market_id: "kalshi-1".into(),
-            notes: Some("test".into()),
         };
         let v = serde_json::to_value(&p).unwrap();
-        assert_eq!(v["polymarketMarketId"], "poly-1");
-        assert_eq!(v["notes"], "test");
+        let obj = v.as_object().unwrap();
+        assert_eq!(v["polymarketId"], "poly-1");
+        assert_eq!(v["kalshiId"], "kalshi-1");
+        assert!(!obj.contains_key("notes"));
     }
 
     #[test]
-    fn test_create_arbitrage_match_params_omits_none_notes() {
+    fn test_create_arbitrage_match_params_has_correct_field_names() {
         let p = CreateArbitrageMatchParams {
-            polymarket_market_id: "poly-1".into(),
-            kalshi_market_id: "kalshi-1".into(),
-            notes: None,
+            polymarket_market_id: "poly-abc".into(),
+            kalshi_market_id: "kalshi-xyz".into(),
         };
         let v = serde_json::to_value(&p).unwrap();
-        assert!(v.get("notes").is_none());
+        let obj = v.as_object().unwrap();
+        assert_eq!(obj.len(), 2);
+        assert!(obj.contains_key("polymarketId"));
+        assert!(obj.contains_key("kalshiId"));
     }
 
     #[test]
@@ -10313,8 +10517,8 @@ mod tests {
             "noPercent": 40,
             "totalVotes": 5,
             "userVote": {
-                "direction": "BUY",
-                "confidence": 0.82
+                "direction": "YES",
+                "confidence": 82
             }
         });
         let report: MarketSentimentReport = serde_json::from_value(json).unwrap();
@@ -10322,8 +10526,8 @@ mod tests {
         assert_eq!(report.no_percent, 40);
         assert_eq!(report.total_votes, 5);
         let vote = report.user_vote.as_ref().unwrap();
-        assert_eq!(vote.direction, "BUY");
-        assert!((vote.confidence - 0.82).abs() < f64::EPSILON);
+        assert_eq!(vote.direction, MarketSentimentDirection::Yes);
+        assert_eq!(vote.confidence, 82);
     }
 
     #[test]
@@ -10342,14 +10546,15 @@ mod tests {
     }
 
     #[test]
-    fn test_vote_market_sentiment_params_preserves_fractional_confidence() {
+    fn test_vote_market_sentiment_params_serializes_backend_compatible() {
+        use crate::types::MarketSentimentDirection;
         let params = VoteMarketSentimentParams {
-            direction: "BUY".into(),
-            confidence: 0.82,
+            direction: MarketSentimentDirection::Yes,
+            confidence: 82,
         };
         let json = serde_json::to_value(&params).unwrap();
-        assert_eq!(json["direction"], "BUY");
-        assert_eq!(json["confidence"], serde_json::json!(0.82));
+        assert_eq!(json["direction"], "YES");
+        assert_eq!(json["confidence"], serde_json::json!(82));
     }
 
     #[test]

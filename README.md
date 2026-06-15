@@ -76,7 +76,14 @@ async fn main() -> polyforge::Result<()> {
 |--------|-------------|
 | `list_strategies(params)` | List strategies with optional status filter, sorting, and pagination |
 | `get_strategy(id)` | Get a strategy by ID |
-| `create_strategy(name, description)` | Create a new strategy |
+| `get_strategy_health(id)` | Get execution health metrics for a strategy |
+| `validate_strategy(id)` | Validate a saved strategy on the platform |
+| `validate_strategy_blocks(params)` | Validate strategy block groups before create/update |
+| `list_strategy_block_types()` | Discover supported strategy block types |
+| `get_block_schema(block_type)` | Fetch configuration schema for one block type |
+| `preview_strategy_update(id, params)` | Preview a strategy update without applying it |
+| `explain_strategy_decision(id, params)` | Ask the platform to explain an AI/operator decision |
+| `create_strategy(params)` | Create a new strategy |
 | `create_strategy_from_description(desc, market_id)` | AI-powered strategy creation |
 | `get_strategy_health(id)` | Get execution health metrics for a strategy |
 | `start_strategy(id, mode)` | Start a strategy (live or paper) |
@@ -88,6 +95,72 @@ async fn main() -> polyforge::Result<()> {
 | `get_strategy_examples()` | Fetch example strategies for discovery and onboarding |
 | `export_strategy(id)` | Export strategy config as JSON |
 | `watch_strategy(id)` | Stream live execution events via SSE |
+
+### Strategy AI / Operator Endpoints
+
+The strategy health, validation, block discovery, preview, and explanation
+methods mirror the platform operator surface used by SDKs and MCP adapters.
+Response structs include forward-compatible `extra` fields so callers can read
+new backend metadata before the SDK needs a breaking type update.
+
+```rust
+use polyforge::{
+    Block, ExplainStrategyDecisionParams, PolyforgeClient, PreviewStrategyUpdateParams,
+    StrategyBlocksParams,
+};
+
+#[tokio::main]
+async fn main() -> polyforge::Result<()> {
+    let client = PolyforgeClient::new("your-api-key")?;
+
+    let health = client.get_strategy_health("strat-uuid").await?;
+    println!("24h errors: {}", health.error_count_24h);
+
+    let blocks = StrategyBlocksParams {
+        actions: Some(vec![Block {
+            id: None,
+            block_type: Some("BUY".into()),
+            label: None,
+            config: None,
+            connections: vec![],
+            extra: serde_json::Value::Null,
+        }]),
+        ..Default::default()
+    };
+    let validation = client.validate_strategy_blocks(&blocks).await?;
+    println!("valid: {}", validation.valid);
+
+    let block_types = client.list_strategy_block_types().await?;
+    println!("known block types: {}", block_types.block_types.len());
+
+    let schema = client.get_block_schema("BUY").await?;
+    println!("BUY schema: {:?}", schema.schema);
+
+    let preview = client
+        .preview_strategy_update(
+            "strat-uuid",
+            &PreviewStrategyUpdateParams {
+                blocks,
+                ..Default::default()
+            },
+        )
+        .await?;
+    println!("preview valid: {:?}", preview.valid);
+
+    let explanation = client
+        .explain_strategy_decision(
+            "strat-uuid",
+            &ExplainStrategyDecisionParams {
+                event_id: Some("evt-123".into()),
+                ..Default::default()
+            },
+        )
+        .await?;
+    println!("decision: {:?}", explanation.summary);
+
+    Ok(())
+}
+```
 
 ### Live Execution Watching
 
