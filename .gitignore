@@ -7,3 +7,6 @@ graphify-out/
 
 # Playwright MCP browser artifacts
 .playwright-mcp/
+
+# Paperclip worktrees and runtime
+.paperclip/

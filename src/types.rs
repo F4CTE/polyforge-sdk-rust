@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -155,6 +157,15 @@ pub struct ListStrategiesParams {
     pub limit: Option<u32>,
 }
 
+/// Parameters for listing strategy templates.
+#[derive(Debug, Default)]
+pub struct ListStrategyTemplatesParams {
+    /// Page number (1-based, default 1).
+    pub page: Option<u32>,
+    /// Items per page (default 20, max 100).
+    pub limit: Option<u32>,
+}
+
 /// Strategy visibility.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -300,6 +311,16 @@ pub struct Strategy {
     pub extra: serde_json::Value,
 }
 
+impl Strategy {
+    /// Kalshi subaccount ID (0–99) for P&L attribution.
+    ///
+    /// Read from the `extra` field at key `kalshiSubaccount` to preserve
+    /// semver compatibility of the `Strategy` struct layout.
+    pub fn kalshi_subaccount(&self) -> Option<u64> {
+        self.extra.get("kalshiSubaccount").and_then(|v| v.as_u64())
+    }
+}
+
 /// Response from strategy lifecycle operations (start/stop/pause/resume).
 ///
 /// The platform returns a minimal status object rather than the full `Strategy`.
@@ -333,175 +354,6 @@ pub struct StrategyHealth {
     pub extra: serde_json::Value,
 }
 
-/// One issue returned by strategy validation.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyValidationIssue {
-    #[serde(default)]
-    pub code: Option<String>,
-    #[serde(default)]
-    pub message: Option<String>,
-    #[serde(default)]
-    pub path: Option<String>,
-    #[serde(default)]
-    pub block_id: Option<String>,
-    #[serde(default)]
-    pub severity: Option<String>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// Validation result for a strategy.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyValidationResult {
-    pub valid: bool,
-    #[serde(default)]
-    pub errors: Vec<StrategyValidationIssue>,
-    #[serde(default)]
-    pub warnings: Vec<StrategyValidationIssue>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// Strategy block groups for validation and preview endpoints.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyBlocksParams {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub triggers: Option<Vec<Block>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Vec<Block>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub actions: Option<Vec<Block>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub safety: Option<Vec<Block>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub logic_blocks: Option<Vec<LogicBlock>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub calc_blocks: Option<Vec<CalcBlock>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub variables: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub canvas: Option<serde_json::Value>,
-}
-
-/// One strategy block type advertised by the platform.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyBlockType {
-    #[serde(rename = "type")]
-    pub block_type: String,
-    #[serde(default)]
-    pub category: Option<String>,
-    #[serde(default)]
-    pub label: Option<String>,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub schema: Option<serde_json::Value>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// Response from strategy block type discovery.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyBlockTypesResponse {
-    #[serde(default)]
-    pub block_types: Vec<StrategyBlockType>,
-    #[serde(default)]
-    pub categories: Option<serde_json::Value>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// JSON schema and metadata for one strategy block type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyBlockSchema {
-    #[serde(rename = "type")]
-    pub block_type: String,
-    #[serde(default)]
-    pub category: Option<String>,
-    #[serde(default)]
-    pub label: Option<String>,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub schema: serde_json::Value,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// Parameters for previewing a strategy update before applying it.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PreviewStrategyUpdateParams {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub market_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub visibility: Option<Visibility>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub exec_mode: Option<ExecMode>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tick_ms: Option<u64>,
-    #[serde(flatten)]
-    pub blocks: StrategyBlocksParams,
-}
-
-/// Preview result for a proposed strategy update.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyUpdatePreview {
-    #[serde(default)]
-    pub valid: Option<bool>,
-    #[serde(default)]
-    pub validation: Option<StrategyValidationResult>,
-    #[serde(default)]
-    pub diff: Option<serde_json::Value>,
-    #[serde(default)]
-    pub estimated_impact: Option<serde_json::Value>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// Parameters for asking the platform to explain a strategy decision.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ExplainStrategyDecisionParams {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub event_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub order_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub timestamp: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context: Option<serde_json::Value>,
-}
-
-/// AI/operator explanation for a strategy decision.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyDecisionExplanation {
-    #[serde(default)]
-    pub summary: Option<String>,
-    #[serde(default)]
-    pub rationale: Option<String>,
-    #[serde(default)]
-    pub inputs: Option<serde_json::Value>,
-    #[serde(default)]
-    pub actions: Option<serde_json::Value>,
-    #[serde(default)]
-    pub confidence: Option<f64>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
 /// A strategy template with block configuration and popularity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -526,25 +378,18 @@ pub struct StrategyTemplate {
 /// Parameters for creating a strategy with full block configuration.
 ///
 /// All fields except `name` are `Option` and default to `None`.
-/// This struct is **exhaustive** — adding a new field is a breaking change
-/// (covered by the 2.0.0 major version bump).
 ///
-/// Construct with a struct literal and `..Default::default()`:
+/// Use [`CreateStrategyParams::new`] for construction, or [`Default`] + struct-update:
 ///
 /// ```ignore
-/// let params = CreateStrategyParams {
+/// CreateStrategyParams {
 ///     name: "My Strategy".into(),
 ///     kalshi_subaccount: Some(42),
 ///     ..Default::default()
 /// };
 /// ```
-/// Or use the convenience constructor [`CreateStrategyParams::new`].
 ///
-/// ## Migration from 1.x
-/// Users upgrading from 1.x must use `..Default::default()` or
-/// `CreateStrategyParams::new(...)` instead of bare struct literals.
-/// The new `kalshi_subaccount` field defaults to `None` and is omitted
-/// from serialized JSON when `None`.
+/// Or use the convenience constructor [`CreateStrategyParams::new`].
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateStrategyParams {
@@ -683,6 +528,94 @@ pub struct Backtest {
     pub extra: serde_json::Value,
 }
 
+/// A single capability entry returned by the strategy capabilities endpoint.
+///
+/// The platform groups capabilities by category; each category maps to a
+/// list of capability identifiers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyCapability {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Strategy capabilities response from `GET /api/v1/strategies/capabilities`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyCapabilities {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub capabilities: std::collections::HashMap<String, Vec<StrategyCapability>>,
+    #[serde(default)]
+    pub items: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A strategy design pattern for AI / tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyDesignPattern {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(rename = "useCases", default)]
+    pub use_cases: Option<Vec<String>>,
+    #[serde(default)]
+    pub blocks: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Design patterns response from `GET /api/v1/strategies/design-patterns`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyDesignPatterns {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub patterns: Vec<StrategyDesignPattern>,
+    #[serde(default)]
+    pub items: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// An example strategy definition for AI / tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyExample {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub strategy: Option<serde_json::Value>,
+    #[serde(default)]
+    pub blocks: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Examples response from `GET /api/v1/strategies/examples`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyExamples {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub examples: Vec<StrategyExample>,
+    #[serde(default)]
+    pub items: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
 // ---------------------------------------------------------------------------
 // Portfolio & Orders
 // ---------------------------------------------------------------------------
@@ -710,8 +643,8 @@ pub struct Portfolio {
 /// A portfolio position.
 ///
 /// Field names match the platform position response: `id`, `marketId`,
-/// `tokenId`, `side`, `size`, `avgPrice`, `currentPrice`,
-/// `unrealizedPnl`, `realizedPnl`, `openedAt`.
+/// `tokenId`, `marketTitle`, `side`, `size`, `avgEntryPrice`,
+/// `currentPrice`, `unrealizedPnl`, `resolutionStatus`, `marketCategory`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Position {
@@ -721,21 +654,23 @@ pub struct Position {
     pub market_id: Option<String>,
     #[serde(default)]
     pub token_id: Option<String>,
-    /// Position direction: "BUY" or "SELL".
+    #[serde(default)]
+    pub market_title: Option<String>,
+    /// Position direction: "YES" or "NO".
     #[serde(default)]
     pub side: Option<String>,
     #[serde(default)]
     pub size: Option<String>,
     #[serde(default)]
-    pub avg_price: Option<String>,
+    pub avg_entry_price: Option<String>,
     #[serde(default)]
     pub current_price: Option<String>,
     #[serde(default)]
     pub unrealized_pnl: Option<String>,
     #[serde(default)]
-    pub realized_pnl: Option<String>,
+    pub resolution_status: Option<String>,
     #[serde(default)]
-    pub opened_at: Option<String>,
+    pub market_category: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -1077,7 +1012,7 @@ pub struct Webhook {
     pub url: Option<String>,
     #[serde(default)]
     pub events: Vec<WebhookEvent>,
-    #[serde(default)]
+    #[serde(default, alias = "active")]
     pub enabled: Option<bool>,
     #[serde(default, skip_serializing)]
     pub secret: Option<String>,
@@ -1403,6 +1338,33 @@ pub struct AccuracyScore {
     pub by_category: std::collections::HashMap<String, serde_json::Value>,
 }
 
+/// Parameters for the accuracy leaderboard endpoint.
+#[derive(Debug, Default)]
+pub struct AccuracyLeaderboardParams {
+    /// Aggregation window: "7d", "30d", or "allTime".
+    pub period: Option<String>,
+    /// 1-100. Defaults to 20 server-side.
+    pub limit: Option<u32>,
+    /// Platform-native page number. Takes precedence over offset when supplied.
+    pub page: Option<u32>,
+    /// Zero-based row offset. Converted to the platform page/limit contract.
+    pub offset: Option<u32>,
+}
+
+/// A single entry in the accuracy leaderboard.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccuracyLeaderboardEntry {
+    pub rank: u32,
+    pub user_id: String,
+    pub username: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub pnl: String,
+    pub win_rate: String,
+    pub trade_count: u32,
+}
+
 /// AI-generated portfolio review and optimization suggestions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortfolioReview {
@@ -1567,34 +1529,325 @@ pub enum ConditionalOrderType {
 }
 
 /// A conditional order (limit, stop, trailing-stop, etc.).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+///
+/// **Human-readable deserialization** (JSON, YAML, …): accepts
+/// `conditionType` (canonical), `type` (platform alias), and
+/// `condition_type` (snake_case) as field names for
+/// [`condition_type`](Self::condition_type). When multiple aliases
+/// appear, precedence is `conditionType` > `type` > `condition_type`.
+/// Unknown keys are collected into [`extra`](Self::extra).
+///
+/// **Non-human-readable deserialization** (bincode, …): falls back to
+/// derive-based struct deserialization. The type alias is not
+/// supported in this mode. The `extra` map is serialized as a JSON
+/// string to avoid `deserialize_any` (unsupported in compact/binary
+/// formats) and is reconstructed on deserialization.
+///
+/// **Serialization**: uses canonical `conditionType` (camelCase).
+#[derive(Debug, Clone)]
 pub struct ConditionalOrder {
     pub id: String,
-    #[serde(default)]
     pub token_id: Option<String>,
-    #[serde(default)]
     pub side: Option<String>,
-    #[serde(default)]
     pub outcome: Option<String>,
-    #[serde(default)]
     pub size: Option<String>,
-    #[serde(default)]
     pub trigger_price: Option<String>,
-    #[serde(default)]
     pub limit_price: Option<String>,
-    #[serde(default, alias = "type")]
     pub condition_type: Option<String>,
-    #[serde(default)]
     pub status: Option<ConditionalOrderStatus>,
-    #[serde(default)]
     pub created_at: Option<String>,
-    #[serde(default)]
     pub triggered_at: Option<String>,
-    #[serde(default)]
     pub expires_at: Option<String>,
-    #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+impl Serialize for ConditionalOrder {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            use serde::ser::SerializeMap;
+            let extra_entries = match &self.extra {
+                serde_json::Value::Object(obj) => obj.len(),
+                serde_json::Value::Null => 0,
+                _ => {
+                    return Err(serde::ser::Error::custom(
+                        "ConditionalOrder::extra must be an Object or Null",
+                    ));
+                }
+            };
+            let mut map = serializer.serialize_map(Some(12 + extra_entries))?;
+            map.serialize_entry("id", &self.id)?;
+            map.serialize_entry("tokenId", &self.token_id)?;
+            map.serialize_entry("side", &self.side)?;
+            map.serialize_entry("outcome", &self.outcome)?;
+            map.serialize_entry("size", &self.size)?;
+            map.serialize_entry("triggerPrice", &self.trigger_price)?;
+            map.serialize_entry("limitPrice", &self.limit_price)?;
+            map.serialize_entry("conditionType", &self.condition_type)?;
+            map.serialize_entry("status", &self.status)?;
+            map.serialize_entry("createdAt", &self.created_at)?;
+            map.serialize_entry("triggeredAt", &self.triggered_at)?;
+            map.serialize_entry("expiresAt", &self.expires_at)?;
+            if let serde_json::Value::Object(obj) = &self.extra {
+                for (k, v) in obj {
+                    map.serialize_entry(k, v)?;
+                }
+            }
+            map.end()
+        } else {
+            use serde::ser::SerializeStruct;
+            let mut s = serializer.serialize_struct("ConditionalOrder", 13)?;
+            s.serialize_field("id", &self.id)?;
+            s.serialize_field("tokenId", &self.token_id)?;
+            s.serialize_field("side", &self.side)?;
+            s.serialize_field("outcome", &self.outcome)?;
+            s.serialize_field("size", &self.size)?;
+            s.serialize_field("triggerPrice", &self.trigger_price)?;
+            s.serialize_field("limitPrice", &self.limit_price)?;
+            s.serialize_field("conditionType", &self.condition_type)?;
+            s.serialize_field("status", &self.status)?;
+            s.serialize_field("createdAt", &self.created_at)?;
+            s.serialize_field("triggeredAt", &self.triggered_at)?;
+            s.serialize_field("expiresAt", &self.expires_at)?;
+            let extra_json =
+                serde_json::to_string(&self.extra).map_err(serde::ser::Error::custom)?;
+            s.serialize_field("extra", &Some(&extra_json))?;
+            s.end()
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ConditionalOrder {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            deserializer.deserialize_map(ConditionalOrderVisitor)
+        } else {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Helper {
+                id: String,
+                token_id: Option<String>,
+                side: Option<String>,
+                outcome: Option<String>,
+                size: Option<String>,
+                trigger_price: Option<String>,
+                limit_price: Option<String>,
+                #[serde(alias = "type")]
+                condition_type: Option<String>,
+                status: Option<ConditionalOrderStatus>,
+                created_at: Option<String>,
+                triggered_at: Option<String>,
+                expires_at: Option<String>,
+                #[serde(default)]
+                extra: Option<String>,
+            }
+            let h = Helper::deserialize(deserializer)?;
+            let extra = match h.extra {
+                Some(s) => serde_json::from_str(&s).map_err(serde::de::Error::custom)?,
+                None => serde_json::Value::Object(serde_json::Map::new()),
+            };
+            Ok(ConditionalOrder {
+                id: h.id,
+                token_id: h.token_id,
+                side: h.side,
+                outcome: h.outcome,
+                size: h.size,
+                trigger_price: h.trigger_price,
+                limit_price: h.limit_price,
+                condition_type: h.condition_type,
+                status: h.status,
+                created_at: h.created_at,
+                triggered_at: h.triggered_at,
+                expires_at: h.expires_at,
+                extra,
+            })
+        }
+    }
+}
+
+fn map_field_value<'de, A, T>(map: &mut A, name: &'static str) -> Result<T, A::Error>
+where
+    A: serde::de::MapAccess<'de>,
+    T: serde::de::Deserialize<'de>,
+{
+    map.next_value::<T>().map_err(|e| {
+        <A::Error as serde::de::Error>::custom(format!("invalid value for field `{name}`: {e}"))
+    })
+}
+
+struct ConditionalOrderVisitor;
+
+impl<'de> serde::de::Visitor<'de> for ConditionalOrderVisitor {
+    type Value = ConditionalOrder;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a ConditionalOrder object")
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::MapAccess<'de>,
+    {
+        let mut id: Option<String> = None;
+        let mut token_id: Option<Option<String>> = None;
+        let mut side: Option<Option<String>> = None;
+        let mut outcome: Option<Option<String>> = None;
+        let mut size: Option<Option<String>> = None;
+        let mut trigger_price: Option<Option<String>> = None;
+        let mut limit_price: Option<Option<String>> = None;
+        let mut condition_type: Option<String> = None;
+        let mut condition_type_priority: u8 = 0;
+        let mut seen_condition_type: bool = false;
+        let mut seen_type: bool = false;
+        let mut seen_condition_type_snake: bool = false;
+        let mut status: Option<Option<ConditionalOrderStatus>> = None;
+        let mut created_at: Option<Option<String>> = None;
+        let mut triggered_at: Option<Option<String>> = None;
+        let mut expires_at: Option<Option<String>> = None;
+        let mut extra_map = serde_json::Map::new();
+
+        while let Some(key) = map.next_key::<String>()? {
+            match key.as_str() {
+                "id" => {
+                    if id.is_some() {
+                        return Err(serde::de::Error::duplicate_field("id"));
+                    }
+                    id = Some(map_field_value(&mut map, "id")?);
+                }
+                "tokenId" => {
+                    if token_id.is_some() {
+                        return Err(serde::de::Error::duplicate_field("tokenId"));
+                    }
+                    token_id = Some(map_field_value(&mut map, "tokenId")?);
+                }
+                "side" => {
+                    if side.is_some() {
+                        return Err(serde::de::Error::duplicate_field("side"));
+                    }
+                    side = Some(map_field_value(&mut map, "side")?);
+                }
+                "outcome" => {
+                    if outcome.is_some() {
+                        return Err(serde::de::Error::duplicate_field("outcome"));
+                    }
+                    outcome = Some(map_field_value(&mut map, "outcome")?);
+                }
+                "size" => {
+                    if size.is_some() {
+                        return Err(serde::de::Error::duplicate_field("size"));
+                    }
+                    size = Some(map_field_value(&mut map, "size")?);
+                }
+                "triggerPrice" => {
+                    if trigger_price.is_some() {
+                        return Err(serde::de::Error::duplicate_field("triggerPrice"));
+                    }
+                    trigger_price = Some(map_field_value(&mut map, "triggerPrice")?);
+                }
+                "limitPrice" => {
+                    if limit_price.is_some() {
+                        return Err(serde::de::Error::duplicate_field("limitPrice"));
+                    }
+                    limit_price = Some(map_field_value(&mut map, "limitPrice")?);
+                }
+                "conditionType" => {
+                    if seen_condition_type {
+                        return Err(serde::de::Error::duplicate_field("conditionType"));
+                    }
+                    seen_condition_type = true;
+                    if condition_type_priority < 3 {
+                        let val: Option<String> = map_field_value(&mut map, "conditionType")?;
+                        if let Some(v) = val {
+                            condition_type = Some(v);
+                            condition_type_priority = 3;
+                        }
+                    } else {
+                        let _: serde::de::IgnoredAny = map.next_value()?;
+                    }
+                }
+                "type" => {
+                    if seen_type {
+                        return Err(serde::de::Error::duplicate_field("type"));
+                    }
+                    seen_type = true;
+                    if condition_type_priority < 2 {
+                        let val: Option<String> = map_field_value(&mut map, "type")?;
+                        if let Some(v) = val {
+                            condition_type = Some(v);
+                            condition_type_priority = 2;
+                        }
+                    } else {
+                        let _: serde::de::IgnoredAny = map.next_value()?;
+                    }
+                }
+                "condition_type" => {
+                    if seen_condition_type_snake {
+                        return Err(serde::de::Error::duplicate_field("condition_type"));
+                    }
+                    seen_condition_type_snake = true;
+                    if condition_type_priority < 1 {
+                        let val: Option<String> = map_field_value(&mut map, "condition_type")?;
+                        if let Some(v) = val {
+                            condition_type = Some(v);
+                            condition_type_priority = 1;
+                        }
+                    } else {
+                        let _: serde::de::IgnoredAny = map.next_value()?;
+                    }
+                }
+                "status" => {
+                    if status.is_some() {
+                        return Err(serde::de::Error::duplicate_field("status"));
+                    }
+                    status = Some(map_field_value(&mut map, "status")?);
+                }
+                "createdAt" => {
+                    if created_at.is_some() {
+                        return Err(serde::de::Error::duplicate_field("createdAt"));
+                    }
+                    created_at = Some(map_field_value(&mut map, "createdAt")?);
+                }
+                "triggeredAt" => {
+                    if triggered_at.is_some() {
+                        return Err(serde::de::Error::duplicate_field("triggeredAt"));
+                    }
+                    triggered_at = Some(map_field_value(&mut map, "triggeredAt")?);
+                }
+                "expiresAt" => {
+                    if expires_at.is_some() {
+                        return Err(serde::de::Error::duplicate_field("expiresAt"));
+                    }
+                    expires_at = Some(map_field_value(&mut map, "expiresAt")?);
+                }
+                _ => {
+                    extra_map.insert(key, map.next_value::<serde_json::Value>()?);
+                }
+            }
+        }
+
+        let id = id.ok_or_else(|| serde::de::Error::missing_field("id"))?;
+
+        Ok(ConditionalOrder {
+            id,
+            token_id: token_id.unwrap_or(None),
+            side: side.unwrap_or(None),
+            outcome: outcome.unwrap_or(None),
+            size: size.unwrap_or(None),
+            trigger_price: trigger_price.unwrap_or(None),
+            limit_price: limit_price.unwrap_or(None),
+            condition_type,
+            status: status.unwrap_or(None),
+            created_at: created_at.unwrap_or(None),
+            triggered_at: triggered_at.unwrap_or(None),
+            expires_at: expires_at.unwrap_or(None),
+            extra: serde_json::Value::Object(extra_map),
+        })
+    }
 }
 
 /// Parameters for listing conditional orders.
@@ -1618,8 +1871,10 @@ pub struct CreateConditionalOrderParams {
     pub outcome: String,
     pub size: f64,
     pub trigger_price: f64,
+    /// Limit price as a number string (e.g. `"0.67"`).  The platform
+    /// validates this field with `@IsNumberString()`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit_price: Option<f64>,
+    pub limit_price: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trailing_pct: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1919,10 +2174,21 @@ pub struct RateListingParams {
 // Risk Settings
 // ---------------------------------------------------------------------------
 
+fn default_drawdown_lookback_hours() -> i32 {
+    24
+}
+
+fn default_drawdown_threshold_pct() -> f64 {
+    0.1
+}
+
 /// Current drawdown / circuit-breaker settings for the authenticated user.
 ///
-/// Field names and types match the platform `RiskSettings` contract
+/// Field names and types match the platform's `RiskSettings` contract
 /// exactly (camelCase on the wire).
+/// Unknown fields returned by the server (`userId`, `updatedAt`, ...)
+/// are preserved in `extra` so that callers using a newer platform
+/// release do not lose data on round-trip.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RiskSettings {
@@ -1941,6 +2207,10 @@ pub struct RiskSettings {
     /// ISO-8601 timestamp of when the circuit breaker tripped, or `None`.
     #[serde(default)]
     pub circuit_breaker_tripped_at: Option<String>,
+    /// Forward-compat bucket for any additional fields the platform
+    /// returns (e.g. `userId`, `updatedAt`).
+    #[serde(default, flatten)]
+    pub extra: HashMap<String, serde_json::Value>,
 }
 
 impl RiskSettings {
@@ -1955,20 +2225,13 @@ impl Default for RiskSettings {
     fn default() -> Self {
         Self {
             drawdown_enabled: false,
-            drawdown_lookback_hours: 24,
-            drawdown_threshold_pct: 0.1,
+            drawdown_lookback_hours: default_drawdown_lookback_hours(),
+            drawdown_threshold_pct: default_drawdown_threshold_pct(),
             circuit_breaker_tripped: false,
             circuit_breaker_tripped_at: None,
+            extra: HashMap::new(),
         }
     }
-}
-
-fn default_drawdown_lookback_hours() -> i32 {
-    24
-}
-
-fn default_drawdown_threshold_pct() -> f64 {
-    0.1
 }
 
 /// Parameters for updating risk settings. Only supplied fields are changed.
@@ -1985,6 +2248,12 @@ pub struct UpdateRiskSettingsParams {
     pub drawdown_threshold_pct: Option<f64>,
 }
 
+/// Response from the circuit breaker reset endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CircuitBreakerResetResponse {
+    pub reset: bool,
+}
+
 // ---------------------------------------------------------------------------
 // Markets — extended data (search, CLOB, tick-size, spread, midpoint)
 // ---------------------------------------------------------------------------
@@ -1995,6 +2264,41 @@ pub struct SearchMarketsParams {
     /// Full-text search query.
     pub q: String,
     pub limit: Option<u32>,
+}
+
+/// Response from the market search endpoint.
+///
+/// The platform returns `{ results: [...] }`, not the standard paginated
+/// envelope.  `search_markets()` deserializes into this type internally and
+/// then converts to `PaginatedResponse<Market>` so the public API stays
+/// backward-compatible.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    bound(deserialize = "T: serde::de::DeserializeOwned")
+)]
+pub struct SearchResults<T> {
+    pub results: Vec<T>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+impl<T> SearchResults<T> {
+    /// Convert into a `PaginatedResponse` using the caller-requested page
+    /// size so the `limit` metadata reflects the original request, not the
+    /// raw result count.
+    pub fn into_paginated_response(self, limit: u32) -> PaginatedResponse<T> {
+        let total = self.results.len() as u64;
+        let limit = u64::from(limit);
+        PaginatedResponse {
+            data: self.results,
+            total,
+            page: 1,
+            limit,
+            total_pages: if total > 0 { 1 } else { 0 },
+            has_next: false,
+        }
+    }
 }
 
 /// Tick-size for a market token (minimum price increment).
@@ -2288,6 +2592,10 @@ pub struct PolymarketActivityResponse {
 pub struct GetPolymarketActivityParams {
     /// Activity type filter, e.g. `"TRADE"`, `"SPLIT"`, or `"REDEEM"`.
     pub activity_type: Option<String>,
+    /// Number of activity rows to skip before returning results.
+    pub offset: Option<u32>,
+    /// Maximum number of activity rows to return.
+    pub limit: Option<u32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2679,12 +2987,11 @@ pub struct ArbitrageMatch {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct CreateArbitrageMatchParams {
+    #[serde(rename = "polymarketId")]
     pub polymarket_market_id: String,
+    #[serde(rename = "kalshiId")]
     pub kalshi_market_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub notes: Option<String>,
 }
 
 /// Bid/ask info for a single venue in a spread comparison.
@@ -4015,8 +4322,26 @@ impl MarketHistoryPeriod {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketSentimentVote {
-    pub direction: String,
-    pub confidence: f64,
+    pub direction: MarketSentimentDirection,
+    pub confidence: i32,
+}
+
+/// Sentiment direction for `POST /api/v1/markets/:marketId/sentiment`.
+///
+/// Matches the backend `@IsIn(["YES", "NO"])` constraint.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MarketSentimentDirection {
+    Yes,
+    No,
+}
+
+/// Request body for `POST /api/v1/markets/:marketId/sentiment`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoteMarketSentimentParams {
+    pub direction: MarketSentimentDirection,
+    pub confidence: i32,
 }
 
 /// Request body for `POST /api/v1/markets/:marketId/sentiment`.
