@@ -61,6 +61,7 @@ async fn main() -> polyforge::Result<()> {
 |--------|-------------|
 | `PolyforgeClient::new(api_key)` | Use `POLYFORGE_API_URL` when set; otherwise connect to `https://api.polyforge.app` |
 | `PolyforgeClient::with_url(api_key, url)` | Connect to a custom URL, including local/dev endpoints such as `http://localhost:3002` |
+| `connect_ws(options)` | Open the platform `/ws` gateway for live prices, whale trades, and broadcasts |
 
 ### Markets
 
@@ -192,6 +193,59 @@ async fn main() -> polyforge::Result<()> {
 **`StrategyEvent` fields:** `event_type: String` · `strategy_id: Option<String>` · `data: serde_json::Value` · `timestamp: u64`
 
 **Common event types:** `CONNECTED` · `STRATEGY_STARTED` · `STRATEGY_STOPPED` · `STRATEGY_PAUSED` · `STRATEGY_RESUMED` · `STRATEGY_ERROR` · `ORDER_PLACED` · `ORDER_SUBMITTED` · `ORDER_PARTIAL` · `ORDER_FILLED` · `ORDER_FAILED` · `ORDER_CANCELLED` · `ORDER_ERROR` · `BACKTEST_PROGRESS` · `BACKTEST_COMPLETED` · `BACKTEST_FAILED`
+
+### Gateway WebSocket
+
+`connect_ws` opens the platform gateway at `/ws`. Pass an explicit gateway JWT
+with `WsConnectOptions::with_token`; the server also accepts a `pf_token`
+cookie, but this Rust SDK does not manage browser cookie sessions.
+
+```rust
+use polyforge::{PolyforgeClient, WsConnectOptions, WsServerMessage};
+
+#[tokio::main]
+async fn main() -> polyforge::Result<()> {
+    let client = PolyforgeClient::new("rest-api-key")?;
+    let mut ws = client
+        .connect_ws(WsConnectOptions::with_token("gateway-jwt"))
+        .await?;
+
+    ws.ping().await?;
+    ws.subscribe_prices(["token-id"]).await?;
+    ws.subscribe_whales(Some(1_000.0)).await?;
+
+    while let Some(message) = ws.next_message_with_reconnect().await? {
+        match message {
+            WsServerMessage::AuthOk { .. } => println!("authenticated"),
+            WsServerMessage::Pong { .. } => println!("pong"),
+            WsServerMessage::PriceUpdate { data, .. } => {
+                println!("{} price {}", data.token_id, data.price);
+            }
+            WsServerMessage::WhaleTrade { data, .. } => {
+                println!("whale trade: {data:?}");
+            }
+            WsServerMessage::NewsSignal { data, .. } => {
+                println!("news signal: {data:?}");
+            }
+            WsServerMessage::MarketSettlement { data, .. } => {
+                println!("market settlement: {data:?}");
+            }
+            WsServerMessage::Broadcast { event_type, data, .. } => {
+                println!("{event_type}: {data:?}");
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
+Client messages: `PING`, `SUBSCRIBE_PRICES`, `UNSUBSCRIBE_PRICES`,
+`SUBSCRIBE_WHALES`, and `UNSUBSCRIBE_WHALES`.
+
+Server messages are parsed into typed envelopes for `AUTH_OK`, `PONG`,
+`PRICE_UPDATE`, `WHALE_TRADE`, `NEWS_SIGNAL`, and `MARKET_SETTLEMENT`; unknown
+broadcast event types are preserved as `WsServerMessage::Broadcast`.
 
 ### Portfolio & Orders
 

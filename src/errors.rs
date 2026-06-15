@@ -15,6 +15,10 @@ pub enum PolyforgeError {
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
 
+    /// A WebSocket transport or protocol error.
+    #[error("WebSocket error: {0}")]
+    WebSocket(#[from] tokio_tungstenite::tungstenite::Error),
+
     /// A JSON serialization or deserialization error.
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),

@@ -514,6 +514,29 @@ impl PolyforgeClient {
         format!("{}{}", self.base_url, path)
     }
 
+    /// Build the `/ws` gateway URL for this client's base URL.
+    ///
+    /// Pass [`WsConnectOptions::with_token`](crate::WsConnectOptions::with_token)
+    /// to authenticate with an explicit gateway JWT query parameter. The
+    /// platform also accepts a `pf_token` cookie, but this Rust SDK does not
+    /// manage browser sessions.
+    pub fn websocket_url(&self, options: &crate::WsConnectOptions) -> Result<Url> {
+        crate::ws::build_ws_url(&self.base_url, options)
+    }
+
+    /// Open an async WebSocket connection to the platform `/ws` gateway.
+    ///
+    /// The returned [`GatewayWsClient`](crate::GatewayWsClient) provides typed
+    /// send/subscribe helpers, typed message parsing, and bounded reconnect
+    /// helpers.
+    pub async fn connect_ws(
+        &self,
+        options: crate::WsConnectOptions,
+    ) -> Result<crate::GatewayWsClient> {
+        let url = self.websocket_url(&options)?;
+        crate::GatewayWsClient::connect(url, options.reconnect).await
+    }
+
     fn auth_header(&self) -> Result<HeaderValue> {
         HeaderValue::from_str(&format!("Bearer {}", self.api_key.expose_secret())).map_err(|_| {
             PolyforgeError::Validation("API key contains invalid HTTP header characters".into())
@@ -7305,7 +7328,6 @@ mod tests {
         assert_eq!(co.condition_type.as_deref(), Some("TAKE_PROFIT"));
     }
 
-    #[test]
     fn test_create_conditional_order_params_serializes_camelcase() {
         let params = CreateConditionalOrderParams {
             market_id: "mkt-1".into(),
