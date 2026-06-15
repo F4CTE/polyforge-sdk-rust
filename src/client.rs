@@ -295,11 +295,11 @@ impl std::fmt::Debug for PolyforgeClient {
 /// hash bit is 1.
 ///
 /// # Errors
-/// Returns [`PolyforgeError::Validation`] if the address is not a valid hex
-/// string of at most 40 hex characters (with or without `0x` prefix).
+/// Returns [`PolyforgeError::Validation`] if the address is not exactly 40
+/// hex characters (20 bytes) with an optional `0x` prefix.
 fn checksum_address(addr: &str) -> Result<String> {
     let hex = addr.strip_prefix("0x").unwrap_or(addr);
-    if hex.len() > 40 {
+    if hex.len() != 40 {
         return Err(PolyforgeError::Validation(format!(
             "address hex component too long: {} chars (max 40)",
             hex.len()
@@ -2264,7 +2264,7 @@ impl PolyforgeClient {
     }
 
     /// List your smart orders with child order progress.
-    pub async fn list_smart_orders(&self) -> Result<PaginatedResponse<SmartOrder>> {
+    pub async fn list_smart_orders(&self) -> Result<Vec<SmartOrder>> {
         self.get("/api/v1/orders/smart").await
     }
 
@@ -7781,7 +7781,11 @@ mod tests {
         let already = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
         assert_eq!(checksum_address(already).unwrap(), already);
 
-        // Malformed long address returns validation error
+        // Too-short address returns validation error (EIP-55 requires exactly 40 hex chars)
+        let too_short = "0xdeadbeef";
+        assert!(checksum_address(too_short).is_err());
+
+        // Too-long address returns validation error
         let too_long = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
         assert!(checksum_address(too_long).is_err());
 
