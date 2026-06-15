@@ -257,6 +257,31 @@ fn is_uuid_like(value: &str) -> bool {
     })
 }
 
+fn build_polymarket_activity_query(params: Option<&GetPolymarketActivityParams>) -> String {
+    let mut qp: Vec<(&str, String)> = Vec::new();
+    if let Some(p) = params {
+        if let Some(ref t) = p.activity_type {
+            qp.push(("type", t.clone()));
+        }
+        if let Some(offset) = p.offset {
+            qp.push(("offset", offset.to_string()));
+        }
+        if let Some(limit) = p.limit {
+            qp.push(("limit", limit.to_string()));
+        }
+    }
+
+    if qp.is_empty() {
+        String::new()
+    } else {
+        let pairs: Vec<String> = qp
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, encode(v)))
+            .collect();
+        format!("?{}", pairs.join("&"))
+    }
+}
+
 /// Reject slippage outside the server-enforced `0..=5` percent range.
 fn validate_arb_slippage(value: f64) -> Result<()> {
     if value.is_nan() || value.is_infinite() {

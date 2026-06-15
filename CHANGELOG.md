@@ -25,6 +25,7 @@
 - **Cross-SDK naming aliases** — `get_notifications()` is now a deprecated alias for `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the canonical `MyReferralsResponse` type.
 - **search_markets return type** — `search_markets()` now returns `MarketSearchResponse` (a flat `{ results: [...] }` envelope) instead of `PaginatedResponse<Market>`, matching the platform's actual response shape for `GET /api/v1/markets/search`. New `MarketSearchResponse` type. (POLA-5122)
 - **vote_market_sentiment params** — `vote_market_sentiment()` now accepts `VoteMarketSentimentParams` with `direction` and `confidence` fields instead of sending an empty JSON body, matching the platform's expected request schema for `POST /api/v1/markets/:marketId/sentiment`. (POLA-5122)
+- **Polymarket activity pagination** — `get_polymarket_activity()` now supports `offset` and `limit` query parameters, matching the platform pagination contract. (closes #311)
 
 ### Added
 - **`CreateStrategyParams.kalshi_subaccount`** — adds an optional `kalshi_subaccount: Option<u64>` field to `CreateStrategyParams`, serialized as `kalshiSubaccount` (camelCase) and omitted when `None`. Enables passing a Kalshi subaccount identifier when creating strategies. `CreateStrategyParams` has a `new(name)` constructor and derives `Default` for forward-compatible construction. (closes #4178)
