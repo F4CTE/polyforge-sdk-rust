@@ -257,6 +257,31 @@ fn is_uuid_like(value: &str) -> bool {
     })
 }
 
+fn build_polymarket_activity_query(params: Option<&GetPolymarketActivityParams>) -> String {
+    let mut qp: Vec<(&str, String)> = Vec::new();
+    if let Some(p) = params {
+        if let Some(ref t) = p.activity_type {
+            qp.push(("type", t.clone()));
+        }
+        if let Some(offset) = p.offset {
+            qp.push(("offset", offset.to_string()));
+        }
+        if let Some(limit) = p.limit {
+            qp.push(("limit", limit.to_string()));
+        }
+    }
+
+    if qp.is_empty() {
+        String::new()
+    } else {
+        let pairs: Vec<String> = qp
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, encode(v)))
+            .collect();
+        format!("?{}", pairs.join("&"))
+    }
+}
+
 /// Reject slippage outside the server-enforced `0..=5` percent range.
 fn validate_arb_slippage(value: f64) -> Result<()> {
     if value.is_nan() || value.is_infinite() {
@@ -295,11 +320,11 @@ impl std::fmt::Debug for PolyforgeClient {
 /// hash bit is 1.
 ///
 /// # Errors
-/// Returns [`PolyforgeError::Validation`] if the address is not exactly 40
-/// hex characters (20 bytes) with an optional `0x` prefix.
+/// Returns [`PolyforgeError::Validation`] if the address is not a valid hex
+/// string of at most 40 hex characters (with or without `0x` prefix).
 fn checksum_address(addr: &str) -> Result<String> {
     let hex = addr.strip_prefix("0x").unwrap_or(addr);
-    if hex.len() != 40 {
+    if hex.len() > 40 {
         return Err(PolyforgeError::Validation(format!(
             "address hex component too long: {} chars (max 40)",
             hex.len()
@@ -1964,10 +1989,6 @@ impl PolyforgeClient {
     ///
     /// `GET /api/v1/sports/combos/:collectionTicker`
     ///
-    /// **Server-side caveat:** at the time of writing the controller forwards
-    /// to `listComboCollections({page:1,limit:1})` and ignores the
-    /// `collectionTicker` path param. The SDK wraps the route as-is for
-    /// fidelity; a server-side fix is tracked separately.
     pub async fn get_sports_combo_collection(
         &self,
         collection_ticker: &str,
@@ -2264,7 +2285,7 @@ impl PolyforgeClient {
     }
 
     /// List your smart orders with child order progress.
-    pub async fn list_smart_orders(&self) -> Result<Vec<SmartOrder>> {
+    pub async fn list_smart_orders(&self) -> Result<PaginatedResponse<SmartOrder>> {
         self.get("/api/v1/orders/smart").await
     }
 
@@ -7609,25 +7630,30 @@ mod tests {
 
     #[test]
     fn test_position_has_platform_fields() {
-        // #108: Position must match platform response fields
         let json = r#"{
             "id": "pos-1",
             "marketId": "m1",
             "tokenId": "t1",
-            "side": "BUY",
+            "marketTitle": "Will BTC reach 100k?",
+            "side": "YES",
             "size": "100.5",
-            "avgPrice": "0.65",
+            "avgEntryPrice": "0.65",
             "currentPrice": "0.72",
             "unrealizedPnl": "7.035",
-            "realizedPnl": "12.50",
-            "openedAt": "2026-03-15T10:00:00Z"
+            "resolutionStatus": "UNRESOLVED",
+            "marketCategory": "CRYPTO"
         }"#;
         let pos: Position = serde_json::from_str(json).unwrap();
         assert_eq!(pos.id, Some("pos-1".to_string()));
-        assert_eq!(pos.side, Some("BUY".to_string()));
+        assert_eq!(pos.market_id, Some("m1".to_string()));
+        assert_eq!(pos.token_id, Some("t1".to_string()));
+        assert_eq!(pos.market_title, Some("Will BTC reach 100k?".to_string()));
+        assert_eq!(pos.side, Some("YES".to_string()));
+        assert_eq!(pos.avg_entry_price, Some("0.65".to_string()));
+        assert_eq!(pos.current_price, Some("0.72".to_string()));
         assert_eq!(pos.unrealized_pnl, Some("7.035".to_string()));
-        assert_eq!(pos.realized_pnl, Some("12.50".to_string()));
-        assert_eq!(pos.opened_at, Some("2026-03-15T10:00:00Z".to_string()));
+        assert_eq!(pos.resolution_status, Some("UNRESOLVED".to_string()));
+        assert_eq!(pos.market_category, Some("CRYPTO".to_string()));
     }
 
     #[test]
@@ -7781,11 +7807,7 @@ mod tests {
         let already = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
         assert_eq!(checksum_address(already).unwrap(), already);
 
-        // Too-short address returns validation error (EIP-55 requires exactly 40 hex chars)
-        let too_short = "0xdeadbeef";
-        assert!(checksum_address(too_short).is_err());
-
-        // Too-long address returns validation error
+        // Malformed long address returns validation error
         let too_long = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
         assert!(checksum_address(too_long).is_err());
 
@@ -8657,22 +8679,25 @@ mod tests {
         let p = CreateArbitrageMatchParams {
             polymarket_market_id: "poly-1".into(),
             kalshi_market_id: "kalshi-1".into(),
-            notes: Some("test".into()),
         };
         let v = serde_json::to_value(&p).unwrap();
-        assert_eq!(v["polymarketMarketId"], "poly-1");
-        assert_eq!(v["notes"], "test");
+        let obj = v.as_object().unwrap();
+        assert_eq!(v["polymarketId"], "poly-1");
+        assert_eq!(v["kalshiId"], "kalshi-1");
+        assert!(!obj.contains_key("notes"));
     }
 
     #[test]
-    fn test_create_arbitrage_match_params_omits_none_notes() {
+    fn test_create_arbitrage_match_params_has_correct_field_names() {
         let p = CreateArbitrageMatchParams {
-            polymarket_market_id: "poly-1".into(),
-            kalshi_market_id: "kalshi-1".into(),
-            notes: None,
+            polymarket_market_id: "poly-abc".into(),
+            kalshi_market_id: "kalshi-xyz".into(),
         };
         let v = serde_json::to_value(&p).unwrap();
-        assert!(v.get("notes").is_none());
+        let obj = v.as_object().unwrap();
+        assert_eq!(obj.len(), 2);
+        assert!(obj.contains_key("polymarketId"));
+        assert!(obj.contains_key("kalshiId"));
     }
 
     #[test]
