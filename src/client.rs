@@ -257,6 +257,31 @@ fn is_uuid_like(value: &str) -> bool {
     })
 }
 
+fn build_polymarket_activity_query(params: Option<&GetPolymarketActivityParams>) -> String {
+    let mut qp: Vec<(&str, String)> = Vec::new();
+    if let Some(p) = params {
+        if let Some(ref t) = p.activity_type {
+            qp.push(("type", t.clone()));
+        }
+        if let Some(offset) = p.offset {
+            qp.push(("offset", offset.to_string()));
+        }
+        if let Some(limit) = p.limit {
+            qp.push(("limit", limit.to_string()));
+        }
+    }
+
+    if qp.is_empty() {
+        String::new()
+    } else {
+        let pairs: Vec<String> = qp
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, encode(v)))
+            .collect();
+        format!("?{}", pairs.join("&"))
+    }
+}
+
 /// Reject slippage outside the server-enforced `0..=5` percent range.
 fn validate_arb_slippage(value: f64) -> Result<()> {
     if value.is_nan() || value.is_infinite() {
@@ -293,8 +318,24 @@ impl std::fmt::Debug for PolyforgeClient {
 /// Lowercases the input, strips the `0x` prefix, computes Keccak-256 of the
 /// lowercase hex string, then upper-cases each hex digit whose corresponding
 /// hash bit is 1.
-fn checksum_address(addr: &str) -> String {
+///
+/// # Errors
+/// Returns [`PolyforgeError::Validation`] if the address is not a valid hex
+/// string of at most 40 hex characters (with or without `0x` prefix).
+fn checksum_address(addr: &str) -> Result<String> {
     let hex = addr.strip_prefix("0x").unwrap_or(addr);
+    if hex.len() > 40 {
+        return Err(PolyforgeError::Validation(format!(
+            "address hex component too long: {} chars (max 40)",
+            hex.len()
+        )));
+    }
+    if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(PolyforgeError::Validation(format!(
+            "address contains non-hex characters: {}",
+            hex
+        )));
+    }
     let lower = hex.to_lowercase();
     let hash = Keccak256::digest(lower.as_bytes());
     let mut result = String::with_capacity(42);
@@ -308,7 +349,7 @@ fn checksum_address(addr: &str) -> String {
             result.push(byte.to_ascii_lowercase());
         }
     }
-    result
+    Ok(result)
 }
 
 impl PolyforgeClient {
@@ -953,15 +994,11 @@ impl PolyforgeClient {
     }
 
     /// Full-text search across all markets.
-    ///
-    /// The platform returns `{ results: [...] }` rather than the standard
-    /// paginated envelope.  The SDK deserializes into `SearchResults<Market>`
-    /// internally and converts to `PaginatedResponse<Market>` so callers see
-    /// a uniform paginated shape.
+    /// Returns a flat `results` list (not a paginated envelope).
     pub async fn search_markets(
         &self,
         params: &SearchMarketsParams,
-    ) -> Result<PaginatedResponse<Market>> {
+    ) -> Result<MarketSearchResponse> {
         let mut qp: Vec<(&str, String)> = vec![("q", params.q.clone())];
         if let Some(l) = params.limit {
             qp.push(("limit", l.to_string()));
@@ -973,7 +1010,9 @@ impl PolyforgeClient {
         let qs = format!("?{}", pairs.join("&"));
         let results: SearchResults<Market> =
             self.get(&format!("/api/v1/markets/search{qs}")).await?;
-        Ok(results.into_paginated_response(params.limit.unwrap_or(20)))
+        Ok(MarketSearchResponse {
+            results: results.results,
+        })
     }
 
     /// Get the minimum price tick size for a market token.
@@ -1075,6 +1114,12 @@ impl PolyforgeClient {
             .await
     }
 
+    /// Get execution health metrics for a strategy.
+    pub async fn get_strategy_health(&self, id: &str) -> Result<StrategyHealth> {
+        self.get(&format!("/api/v1/strategies/{}/health", encode(id)))
+            .await
+    }
+
     /// Create a new strategy with full block configuration.
     ///
     /// Use [`CreateStrategyParams`] to specify blocks, visibility, execution mode,
@@ -1127,9 +1172,59 @@ impl PolyforgeClient {
         .await
     }
 
-    /// Get available strategy templates.
+    /// List available strategy templates with optional pagination.
+    pub async fn list_strategy_templates(
+        &self,
+        params: Option<&ListStrategyTemplatesParams>,
+    ) -> Result<PaginatedResponse<StrategyTemplate>> {
+        let mut qp: Vec<(&str, String)> = Vec::new();
+        if let Some(p) = params {
+            if let Some(page) = p.page {
+                qp.push(("page", page.to_string()));
+            }
+            if let Some(limit) = p.limit {
+                qp.push(("limit", limit.to_string()));
+            }
+        }
+        let qs = if qp.is_empty() {
+            String::new()
+        } else {
+            let pairs: Vec<String> = qp
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, encode(v)))
+                .collect();
+            format!("?{}", pairs.join("&"))
+        };
+        self.get(&format!("/api/v1/strategies/templates{qs}")).await
+    }
+
+    /// Get the first page of available strategy templates.
     pub async fn get_strategy_templates(&self) -> Result<PaginatedResponse<StrategyTemplate>> {
-        self.get("/api/v1/strategies/templates").await
+        self.list_strategy_templates(None).await
+    }
+
+    /// Fetch the strategy builder capability manifest.
+    ///
+    /// Returns the platform-defined catalog of supported strategy primitives
+    /// for clients that need to discover builder capabilities dynamically.
+    pub async fn get_strategy_capabilities(&self) -> Result<serde_json::Value> {
+        self.get_with_optional_auth("/api/v1/strategies/capabilities")
+            .await
+    }
+
+    /// Fetch the strategy design-pattern catalog.
+    ///
+    /// Returns platform-defined strategy composition patterns for clients and
+    /// agents that generate or explain block-based strategies.
+    pub async fn get_strategy_design_patterns(&self) -> Result<serde_json::Value> {
+        self.get_with_optional_auth("/api/v1/strategies/design-patterns")
+            .await
+    }
+
+    /// Fetch example strategies for capability discovery and onboarding.
+    pub async fn get_strategy_examples(&self) -> Result<serde_json::Value> {
+        self.get_with_optional_auth("/api/v1/strategies/examples")
+            .await
     }
 
     /// Export a strategy configuration as JSON.
@@ -1234,13 +1329,13 @@ impl PolyforgeClient {
     }
 
     // -----------------------------------------------------------------------
-    // MCP Strategy Discovery (POLA-12355)
+    // MCP Strategy Discovery — Typed variants (POLA-12355)
     // -----------------------------------------------------------------------
 
     /// Get execution health metrics for a specific strategy.
     ///
     /// `GET /api/v1/strategies/{id}/health`
-    pub async fn get_strategy_health(&self, id: &str) -> Result<StrategyHealth> {
+    pub async fn get_strategy_health_typed(&self, id: &str) -> Result<StrategyHealth> {
         let path = format!("/api/v1/strategies/{}/health", encode(id));
         self.get(&path).await
     }
@@ -1248,11 +1343,10 @@ impl PolyforgeClient {
     /// Get strategy capabilities for AI / tooling discovery.
     ///
     /// Returns a structured map of capability categories to individual
-    /// capability entries.  This endpoint is public — the client can be
-    /// constructed with an empty API key.
+    /// capability entries.
     ///
     /// `GET /api/v1/strategies/capabilities`
-    pub async fn get_strategy_capabilities(&self) -> Result<StrategyCapabilities> {
+    pub async fn get_strategy_capabilities_typed(&self) -> Result<StrategyCapabilities> {
         self.get_with_optional_auth("/api/v1/strategies/capabilities")
             .await
     }
@@ -1260,7 +1354,7 @@ impl PolyforgeClient {
     /// Get strategy design patterns for AI / tooling discovery.
     ///
     /// `GET /api/v1/strategies/design-patterns`
-    pub async fn get_strategy_design_patterns(
+    pub async fn get_strategy_design_patterns_typed(
         &self,
     ) -> Result<StrategyDesignPatterns> {
         self.get_with_optional_auth("/api/v1/strategies/design-patterns")
@@ -1270,7 +1364,7 @@ impl PolyforgeClient {
     /// Get example strategy definitions for AI / tooling discovery.
     ///
     /// `GET /api/v1/strategies/examples`
-    pub async fn get_strategy_examples(&self) -> Result<StrategyExamples> {
+    pub async fn get_strategy_examples_typed(&self) -> Result<StrategyExamples> {
         self.get_with_optional_auth("/api/v1/strategies/examples")
             .await
     }
@@ -1895,10 +1989,6 @@ impl PolyforgeClient {
     ///
     /// `GET /api/v1/sports/combos/:collectionTicker`
     ///
-    /// **Server-side caveat:** at the time of writing the controller forwards
-    /// to `listComboCollections({page:1,limit:1})` and ignores the
-    /// `collectionTicker` path param. The SDK wraps the route as-is for
-    /// fidelity; a server-side fix is tracked separately.
     pub async fn get_sports_combo_collection(
         &self,
         collection_ticker: &str,
@@ -2577,7 +2667,7 @@ impl PolyforgeClient {
             .get("targetWallet")
             .and_then(serde_json::Value::as_str)
         {
-            body["targetWallet"] = serde_json::Value::String(checksum_address(raw));
+            body["targetWallet"] = serde_json::Value::String(checksum_address(raw)?);
         }
         Ok(body)
     }
@@ -4022,11 +4112,14 @@ impl PolyforgeClient {
 
     /// Attach or update the journal note + mood on one of the user's orders
     /// (`PATCH /api/v1/orders/:id/journal`).
+    ///
+    /// Returns the full updated order. Journal annotation fields returned by
+    /// the platform are preserved in [`Order::extra`].
     pub async fn update_order_journal(
         &self,
         order_id: &str,
         params: &UpdateOrderJournalParams,
-    ) -> Result<JournalEntry> {
+    ) -> Result<Order> {
         self.patch(
             &format!("/api/v1/orders/{}/journal", encode(order_id)),
             &serde_json::to_value(params)?,
@@ -4399,6 +4492,67 @@ mod tests {
         let actions = client.get_actions().await.unwrap();
         assert_eq!(actions.version, "1.0");
         assert!(actions.actions.is_empty());
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_strategy_capability_discovery_endpoints_dispatch_without_api_key() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let expected_paths = [
+                "/api/v1/strategies/capabilities",
+                "/api/v1/strategies/design-patterns",
+                "/api/v1/strategies/examples",
+            ];
+
+            for expected_path in expected_paths {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = vec![0_u8; 4096];
+                let n = socket.read(&mut request).await.unwrap();
+                let request = String::from_utf8_lossy(&request[..n]);
+
+                assert!(
+                    request.starts_with(&format!("GET {expected_path} ")),
+                    "unexpected strategy discovery request path: {request}"
+                );
+                assert!(
+                    !request.to_ascii_lowercase().contains("authorization:"),
+                    "strategy discovery with empty API key must not send Authorization header: {request}"
+                );
+
+                let body = r#"{"version":"1.0","items":[]}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                     content-type: application/json\r\n\
+                     content-length: {}\r\n\
+                     connection: close\r\n\
+                     \r\n\
+                     {}",
+                    body.len(),
+                    body
+                );
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+
+        let client = PolyforgeClient::with_url("", format!("http://{addr}")).unwrap();
+        assert_eq!(
+            client.get_strategy_capabilities().await.unwrap()["version"],
+            "1.0"
+        );
+        assert_eq!(
+            client.get_strategy_design_patterns().await.unwrap()["version"],
+            "1.0"
+        );
+        assert_eq!(
+            client.get_strategy_examples().await.unwrap()["version"],
+            "1.0"
+        );
 
         server.await.unwrap();
     }
@@ -5743,6 +5897,38 @@ mod tests {
     }
 
     #[test]
+    fn test_strategy_health_deserializes() {
+        let json = r#"{"fillRate":98.5,"avgLatencyMs":120,"errorCount24h":1,"slippageBps":2.5,"winRate":57.25,"totalPnl":1234.56,"maxDrawdown":-42.0,"totalOrders":20,"filledOrders":19,"lastUpdated":"2026-05-20T12:00:00Z"}"#;
+        let health: StrategyHealth = serde_json::from_str(json).unwrap();
+        assert_eq!(health.fill_rate, Some(98.5));
+        assert_eq!(health.avg_latency_ms, 120);
+        assert_eq!(health.error_count_24h, 1);
+        assert_eq!(health.slippage_bps, 2.5);
+        assert_eq!(health.win_rate, Some(57.25));
+        assert_eq!(health.total_pnl, Some(1234.56));
+        assert_eq!(health.max_drawdown, Some(-42.0));
+        assert_eq!(health.total_orders, 20);
+        assert_eq!(health.filled_orders, 19);
+        assert_eq!(health.last_updated.as_deref(), Some("2026-05-20T12:00:00Z"));
+    }
+
+    #[test]
+    fn test_strategy_health_deserializes_platform_placeholder_nulls() {
+        let json = r#"{"fillRate":null,"avgLatencyMs":0,"errorCount24h":0,"slippageBps":0,"winRate":null,"totalPnl":null,"maxDrawdown":null,"totalOrders":0,"filledOrders":0,"lastUpdated":null}"#;
+        let health: StrategyHealth = serde_json::from_str(json).unwrap();
+        assert_eq!(health.fill_rate, None);
+        assert_eq!(health.avg_latency_ms, 0);
+        assert_eq!(health.error_count_24h, 0);
+        assert_eq!(health.slippage_bps, 0.0);
+        assert_eq!(health.win_rate, None);
+        assert_eq!(health.total_pnl, None);
+        assert_eq!(health.max_drawdown, None);
+        assert_eq!(health.total_orders, 0);
+        assert_eq!(health.filled_orders, 0);
+        assert_eq!(health.last_updated, None);
+    }
+
+    #[test]
     fn test_paginated_response_deserializes_strategies() {
         let json = r#"{
             "data": [{"id":"s1","name":"Alpha"},{"id":"s2","name":"Beta"}],
@@ -5765,6 +5951,41 @@ mod tests {
             result.is_err(),
             "bare array must not deserialize as PaginatedResponse"
         );
+    }
+
+    #[test]
+    fn test_smart_order_list_deserializes_bare_array() {
+        // #303: GET /api/v1/orders/smart returns a bare array, not PaginatedResponse.
+        let json = r#"[
+            {
+                "id": "so-1",
+                "type": "TWAP",
+                "status": "ACTIVE",
+                "marketId": "m-1",
+                "tokenId": "t-1",
+                "outcome": "YES",
+                "side": "BUY",
+                "totalSize": "10",
+                "slicesFilled": 1,
+                "slicesTotal": 5,
+                "nextExecuteAt": "2026-05-24T03:00:00Z",
+                "createdAt": "2026-05-24T02:00:00Z",
+                "orders": [
+                    {
+                        "id": "order-1",
+                        "status": "FILLED",
+                        "fillSize": "2",
+                        "fillPrice": "0.45",
+                        "createdAt": "2026-05-24T02:30:00Z"
+                    }
+                ]
+            }
+        ]"#;
+        let resp: Vec<SmartOrder> = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.len(), 1);
+        assert_eq!(resp[0].id, "so-1");
+        assert_eq!(resp[0].orders.len(), 1);
+        assert_eq!(resp[0].orders[0].id, "order-1");
     }
 
     // -----------------------------------------------------------------------
@@ -6380,6 +6601,18 @@ mod tests {
         assert!(result.success);
         assert_eq!(result.status_code, 200);
         assert_eq!(result.extra["latencyMs"], 42);
+    }
+
+    #[test]
+    fn test_webhook_active_alias_populates_enabled() {
+        let json = r#"{"id":"wh_1","url":"https://example.com/webhook","events":["ORDER_FILLED"],"active":true,"createdAt":"2026-06-01T00:00:00Z"}"#;
+        let webhook: Webhook = serde_json::from_str(json).unwrap();
+
+        assert_eq!(webhook.id, "wh_1");
+        assert_eq!(webhook.enabled, Some(true));
+        assert_eq!(webhook.events, vec![WebhookEvent::OrderFilled]);
+        assert_eq!(webhook.created_at.as_deref(), Some("2026-06-01T00:00:00Z"));
+        assert!(webhook.extra.get("active").is_none());
     }
 
     // --- Price history & order book (closes #54) ---
@@ -7397,25 +7630,30 @@ mod tests {
 
     #[test]
     fn test_position_has_platform_fields() {
-        // #108: Position must match platform response fields
         let json = r#"{
             "id": "pos-1",
             "marketId": "m1",
             "tokenId": "t1",
-            "side": "BUY",
+            "marketTitle": "Will BTC reach 100k?",
+            "side": "YES",
             "size": "100.5",
-            "avgPrice": "0.65",
+            "avgEntryPrice": "0.65",
             "currentPrice": "0.72",
             "unrealizedPnl": "7.035",
-            "realizedPnl": "12.50",
-            "openedAt": "2026-03-15T10:00:00Z"
+            "resolutionStatus": "UNRESOLVED",
+            "marketCategory": "CRYPTO"
         }"#;
         let pos: Position = serde_json::from_str(json).unwrap();
         assert_eq!(pos.id, Some("pos-1".to_string()));
-        assert_eq!(pos.side, Some("BUY".to_string()));
+        assert_eq!(pos.market_id, Some("m1".to_string()));
+        assert_eq!(pos.token_id, Some("t1".to_string()));
+        assert_eq!(pos.market_title, Some("Will BTC reach 100k?".to_string()));
+        assert_eq!(pos.side, Some("YES".to_string()));
+        assert_eq!(pos.avg_entry_price, Some("0.65".to_string()));
+        assert_eq!(pos.current_price, Some("0.72".to_string()));
         assert_eq!(pos.unrealized_pnl, Some("7.035".to_string()));
-        assert_eq!(pos.realized_pnl, Some("12.50".to_string()));
-        assert_eq!(pos.opened_at, Some("2026-03-15T10:00:00Z".to_string()));
+        assert_eq!(pos.resolution_status, Some("UNRESOLVED".to_string()));
+        assert_eq!(pos.market_category, Some("CRYPTO".to_string()));
     }
 
     #[test]
@@ -7435,6 +7673,16 @@ mod tests {
         assert_eq!(tmpl.name, Some("Mean Reversion".to_string()));
         assert_eq!(tmpl.blocks.len(), 1);
         assert_eq!(tmpl.popularity, 342);
+    }
+
+    #[test]
+    fn test_list_strategy_templates_params_supports_pagination() {
+        let params = ListStrategyTemplatesParams {
+            page: Some(2),
+            limit: Some(5),
+        };
+        assert_eq!(params.page, Some(2));
+        assert_eq!(params.limit, Some(5));
     }
 
     #[test]
@@ -7542,22 +7790,30 @@ mod tests {
     fn test_checksum_address_eip55() {
         // All-lowercase hex gets EIP-55 checksummed (mixed case)
         let all_lower = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
-        let cksummed = checksum_address(all_lower);
+        let cksummed = checksum_address(all_lower).unwrap();
         assert!(cksummed.starts_with("0x"));
         assert_eq!(cksummed.len(), 42);
         assert_ne!(cksummed, all_lower); // EIP-55 produces mixed case
 
         // Mixed case input gets normalized to same EIP-55 checksum
         let mixed = "0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf";
-        assert_eq!(checksum_address(mixed), cksummed);
+        assert_eq!(checksum_address(mixed).unwrap(), cksummed);
 
         // Verify known EIP-55 address: 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed
         let known = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
-        assert_eq!(checksum_address(known), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+        assert_eq!(checksum_address(known).unwrap(), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
 
         // Already checksummed address stays unchanged (idempotent)
         let already = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
-        assert_eq!(checksum_address(already), already);
+        assert_eq!(checksum_address(already).unwrap(), already);
+
+        // Malformed long address returns validation error
+        let too_long = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+        assert!(checksum_address(too_long).is_err());
+
+        // Non-hex characters return validation error
+        let non_hex = "0xdeadbeefXYZdeadbeefdeadbeefdeadbeefdeadbee";
+        assert!(checksum_address(non_hex).is_err());
     }
 
     #[test]
@@ -7572,7 +7828,7 @@ mod tests {
         };
 
         let body = PolyforgeClient::create_copy_config_body(&params).unwrap();
-        let checksummed = checksum_address("0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf");
+        let checksummed = checksum_address("0xDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEfDeAdBeEf").unwrap();
         assert_eq!(body["targetWallet"], checksummed);
     }
 
@@ -8423,22 +8679,25 @@ mod tests {
         let p = CreateArbitrageMatchParams {
             polymarket_market_id: "poly-1".into(),
             kalshi_market_id: "kalshi-1".into(),
-            notes: Some("test".into()),
         };
         let v = serde_json::to_value(&p).unwrap();
-        assert_eq!(v["polymarketMarketId"], "poly-1");
-        assert_eq!(v["notes"], "test");
+        let obj = v.as_object().unwrap();
+        assert_eq!(v["polymarketId"], "poly-1");
+        assert_eq!(v["kalshiId"], "kalshi-1");
+        assert!(!obj.contains_key("notes"));
     }
 
     #[test]
-    fn test_create_arbitrage_match_params_omits_none_notes() {
+    fn test_create_arbitrage_match_params_has_correct_field_names() {
         let p = CreateArbitrageMatchParams {
-            polymarket_market_id: "poly-1".into(),
-            kalshi_market_id: "kalshi-1".into(),
-            notes: None,
+            polymarket_market_id: "poly-abc".into(),
+            kalshi_market_id: "kalshi-xyz".into(),
         };
         let v = serde_json::to_value(&p).unwrap();
-        assert!(v.get("notes").is_none());
+        let obj = v.as_object().unwrap();
+        assert_eq!(obj.len(), 2);
+        assert!(obj.contains_key("polymarketId"));
+        assert!(obj.contains_key("kalshiId"));
     }
 
     #[test]
@@ -9592,6 +9851,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_strategy_health_path_and_auth() {
+        let response_json = r#"{"fillRate":null,"avgLatencyMs":0,"errorCount24h":0,"slippageBps":0,"winRate":null,"totalPnl":null,"maxDrawdown":null,"totalOrders":0,"filledOrders":0,"lastUpdated":null}"#;
+        let request = capture_request(response_json, |client| async move {
+            client.get_strategy_health("strategy/id").await.map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("GET /api/v1/strategies/strategy%2Fid/health HTTP/1.1"),
+            "request must hit encoded strategy health path; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        let auth = captured_header(&request, "Authorization")
+            .expect("get_strategy_health must include Authorization header");
+        assert!(
+            auth.starts_with("Bearer "),
+            "Authorization must be Bearer token"
+        );
+    }
+
+    #[tokio::test]
     async fn test_get_health_dispatch_without_api_key() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -10216,8 +10495,8 @@ mod tests {
             "noPercent": 40,
             "totalVotes": 5,
             "userVote": {
-                "direction": "BUY",
-                "confidence": 0.82
+                "direction": "YES",
+                "confidence": 82
             }
         });
         let report: MarketSentimentReport = serde_json::from_value(json).unwrap();
@@ -10225,8 +10504,8 @@ mod tests {
         assert_eq!(report.no_percent, 40);
         assert_eq!(report.total_votes, 5);
         let vote = report.user_vote.as_ref().unwrap();
-        assert_eq!(vote.direction, "BUY");
-        assert!((vote.confidence - 0.82).abs() < f64::EPSILON);
+        assert_eq!(vote.direction, MarketSentimentDirection::Yes);
+        assert_eq!(vote.confidence, 82);
     }
 
     #[test]
@@ -10245,14 +10524,15 @@ mod tests {
     }
 
     #[test]
-    fn test_vote_market_sentiment_params_preserves_fractional_confidence() {
+    fn test_vote_market_sentiment_params_serializes_backend_compatible() {
+        use crate::types::MarketSentimentDirection;
         let params = VoteMarketSentimentParams {
-            direction: "BUY".into(),
-            confidence: 0.82,
+            direction: MarketSentimentDirection::Yes,
+            confidence: 82,
         };
         let json = serde_json::to_value(&params).unwrap();
-        assert_eq!(json["direction"], "BUY");
-        assert_eq!(json["confidence"], serde_json::json!(0.82));
+        assert_eq!(json["direction"], "YES");
+        assert_eq!(json["confidence"], serde_json::json!(82));
     }
 
     #[test]
@@ -10515,6 +10795,46 @@ mod tests {
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["mood"], "DISCIPLINED");
         assert!(v.get("note").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_update_order_journal_returns_updated_order() {
+        fn assert_returns_order<F>(_future: F)
+        where
+            F: Future<Output = Result<Order>>,
+        {
+        }
+
+        let client = PolyforgeClient::new("k").unwrap();
+        let params = UpdateOrderJournalParams {
+            mood: OrderJournalMood::Confident,
+            note: Some("High conviction".into()),
+        };
+        assert_returns_order(client.update_order_journal("order-1", &params));
+
+        let order: Order = serde_json::from_value(serde_json::json!({
+            "id": "order-1",
+            "marketId": "market-1",
+            "side": "BUY",
+            "size": "10",
+            "price": "0.55",
+            "status": "CONFIRMED",
+            "mood": "CONFIDENT",
+            "note": "High conviction"
+        }))
+        .unwrap();
+
+        assert_eq!(order.id, "order-1");
+        assert_eq!(order.market_id.as_deref(), Some("market-1"));
+        assert_eq!(order.status, Some(OrderStatus::Confirmed));
+        assert_eq!(
+            order.extra.get("mood").and_then(|value| value.as_str()),
+            Some("CONFIDENT")
+        );
+        assert_eq!(
+            order.extra.get("note").and_then(|value| value.as_str()),
+            Some("High conviction")
+        );
     }
 
     #[test]

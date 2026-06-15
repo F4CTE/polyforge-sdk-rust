@@ -63,6 +63,13 @@ pub struct Token {
     pub price: Option<f64>,
 }
 
+/// Response from `GET /api/v1/markets/search` (flat `results` list, not paginated).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketSearchResponse {
+    pub results: Vec<Market>,
+}
+
 // ---------------------------------------------------------------------------
 // GDPR Personal Data Export (POLA-3846)
 // ---------------------------------------------------------------------------
@@ -144,6 +151,15 @@ pub struct ListStrategiesParams {
     pub status: Option<StrategyStatus>,
     /// Sort order: `"createdAt"`, `"updatedAt"`, `"name"`, `"status"`, `"likeCount"`.
     pub sort: Option<String>,
+    /// Page number (1-based, default 1).
+    pub page: Option<u32>,
+    /// Items per page (default 20, max 100).
+    pub limit: Option<u32>,
+}
+
+/// Parameters for listing strategy templates.
+#[derive(Debug, Default)]
+pub struct ListStrategyTemplatesParams {
     /// Page number (1-based, default 1).
     pub page: Option<u32>,
     /// Items per page (default 20, max 100).
@@ -316,6 +332,24 @@ pub struct StrategyStatusResponse {
     pub started_at: Option<String>,
     #[serde(default)]
     pub stopped_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Execution health metrics for a strategy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyHealth {
+    pub fill_rate: Option<f64>,
+    pub avg_latency_ms: u64,
+    pub error_count_24h: u64,
+    pub slippage_bps: f64,
+    pub win_rate: Option<f64>,
+    pub total_pnl: Option<f64>,
+    pub max_drawdown: Option<f64>,
+    pub total_orders: u64,
+    pub filled_orders: u64,
+    pub last_updated: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -494,6 +528,94 @@ pub struct Backtest {
     pub extra: serde_json::Value,
 }
 
+/// A single capability entry returned by the strategy capabilities endpoint.
+///
+/// The platform groups capabilities by category; each category maps to a
+/// list of capability identifiers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyCapability {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Strategy capabilities response from `GET /api/v1/strategies/capabilities`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyCapabilities {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub capabilities: std::collections::HashMap<String, Vec<StrategyCapability>>,
+    #[serde(default)]
+    pub items: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A strategy design pattern for AI / tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyDesignPattern {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(rename = "useCases", default)]
+    pub use_cases: Option<Vec<String>>,
+    #[serde(default)]
+    pub blocks: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Design patterns response from `GET /api/v1/strategies/design-patterns`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyDesignPatterns {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub patterns: Vec<StrategyDesignPattern>,
+    #[serde(default)]
+    pub items: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// An example strategy definition for AI / tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyExample {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub strategy: Option<serde_json::Value>,
+    #[serde(default)]
+    pub blocks: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Examples response from `GET /api/v1/strategies/examples`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyExamples {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub examples: Vec<StrategyExample>,
+    #[serde(default)]
+    pub items: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
 // ---------------------------------------------------------------------------
 // MCP Feature SDK Alignment — Strategy Discovery Types (POLA-12355)
 // ---------------------------------------------------------------------------
@@ -627,8 +749,8 @@ pub struct Portfolio {
 /// A portfolio position.
 ///
 /// Field names match the platform position response: `id`, `marketId`,
-/// `tokenId`, `side`, `size`, `avgPrice`, `currentPrice`,
-/// `unrealizedPnl`, `realizedPnl`, `openedAt`.
+/// `tokenId`, `marketTitle`, `side`, `size`, `avgEntryPrice`,
+/// `currentPrice`, `unrealizedPnl`, `resolutionStatus`, `marketCategory`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Position {
@@ -638,21 +760,23 @@ pub struct Position {
     pub market_id: Option<String>,
     #[serde(default)]
     pub token_id: Option<String>,
-    /// Position direction: "BUY" or "SELL".
+    #[serde(default)]
+    pub market_title: Option<String>,
+    /// Position direction: "YES" or "NO".
     #[serde(default)]
     pub side: Option<String>,
     #[serde(default)]
     pub size: Option<String>,
     #[serde(default)]
-    pub avg_price: Option<String>,
+    pub avg_entry_price: Option<String>,
     #[serde(default)]
     pub current_price: Option<String>,
     #[serde(default)]
     pub unrealized_pnl: Option<String>,
     #[serde(default)]
-    pub realized_pnl: Option<String>,
+    pub resolution_status: Option<String>,
     #[serde(default)]
-    pub opened_at: Option<String>,
+    pub market_category: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -994,7 +1118,7 @@ pub struct Webhook {
     pub url: Option<String>,
     #[serde(default)]
     pub events: Vec<WebhookEvent>,
-    #[serde(default)]
+    #[serde(default, alias = "active")]
     pub enabled: Option<bool>,
     #[serde(default, skip_serializing)]
     pub secret: Option<String>,
@@ -2969,12 +3093,11 @@ pub struct ArbitrageMatch {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct CreateArbitrageMatchParams {
+    #[serde(rename = "polymarketId")]
     pub polymarket_market_id: String,
+    #[serde(rename = "kalshiId")]
     pub kalshi_market_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub notes: Option<String>,
 }
 
 /// Bid/ask info for a single venue in a spread comparison.
@@ -4305,8 +4428,26 @@ impl MarketHistoryPeriod {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketSentimentVote {
-    pub direction: String,
-    pub confidence: f64,
+    pub direction: MarketSentimentDirection,
+    pub confidence: i32,
+}
+
+/// Sentiment direction for `POST /api/v1/markets/:marketId/sentiment`.
+///
+/// Matches the backend `@IsIn(["YES", "NO"])` constraint.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MarketSentimentDirection {
+    Yes,
+    No,
+}
+
+/// Request body for `POST /api/v1/markets/:marketId/sentiment`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoteMarketSentimentParams {
+    pub direction: MarketSentimentDirection,
+    pub confidence: i32,
 }
 
 /// Request body for `POST /api/v1/markets/:marketId/sentiment`.
@@ -4314,7 +4455,7 @@ pub struct MarketSentimentVote {
 #[serde(rename_all = "camelCase")]
 pub struct VoteMarketSentimentParams {
     pub direction: String,
-    pub confidence: f64,
+    pub confidence: i32,
 }
 
 /// Aggregated, market-controller-derived sentiment report.

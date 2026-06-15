@@ -6,8 +6,11 @@
 - **`CreateStrategyParams` new field** — `kalshi_subaccount: Option<u64>` added. Any code that constructs `CreateStrategyParams` with an exhaustive struct literal without `..Default::default()` must add the new field. Use [`CreateStrategyParams::new`] or `..Default::default()` for forward-compatible construction.
 
 ### Fixed
+- **Webhook active alias** — `Webhook.enabled` now deserializes from platform `"active"` responses, matching the actual webhook payload shape while preserving the Rust SDK field name. (closes #306)
+- **list_smart_orders response type** — `list_smart_orders()` now returns `Vec<SmartOrder>` instead of `PaginatedResponse<SmartOrder>`, matching the bare array returned by `GET /api/v1/orders/smart`. (closes #303)
 - **search_markets response shape** — `search_markets()` now returns `SearchMarketsResponse { results: Vec<Market> }` instead of `PaginatedResponse<Market>`, matching the platform's actual `{ "results": [...] }` envelope. `MarketSearchResponse` is retained as a deprecated alias for backward compatibility. (#253)
 - **ConditionalOrder type alias** — `ConditionalOrder.condition_type` now accepts `"type"` as a serde alias, matching the platform's actual field name in `GET /api/v1/conditional-orders` responses. (POLA-5122)
+- **Position response schema** — `Position` now matches the platform portfolio payload by exposing `market_title`, `avg_entry_price`, `resolution_status`, and `market_category`, and by removing stale `avg_price`, `realized_pnl`, and `opened_at` fields. (closes #299)
 
 ### Changed
 - **report_strategy doc** — updated `report_strategy` doc comment to reference `"INAPPROPRIATE"` instead of `"HARMFUL"` to match the platform's current report reason values. (closes #227)
@@ -20,10 +23,15 @@
   - `idempotency_key_header()` validation tightened from non-empty to 8–128 characters.
 - **Auth behavior for public endpoints** — `get_user_score()`, `get_user_badges()`, `get_user_profile()`, and `get_actions()` now use `get_with_optional_auth()`. When the client is constructed with an empty API key these methods skip the `Authorization` header, matching the platform's public-route contract. `get_health()` uses `get_no_auth()` (never attaches the `Authorization` header). Previously `get_user_score()`, `get_user_badges()`, and `get_user_profile()` always attached `Authorization: Bearer <key>`, causing 401 errors when no key was available.
 - **Cross-SDK naming aliases** — `get_notifications()` is now a deprecated alias for `list_notifications()`, and `ReferralsInfo` is now a deprecated alias for the canonical `MyReferralsResponse` type.
+- **search_markets return type** — `search_markets()` now returns `MarketSearchResponse` (a flat `{ results: [...] }` envelope) instead of `PaginatedResponse<Market>`, matching the platform's actual response shape for `GET /api/v1/markets/search`. New `MarketSearchResponse` type. (POLA-5122)
 - **vote_market_sentiment params** — `vote_market_sentiment()` now accepts `VoteMarketSentimentParams` with `direction` and `confidence` fields instead of sending an empty JSON body, matching the platform's expected request schema for `POST /api/v1/markets/:marketId/sentiment`. (POLA-5122)
+- **Polymarket activity pagination** — `get_polymarket_activity()` now supports `offset` and `limit` query parameters, matching the platform pagination contract. (closes #311)
 
 ### Added
 - **`CreateStrategyParams.kalshi_subaccount`** — adds an optional `kalshi_subaccount: Option<u64>` field to `CreateStrategyParams`, serialized as `kalshiSubaccount` (camelCase) and omitted when `None`. Enables passing a Kalshi subaccount identifier when creating strategies. `CreateStrategyParams` has a `new(name)` constructor and derives `Default` for forward-compatible construction. (closes #4178)
+- **Strategy health endpoint (POLA-9105 / #301)** — add `get_strategy_health(id)` for
+  `GET /api/v1/strategies/{id}/health`, returning the new typed
+  `StrategyHealth` metrics payload.
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
 - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
@@ -59,7 +67,7 @@
   - `get_market_history(market_id, Option<MarketHistoryPeriod>)` → `GET /api/v1/markets/{marketId}/history` — `period` ∈ `1d | 7d | 30d | 90d`, defaults to `7d` server-side.
   - `get_market_sentiment_report(market_id)` → `GET /api/v1/markets/{marketId}/sentiment` — markets-controller sentiment report with `yesPercent`, `noPercent`, `totalVotes`, and nullable `userVote`. Method is named distinctly from the existing `get_market_sentiment(market_id)` (which still hits the news-controller `/news/sentiment/:marketId`) to avoid silently breaking callers.
   - `vote_market_sentiment(market_id)` → `POST /api/v1/markets/{marketId}/sentiment`.
-  - `update_order_journal(order_id, &UpdateOrderJournalParams)` → `PATCH /api/v1/orders/{id}/journal`.
+  - `update_order_journal(order_id, &UpdateOrderJournalParams)` → `PATCH /api/v1/orders/{id}/journal`, returning the full updated `Order`.
   - `list_combo_collections(Option<&ListComboCollectionsParams>)` → `GET /api/v1/markets/combo/collections` — Kalshi combo collections with optional `seriesTicker`/`limit`/`cursor` filters.
   - `get_combo_collection(ticker)` → `GET /api/v1/markets/combo/collections/{ticker}`.
   - `lookup_combo_market(&ComboLookupParams)` → `POST /api/v1/markets/combo/lookup` — `legs[].outcome` must be `"yes"` or `"no"` (lowercase) to match the server enum.
@@ -138,7 +146,7 @@
 - **BREAKING** `handle_response()`: handle 204 No Content by returning `serde_json::Value::Null` instead of crashing on empty body — `delete_strategy()` now returns `Result<()>` (closes #70)
 - **Endpoint path/method compatibility audit** — verified all 10 reported route mismatches against platform controllers (`#206`): `get_price_history` (`price-history` vs `history`), `watch_strategy` (`/events` vs `/watch`), `rollback_strategy` (`/versions/{id}/rollback`), `reset_circuit_breaker` (`/reset` vs `/reset-circuit-breaker`), `change_profile_password` (POST vs PATCH), `follow_user` (`/profile/*/follow` vs `/users/*/follow`), `get_arbitrage_comparison` (`/cross-venue/{id}/comparison` vs `/compare/{id}`), `get_rebates` (`/rewards/rebates` vs `/rebates`), `get_sports_live_data` (`/live-data/{id}` vs `/milestones/{id}/live`), `lookup_combo_market` (POST vs GET). All paths already match — no code changes required. (closes #206)
 - **StrategyEvent documented type list** — add 6 event types that the platform already emits to the `KNOWN_STRATEGY_EVENT_TYPES` constant and doc comments: `STRATEGY_PAUSED`, `STRATEGY_RESUMED`, `ORDER_SUBMITTED`, `ORDER_PARTIAL`, `ORDER_FAILED`, `ORDER_ERROR`. New tests verify all 16 known types and deserialization — parity with TypeScript SDK `KNOWN_STRATEGY_EVENTS`. (closes #214)
-- `GET /sports/combos/:collectionTicker` currently ignores its path param server-side (forwards to `listComboCollections({page:1, limit:1})`). The SDK wraps the route as-is for fidelity; a server-side fix is tracked separately.
+- `GET /sports/combos/:collectionTicker` now documents the fixed server-side behavior: the platform honors the `collectionTicker` path parameter when resolving combo collections.
 - **`list_tickets()` returns `PaginatedResponse<Ticket>`** — the platform `/api/v1/tickets` endpoint returns a paginated envelope (`{ data, total, page, limit, totalPages, hasNext }`), but the SDK was decoding the response as `Vec<Ticket>`. Fix changes the return type to `PaginatedResponse<Ticket>` to match the platform contract. (closes #254)
 - **`search_markets` response shape** — the platform returns `{ results: [...] }` but the SDK previously expected a paginated `{ data: [...] }` envelope, causing serde deserialization failures. A new `SearchResults<T>` type deserializes the platform shape internally and converts to `PaginatedResponse<T>` via `into_paginated_response` so the public `search_markets()` signature stays backward-compatible. (closes #253)
 - **`ConditionalOrder.condition_type` deserialization** — uses a custom `Deserialize` implementation that accepts `conditionType` (camelCase), `type` (platform alias), and `condition_type` (snake_case) without failing when multiple key formats appear in the same payload. Known keys with non-string values are no longer leaked into the `extra` field, preventing round-trip corruption when the platform transitions between `conditionType` and `type`. Serialization always emits the canonical `conditionType` key. (closes #250)
