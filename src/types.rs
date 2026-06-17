@@ -336,24 +336,6 @@ pub struct StrategyStatusResponse {
     pub extra: serde_json::Value,
 }
 
-/// Execution health metrics for a strategy.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyHealth {
-    pub fill_rate: Option<f64>,
-    pub avg_latency_ms: u64,
-    pub error_count_24h: u64,
-    pub slippage_bps: f64,
-    pub win_rate: Option<f64>,
-    pub total_pnl: Option<f64>,
-    pub max_drawdown: Option<f64>,
-    pub total_orders: u64,
-    pub filled_orders: u64,
-    pub last_updated: Option<String>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
 /// A strategy template with block configuration and popularity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -524,94 +506,6 @@ pub struct Backtest {
     pub created_at: Option<String>,
     #[serde(default)]
     pub completed_at: Option<String>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// A single capability entry returned by the strategy capabilities endpoint.
-///
-/// The platform groups capabilities by category; each category maps to a
-/// list of capability identifiers.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyCapability {
-    pub name: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// Strategy capabilities response from `GET /api/v1/strategies/capabilities`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyCapabilities {
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default)]
-    pub capabilities: std::collections::HashMap<String, Vec<StrategyCapability>>,
-    #[serde(default)]
-    pub items: Vec<serde_json::Value>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// A strategy design pattern for AI / tooling discovery.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyDesignPattern {
-    pub name: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(rename = "useCases", default)]
-    pub use_cases: Option<Vec<String>>,
-    #[serde(default)]
-    pub blocks: Option<serde_json::Value>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// Design patterns response from `GET /api/v1/strategies/design-patterns`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyDesignPatterns {
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default)]
-    pub patterns: Vec<StrategyDesignPattern>,
-    #[serde(default)]
-    pub items: Vec<serde_json::Value>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// An example strategy definition for AI / tooling discovery.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyExample {
-    pub name: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub strategy: Option<serde_json::Value>,
-    #[serde(default)]
-    pub blocks: Option<serde_json::Value>,
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
-}
-
-/// Examples response from `GET /api/v1/strategies/examples`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StrategyExamples {
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default)]
-    pub examples: Vec<StrategyExample>,
-    #[serde(default)]
-    pub items: Vec<serde_json::Value>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -4447,22 +4341,6 @@ pub enum MarketSentimentDirection {
 #[serde(rename_all = "camelCase")]
 pub struct VoteMarketSentimentParams {
     pub direction: MarketSentimentDirection,
-    pub confidence: i32,
-}
-
-/// Request body for `POST /api/v1/markets/:marketId/sentiment`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VoteMarketSentimentParams {
-    pub direction: String,
-    pub confidence: i32,
-}
-
-/// Request body for `POST /api/v1/markets/:marketId/sentiment`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VoteMarketSentimentParams {
-    pub direction: String,
     pub confidence: i32,
 }
 

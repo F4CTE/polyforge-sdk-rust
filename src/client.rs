@@ -36,31 +36,6 @@ const MAX_GDPR_EXPORT_SIZE: usize = 500 * 1024 * 1024; // 500 MiB
 
 const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
 
-fn build_polymarket_activity_query(params: Option<&GetPolymarketActivityParams>) -> String {
-    let mut qp: Vec<(&str, String)> = Vec::new();
-    if let Some(p) = params {
-        if let Some(ref t) = p.activity_type {
-            qp.push(("type", t.clone()));
-        }
-        if let Some(offset) = p.offset {
-            qp.push(("offset", offset.to_string()));
-        }
-        if let Some(limit) = p.limit {
-            qp.push(("limit", limit.to_string()));
-        }
-    }
-
-    if qp.is_empty() {
-        String::new()
-    } else {
-        let pairs: Vec<String> = qp
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, encode(v)))
-            .collect();
-        format!("?{}", pairs.join("&"))
-    }
-}
-
 /// An open SSE connection to a strategy's execution event stream.
 ///
 /// Call [`StrategyEventStream::next`] in a loop to receive events one at a time.
@@ -5924,14 +5899,14 @@ mod tests {
         let json = r#"{"fillRate":98.5,"avgLatencyMs":120,"errorCount24h":1,"slippageBps":2.5,"winRate":57.25,"totalPnl":1234.56,"maxDrawdown":-42.0,"totalOrders":20,"filledOrders":19,"lastUpdated":"2026-05-20T12:00:00Z"}"#;
         let health: StrategyHealth = serde_json::from_str(json).unwrap();
         assert_eq!(health.fill_rate, Some(98.5));
-        assert_eq!(health.avg_latency_ms, 120);
-        assert_eq!(health.error_count_24h, 1);
-        assert_eq!(health.slippage_bps, 2.5);
+        assert_eq!(health.avg_latency_ms, Some(120.0));
+        assert_eq!(health.error_count_24h, Some(1));
+        assert_eq!(health.slippage_bps, Some(2.5));
         assert_eq!(health.win_rate, Some(57.25));
         assert_eq!(health.total_pnl, Some(1234.56));
         assert_eq!(health.max_drawdown, Some(-42.0));
-        assert_eq!(health.total_orders, 20);
-        assert_eq!(health.filled_orders, 19);
+        assert_eq!(health.total_orders, Some(20));
+        assert_eq!(health.filled_orders, Some(19));
         assert_eq!(health.last_updated.as_deref(), Some("2026-05-20T12:00:00Z"));
     }
 
@@ -5940,14 +5915,14 @@ mod tests {
         let json = r#"{"fillRate":null,"avgLatencyMs":0,"errorCount24h":0,"slippageBps":0,"winRate":null,"totalPnl":null,"maxDrawdown":null,"totalOrders":0,"filledOrders":0,"lastUpdated":null}"#;
         let health: StrategyHealth = serde_json::from_str(json).unwrap();
         assert_eq!(health.fill_rate, None);
-        assert_eq!(health.avg_latency_ms, 0);
-        assert_eq!(health.error_count_24h, 0);
-        assert_eq!(health.slippage_bps, 0.0);
+        assert_eq!(health.avg_latency_ms, Some(0.0));
+        assert_eq!(health.error_count_24h, Some(0));
+        assert_eq!(health.slippage_bps, Some(0.0));
         assert_eq!(health.win_rate, None);
         assert_eq!(health.total_pnl, None);
         assert_eq!(health.max_drawdown, None);
-        assert_eq!(health.total_orders, 0);
-        assert_eq!(health.filled_orders, 0);
+        assert_eq!(health.total_orders, Some(0));
+        assert_eq!(health.filled_orders, Some(0));
         assert_eq!(health.last_updated, None);
     }
 
