@@ -712,23 +712,6 @@ impl PolyforgeClient {
         self.handle_response(resp).await
     }
 
-    async fn delete_with_body_idempotent<T: serde::de::DeserializeOwned>(
-        &self,
-        path: &str,
-        body: &serde_json::Value,
-    ) -> Result<T> {
-        let resp = self
-            .http
-            .delete(self.url(path))
-            .header(AUTHORIZATION, self.auth_header()?)
-            .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
-            .header(IDEMPOTENCY_KEY_HEADER, Self::generate_idempotency_key())
-            .json(body)
-            .send()
-            .await?;
-        self.handle_response(resp).await
-    }
-
     async fn handle_response<T: serde::de::DeserializeOwned>(
         &self,
         resp: reqwest::Response,
@@ -2063,7 +2046,7 @@ impl PolyforgeClient {
         params: &BulkCancelParams,
     ) -> Result<BulkCancelResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.delete_with_body_idempotent("/api/v1/orders/bulk", &body)
+        self.post_idempotent("/api/v1/orders/bulk", &body)
             .await
     }
 
