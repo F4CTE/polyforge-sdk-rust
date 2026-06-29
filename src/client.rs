@@ -9612,9 +9612,11 @@ mod tests {
 
     #[test]
     fn test_ticket_message_deserializes() {
-        let json = r#"{"id":"msg-1","ticketId":"t-1","body":"We are looking into it.","author":"support","isStaff":true,"createdAt":"2026-04-02"}"#;
+        let json = r#"{"id":"msg-1","ticketId":"t-1","body":"We are looking into it.","senderName":"support","isAdmin":true,"createdAt":"2026-04-02"}"#;
         let m: TicketMessage = serde_json::from_str(json).unwrap();
         assert_eq!(m.id, "msg-1");
+        assert_eq!(m.is_admin, Some(true));
+        assert_eq!(m.sender_name.as_deref(), Some("support"));
         assert_eq!(m.is_staff, Some(true));
         assert_eq!(m.author.as_deref(), Some("support"));
     }

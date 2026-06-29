@@ -3743,7 +3743,7 @@ pub struct Ticket {
     pub extra: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TicketMessage {
     pub id: String,
@@ -3752,13 +3752,55 @@ pub struct TicketMessage {
     #[serde(default)]
     pub body: Option<String>,
     #[serde(default)]
-    pub author: Option<String>,
+    pub sender_name: Option<String>,
     #[serde(default)]
+    pub is_admin: Option<bool>,
+    #[serde(skip_serializing)]
+    pub author: Option<String>,
+    #[serde(skip_serializing)]
     pub is_staff: Option<bool>,
     #[serde(default)]
     pub created_at: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+impl<'de> Deserialize<'de> for TicketMessage {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TicketMessageWire {
+            id: String,
+            #[serde(default)]
+            ticket_id: Option<String>,
+            #[serde(default)]
+            body: Option<String>,
+            #[serde(default, alias = "author")]
+            sender_name: Option<String>,
+            #[serde(default, alias = "isStaff")]
+            is_admin: Option<bool>,
+            #[serde(default)]
+            created_at: Option<String>,
+            #[serde(flatten)]
+            extra: serde_json::Value,
+        }
+
+        let wire = TicketMessageWire::deserialize(deserializer)?;
+        Ok(Self {
+            id: wire.id,
+            ticket_id: wire.ticket_id,
+            body: wire.body,
+            author: wire.sender_name.clone(),
+            sender_name: wire.sender_name,
+            is_staff: wire.is_admin,
+            is_admin: wire.is_admin,
+            created_at: wire.created_at,
+            extra: wire.extra,
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------
