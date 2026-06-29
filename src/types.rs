@@ -3777,30 +3777,44 @@ impl<'de> Deserialize<'de> for TicketMessage {
             .ok_or_else(|| <D::Error as serde::de::Error>::missing_field("id"))
             .and_then(|value| serde_json::from_value(value).map_err(serde::de::Error::custom))?;
         let ticket_id: Option<String> =
-            deserialize_optional_ticket_message_field(&mut fields, "ticketId")?;
-        let body: Option<String> = deserialize_optional_ticket_message_field(&mut fields, "body")?;
-        let platform_sender_name: Option<String> =
-            deserialize_optional_ticket_message_field(&mut fields, "senderName")?;
+            deserialize_ticket_message_field(&mut fields, "ticketId")?.0;
+        let body: Option<String> = deserialize_ticket_message_field(&mut fields, "body")?.0;
+        let (platform_sender_name, raw_sender_name): (Option<String>, Option<serde_json::Value>) =
+            deserialize_ticket_message_field(&mut fields, "senderName")?;
         let legacy_author: Option<String> =
-            deserialize_optional_ticket_message_field(&mut fields, "author")?;
+            deserialize_ticket_message_field(&mut fields, "author")?.0;
         let sender_name = platform_sender_name.or(legacy_author);
-        let platform_is_admin: Option<bool> =
-            deserialize_optional_ticket_message_field(&mut fields, "isAdmin")?;
+        let (platform_is_admin, raw_is_admin): (Option<bool>, Option<serde_json::Value>) =
+            deserialize_ticket_message_field(&mut fields, "isAdmin")?;
         let legacy_is_staff: Option<bool> =
-            deserialize_optional_ticket_message_field(&mut fields, "isStaff")?;
+            deserialize_ticket_message_field(&mut fields, "isStaff")?.0;
         let is_admin = platform_is_admin.or(legacy_is_staff);
         let created_at: Option<String> =
-            deserialize_optional_ticket_message_field(&mut fields, "createdAt")?;
+            deserialize_ticket_message_field(&mut fields, "createdAt")?.0;
 
         let mut extra = fields;
-        if let Some(sender_name) = &sender_name {
-            extra.insert(
-                "senderName".to_string(),
-                serde_json::Value::String(sender_name.clone()),
-            );
+        match raw_sender_name {
+            Some(value) => {
+                extra.insert("senderName".to_string(), value);
+            }
+            None => {
+                if let Some(sender_name) = &sender_name {
+                    extra.insert(
+                        "senderName".to_string(),
+                        serde_json::Value::String(sender_name.clone()),
+                    );
+                }
+            }
         }
-        if let Some(is_admin) = is_admin {
-            extra.insert("isAdmin".to_string(), serde_json::Value::Bool(is_admin));
+        match raw_is_admin {
+            Some(value) => {
+                extra.insert("isAdmin".to_string(), value);
+            }
+            None => {
+                if let Some(is_admin) = is_admin {
+                    extra.insert("isAdmin".to_string(), serde_json::Value::Bool(is_admin));
+                }
+            }
         }
 
         Ok(Self {
@@ -3817,19 +3831,21 @@ impl<'de> Deserialize<'de> for TicketMessage {
     }
 }
 
-fn deserialize_optional_ticket_message_field<T, E>(
+fn deserialize_ticket_message_field<T, E>(
     fields: &mut serde_json::Map<String, serde_json::Value>,
     name: &str,
-) -> std::result::Result<Option<T>, E>
+) -> std::result::Result<(Option<T>, Option<serde_json::Value>), E>
 where
     T: serde::de::DeserializeOwned,
     E: serde::de::Error,
 {
-    fields
-        .remove(name)
-        .map(serde_json::from_value)
-        .transpose()
-        .map_err(E::custom)
+    match fields.remove(name) {
+        Some(value) if value.is_null() => Ok((None, Some(value))),
+        Some(value) => serde_json::from_value(value.clone())
+            .map(|decoded| (Some(decoded), Some(value)))
+            .map_err(E::custom),
+        None => Ok((None, None)),
+    }
 }
 
 // ---------------------------------------------------------------------------

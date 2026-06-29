@@ -9628,6 +9628,15 @@ mod tests {
         assert_eq!(transition.author.as_deref(), Some("support"));
         assert_eq!(transition.is_admin, Some(true));
         assert_eq!(transition.is_staff, Some(true));
+
+        let null_json = r#"{"id":"msg-3","senderName":null,"isAdmin":null}"#;
+        let null_message: TicketMessage = serde_json::from_str(null_json).unwrap();
+        assert_eq!(null_message.sender_name, None);
+        assert_eq!(null_message.author, None);
+        assert_eq!(null_message.is_admin, None);
+        assert_eq!(null_message.is_staff, None);
+        assert!(null_message.extra["senderName"].is_null());
+        assert!(null_message.extra["isAdmin"].is_null());
     }
 
     // -----------------------------------------------------------------------
