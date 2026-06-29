@@ -3743,22 +3743,126 @@ pub struct Ticket {
     pub extra: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone)]
 pub struct TicketMessage {
     pub id: String,
-    #[serde(default)]
     pub ticket_id: Option<String>,
-    #[serde(default)]
     pub body: Option<String>,
-    #[serde(default)]
+    pub sender_name: Option<String>,
+    pub is_admin: Option<bool>,
     pub author: Option<String>,
-    #[serde(default)]
     pub is_staff: Option<bool>,
-    #[serde(default)]
     pub created_at: Option<String>,
-    #[serde(flatten)]
     pub extra: serde_json::Value,
+}
+
+impl<'de> Deserialize<'de> for TicketMessage {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let mut fields = serde_json::Map::deserialize(deserializer)?;
+
+        let id = fields
+            .remove("id")
+            .ok_or_else(|| <D::Error as serde::de::Error>::missing_field("id"))
+            .and_then(|value| serde_json::from_value(value).map_err(serde::de::Error::custom))?;
+        let ticket_id: Option<String> =
+            deserialize_ticket_message_field(&mut fields, "ticketId")?.0;
+        let body: Option<String> = deserialize_ticket_message_field(&mut fields, "body")?.0;
+        let (platform_sender_name, raw_sender_name): (Option<String>, Option<serde_json::Value>) =
+            deserialize_ticket_message_field(&mut fields, "senderName")?;
+        let legacy_author: Option<String> =
+            deserialize_ticket_message_field(&mut fields, "author")?.0;
+        let sender_name = if raw_sender_name.is_some() {
+            platform_sender_name
+        } else {
+            legacy_author
+        };
+        let (platform_is_admin, raw_is_admin): (Option<bool>, Option<serde_json::Value>) =
+            deserialize_ticket_message_field(&mut fields, "isAdmin")?;
+        let legacy_is_staff: Option<bool> =
+            deserialize_ticket_message_field(&mut fields, "isStaff")?.0;
+        let is_admin = if raw_is_admin.is_some() {
+            platform_is_admin
+        } else {
+            legacy_is_staff
+        };
+        let created_at: Option<String> =
+            deserialize_ticket_message_field(&mut fields, "createdAt")?.0;
+
+        let mut extra = fields;
+        if let Some(value) = raw_sender_name {
+            extra.insert("senderName".to_string(), value);
+        }
+        if let Some(value) = raw_is_admin {
+            extra.insert("isAdmin".to_string(), value);
+        }
+
+        Ok(Self {
+            id,
+            ticket_id,
+            body,
+            author: sender_name.clone(),
+            sender_name,
+            is_staff: is_admin,
+            is_admin,
+            created_at,
+            extra: serde_json::Value::Object(extra),
+        })
+    }
+}
+
+impl Serialize for TicketMessage {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+
+        let mut field_count = 6;
+        if let serde_json::Value::Object(extra) = &self.extra {
+            field_count += extra
+                .keys()
+                .filter(|key| key.as_str() != "senderName" && key.as_str() != "isAdmin")
+                .count();
+        }
+
+        let mut map = serializer.serialize_map(Some(field_count))?;
+        map.serialize_entry("id", &self.id)?;
+        map.serialize_entry("ticketId", &self.ticket_id)?;
+        map.serialize_entry("body", &self.body)?;
+        map.serialize_entry("senderName", &self.sender_name)?;
+        map.serialize_entry("isAdmin", &self.is_admin)?;
+        map.serialize_entry("createdAt", &self.created_at)?;
+
+        if let serde_json::Value::Object(extra) = &self.extra {
+            for (key, value) in extra {
+                if key != "senderName" && key != "isAdmin" {
+                    map.serialize_entry(key, value)?;
+                }
+            }
+        }
+
+        map.end()
+    }
+}
+
+fn deserialize_ticket_message_field<T, E>(
+    fields: &mut serde_json::Map<String, serde_json::Value>,
+    name: &str,
+) -> std::result::Result<(Option<T>, Option<serde_json::Value>), E>
+where
+    T: serde::de::DeserializeOwned,
+    E: serde::de::Error,
+{
+    match fields.remove(name) {
+        Some(value) if value.is_null() => Ok((None, Some(value))),
+        Some(value) => serde_json::from_value(value.clone())
+            .map(|decoded| (Some(decoded), Some(value)))
+            .map_err(E::custom),
+        None => Ok((None, None)),
+    }
 }
 
 // ---------------------------------------------------------------------------

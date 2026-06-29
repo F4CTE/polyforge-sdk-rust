@@ -9612,11 +9612,44 @@ mod tests {
 
     #[test]
     fn test_ticket_message_deserializes() {
-        let json = r#"{"id":"msg-1","ticketId":"t-1","body":"We are looking into it.","author":"support","isStaff":true,"createdAt":"2026-04-02"}"#;
+        let json = r#"{"id":"msg-1","ticketId":"t-1","body":"We are looking into it.","senderName":"support","isAdmin":true,"createdAt":"2026-04-02"}"#;
         let m: TicketMessage = serde_json::from_str(json).unwrap();
         assert_eq!(m.id, "msg-1");
+        assert_eq!(m.is_admin, Some(true));
+        assert_eq!(m.sender_name.as_deref(), Some("support"));
         assert_eq!(m.is_staff, Some(true));
         assert_eq!(m.author.as_deref(), Some("support"));
+        assert_eq!(m.extra["senderName"], "support");
+        assert_eq!(m.extra["isAdmin"], true);
+
+        let transition_json = r#"{"id":"msg-2","senderName":"support","author":"legacy","isAdmin":true,"isStaff":false}"#;
+        let transition: TicketMessage = serde_json::from_str(transition_json).unwrap();
+        assert_eq!(transition.sender_name.as_deref(), Some("support"));
+        assert_eq!(transition.author.as_deref(), Some("support"));
+        assert_eq!(transition.is_admin, Some(true));
+        assert_eq!(transition.is_staff, Some(true));
+        let serialized_transition = serde_json::to_string(&transition).unwrap();
+        assert_eq!(serialized_transition.matches("senderName").count(), 1);
+        assert_eq!(serialized_transition.matches("isAdmin").count(), 1);
+
+        let null_json =
+            r#"{"id":"msg-3","senderName":null,"author":"legacy","isAdmin":null,"isStaff":true}"#;
+        let null_message: TicketMessage = serde_json::from_str(null_json).unwrap();
+        assert_eq!(null_message.sender_name, None);
+        assert_eq!(null_message.author, None);
+        assert_eq!(null_message.is_admin, None);
+        assert_eq!(null_message.is_staff, None);
+        assert!(null_message.extra["senderName"].is_null());
+        assert!(null_message.extra["isAdmin"].is_null());
+
+        let legacy_json = r#"{"id":"msg-4","author":"legacy","isStaff":true}"#;
+        let legacy_message: TicketMessage = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(legacy_message.sender_name.as_deref(), Some("legacy"));
+        assert_eq!(legacy_message.author.as_deref(), Some("legacy"));
+        assert_eq!(legacy_message.is_admin, Some(true));
+        assert_eq!(legacy_message.is_staff, Some(true));
+        assert!(legacy_message.extra.get("senderName").is_none());
+        assert!(legacy_message.extra.get("isAdmin").is_none());
     }
 
     // -----------------------------------------------------------------------
