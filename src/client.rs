@@ -9619,6 +9619,15 @@ mod tests {
         assert_eq!(m.sender_name.as_deref(), Some("support"));
         assert_eq!(m.is_staff, Some(true));
         assert_eq!(m.author.as_deref(), Some("support"));
+        assert_eq!(m.extra["senderName"], "support");
+        assert_eq!(m.extra["isAdmin"], true);
+
+        let transition_json = r#"{"id":"msg-2","senderName":"support","author":"legacy","isAdmin":true,"isStaff":false}"#;
+        let transition: TicketMessage = serde_json::from_str(transition_json).unwrap();
+        assert_eq!(transition.sender_name.as_deref(), Some("support"));
+        assert_eq!(transition.author.as_deref(), Some("support"));
+        assert_eq!(transition.is_admin, Some(true));
+        assert_eq!(transition.is_staff, Some(true));
     }
 
     // -----------------------------------------------------------------------
