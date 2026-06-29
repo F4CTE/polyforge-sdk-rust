@@ -3709,6 +3709,18 @@ pub enum TicketPriority {
     Urgent,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TicketStatus {
+    #[serde(rename = "OPEN")]
+    Open,
+    #[serde(rename = "AWAITING_USER")]
+    AwaitingUser,
+    #[serde(rename = "AWAITING_ADMIN")]
+    AwaitingAdmin,
+    #[serde(rename = "CLOSED")]
+    Closed,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTicketParams {
     pub subject: String,
@@ -3728,7 +3740,7 @@ pub struct Ticket {
     #[serde(default)]
     pub body: Option<String>,
     #[serde(default)]
-    pub status: Option<String>,
+    pub status: Option<TicketStatus>,
     #[serde(default)]
     pub category: Option<String>,
     #[serde(default)]
