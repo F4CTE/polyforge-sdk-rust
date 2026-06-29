@@ -9628,8 +9628,12 @@ mod tests {
         assert_eq!(transition.author.as_deref(), Some("support"));
         assert_eq!(transition.is_admin, Some(true));
         assert_eq!(transition.is_staff, Some(true));
+        let serialized_transition = serde_json::to_string(&transition).unwrap();
+        assert_eq!(serialized_transition.matches("senderName").count(), 1);
+        assert_eq!(serialized_transition.matches("isAdmin").count(), 1);
 
-        let null_json = r#"{"id":"msg-3","senderName":null,"isAdmin":null}"#;
+        let null_json =
+            r#"{"id":"msg-3","senderName":null,"author":"legacy","isAdmin":null,"isStaff":true}"#;
         let null_message: TicketMessage = serde_json::from_str(null_json).unwrap();
         assert_eq!(null_message.sender_name, None);
         assert_eq!(null_message.author, None);
@@ -9637,6 +9641,15 @@ mod tests {
         assert_eq!(null_message.is_staff, None);
         assert!(null_message.extra["senderName"].is_null());
         assert!(null_message.extra["isAdmin"].is_null());
+
+        let legacy_json = r#"{"id":"msg-4","author":"legacy","isStaff":true}"#;
+        let legacy_message: TicketMessage = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(legacy_message.sender_name.as_deref(), Some("legacy"));
+        assert_eq!(legacy_message.author.as_deref(), Some("legacy"));
+        assert_eq!(legacy_message.is_admin, Some(true));
+        assert_eq!(legacy_message.is_staff, Some(true));
+        assert!(legacy_message.extra.get("senderName").is_none());
+        assert!(legacy_message.extra.get("isAdmin").is_none());
     }
 
     // -----------------------------------------------------------------------
