@@ -336,6 +336,92 @@ pub struct StrategyTemplate {
     pub extra: serde_json::Value,
 }
 
+/// A single server-supported strategy block capability.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyCapability {
+    #[serde(rename = "type")]
+    pub capability_type: String,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub config_schema: Option<serde_json::Value>,
+    #[serde(default)]
+    pub examples: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Strategy capability manifest for AI/tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyCapabilities {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub capabilities: std::collections::HashMap<String, Vec<StrategyCapability>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// A platform-authored strategy design pattern.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyDesignPattern {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub use_cases: Option<Vec<String>>,
+    #[serde(default)]
+    pub blocks: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Strategy design pattern manifest for AI/tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyDesignPatterns {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub patterns: Vec<StrategyDesignPattern>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// An example strategy definition published for AI/tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyExample {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub strategy: Option<serde_json::Value>,
+    #[serde(default)]
+    pub blocks: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Strategy examples manifest for AI/tooling discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyExamples {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub examples: Vec<StrategyExample>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
 /// Parameters for creating a strategy with full block configuration.
 ///
 /// All fields except `name` are `Option` and default to `None`.

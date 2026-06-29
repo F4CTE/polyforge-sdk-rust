@@ -80,6 +80,9 @@ async fn main() -> polyforge::Result<()> {
 | `start_strategy(id, mode)` | Start a strategy (live or paper) |
 | `stop_strategy(id)` | Stop a running strategy |
 | `get_strategy_templates()` | List available templates |
+| `get_strategy_capabilities()` | Discover server-supported strategy builder capabilities |
+| `get_strategy_design_patterns()` | Discover strategy design pattern guidance |
+| `get_strategy_examples()` | Fetch example strategy definitions for tooling |
 | `export_strategy(id)` | Export strategy config as JSON |
 | `watch_strategy(id)` | Stream live execution events via SSE |
 

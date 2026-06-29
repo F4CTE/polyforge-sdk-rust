@@ -1048,6 +1048,21 @@ impl PolyforgeClient {
         self.get("/api/v1/strategies/templates").await
     }
 
+    /// Fetch available strategy block capabilities for AI/tooling discovery.
+    pub async fn get_strategy_capabilities(&self) -> Result<StrategyCapabilities> {
+        self.get("/api/v1/strategies/capabilities").await
+    }
+
+    /// Fetch platform-authored strategy design patterns for AI/tooling discovery.
+    pub async fn get_strategy_design_patterns(&self) -> Result<StrategyDesignPatterns> {
+        self.get("/api/v1/strategies/design-patterns").await
+    }
+
+    /// Fetch example strategy definitions for AI/tooling discovery.
+    pub async fn get_strategy_examples(&self) -> Result<StrategyExamples> {
+        self.get("/api/v1/strategies/examples").await
+    }
+
     /// Export a strategy configuration as JSON.
     pub async fn export_strategy(&self, id: &str) -> Result<serde_json::Value> {
         self.get(&format!("/api/v1/strategies/{}/export", encode(id)))
@@ -6614,6 +6629,102 @@ mod tests {
         assert_eq!(tmpl.name, Some("Mean Reversion".to_string()));
         assert_eq!(tmpl.blocks.len(), 1);
         assert_eq!(tmpl.popularity, 342);
+    }
+
+    #[tokio::test]
+    async fn test_get_strategy_capabilities_path() {
+        let request = capture_request(
+            r#"{"version":"1.0","capabilities":{"triggers":[{"type":"PRICE_ABOVE"}]}}"#,
+            |client| async move { client.get_strategy_capabilities().await.map(|_| ()) },
+        )
+        .await;
+
+        assert!(request.contains("GET /api/v1/strategies/capabilities HTTP/1.1"));
+    }
+
+    #[tokio::test]
+    async fn test_get_strategy_design_patterns_path() {
+        let request = capture_request(
+            r#"{"version":"1.0","patterns":[{"name":"Mean reversion"}]}"#,
+            |client| async move { client.get_strategy_design_patterns().await.map(|_| ()) },
+        )
+        .await;
+
+        assert!(request.contains("GET /api/v1/strategies/design-patterns HTTP/1.1"));
+    }
+
+    #[tokio::test]
+    async fn test_get_strategy_examples_path() {
+        let request = capture_request(
+            r#"{"version":"1.0","examples":[{"name":"BTC momentum","strategy":{"name":"BTC momentum"}}]}"#,
+            |client| async move { client.get_strategy_examples().await.map(|_| ()) },
+        )
+        .await;
+
+        assert!(request.contains("GET /api/v1/strategies/examples HTTP/1.1"));
+    }
+
+    #[test]
+    fn test_strategy_capability_discovery_deserializes() {
+        let capabilities_json = r#"{
+            "version": "1.0",
+            "capabilities": {
+                "triggers": [
+                    {
+                        "type": "PRICE_ABOVE",
+                        "label": "Price above",
+                        "category": "triggers",
+                        "configSchema": {"threshold": {"type": "number"}},
+                        "examples": [{"threshold": 0.75}]
+                    }
+                ]
+            },
+            "generatedAt": "2026-06-29T00:00:00Z"
+        }"#;
+        let capabilities: StrategyCapabilities = serde_json::from_str(capabilities_json).unwrap();
+        assert_eq!(capabilities.version.as_deref(), Some("1.0"));
+        assert_eq!(
+            capabilities.capabilities["triggers"][0].capability_type,
+            "PRICE_ABOVE"
+        );
+        assert_eq!(
+            capabilities.capabilities["triggers"][0].category.as_deref(),
+            Some("triggers")
+        );
+        assert!(capabilities.extra.get("generatedAt").is_some());
+
+        let patterns_json = r#"{
+            "version": "1.0",
+            "patterns": [
+                {
+                    "name": "Mean reversion",
+                    "useCases": ["range-bound markets"],
+                    "blocks": {"triggers": ["PRICE_BELOW"]}
+                }
+            ]
+        }"#;
+        let patterns: StrategyDesignPatterns = serde_json::from_str(patterns_json).unwrap();
+        assert_eq!(patterns.patterns[0].name, "Mean reversion");
+        assert_eq!(
+            patterns.patterns[0].use_cases.as_ref().unwrap()[0],
+            "range-bound markets"
+        );
+
+        let examples_json = r#"{
+            "version": "1.0",
+            "examples": [
+                {
+                    "name": "BTC momentum",
+                    "strategy": {"name": "BTC momentum", "visibility": "PUBLIC"}
+                }
+            ]
+        }"#;
+        let examples: StrategyExamples = serde_json::from_str(examples_json).unwrap();
+        assert_eq!(examples.examples[0].name, "BTC momentum");
+        assert_eq!(
+            examples.examples[0].strategy.as_ref().unwrap()["name"],
+            "BTC momentum"
+        );
     }
 
     #[test]
