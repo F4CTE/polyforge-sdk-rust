@@ -1,7 +1,13 @@
+use futures_util::{SinkExt, StreamExt};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use secrecy::{ExposeSecret, SecretBox};
 use serde_json::json;
 use sha3::{Digest, Keccak256};
+use tokio::net::TcpStream;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::http::header::COOKIE;
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use url::Url;
 use urlencoding::encode;
 
@@ -35,6 +41,152 @@ const MAX_RESPONSE_BODY_SIZE: usize = 1_048_576; // 1 MiB
 const MAX_GDPR_EXPORT_SIZE: usize = 500 * 1024 * 1024; // 500 MiB
 
 const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
+const MAX_WEBSOCKET_SUBSCRIPTIONS: usize = 200;
+
+// ---------------------------------------------------------------------------
+// PolyforgeWebSocketClient — async client for the native /ws gateway
+// ---------------------------------------------------------------------------
+
+/// An open WebSocket connection to Polyforge's native `/ws` gateway.
+///
+/// Use this client for live price updates, whale trades, strategy events, and
+/// broadcast notifications. For strategy-only SSE streams, use
+/// [`PolyforgeClient::watch_strategy`].
+pub struct PolyforgeWebSocketClient {
+    stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
+}
+
+impl std::fmt::Debug for PolyforgeWebSocketClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PolyforgeWebSocketClient").finish()
+    }
+}
+
+impl PolyforgeWebSocketClient {
+    /// Send a raw gateway message.
+    pub async fn send(&mut self, message: WebSocketClientMessage) -> Result<()> {
+        let payload = serde_json::to_string(&message)?;
+        self.stream.send(Message::Text(payload.into())).await?;
+        Ok(())
+    }
+
+    /// Receive the next gateway event.
+    ///
+    /// Returns `None` when the server closes the connection.
+    pub async fn next(&mut self) -> Option<Result<WebSocketEvent>> {
+        loop {
+            let message = self.stream.next().await?;
+            match message {
+                Ok(Message::Text(payload)) => {
+                    return Some(
+                        serde_json::from_str::<WebSocketEvent>(&payload).map_err(Into::into),
+                    );
+                }
+                Ok(Message::Binary(payload)) => {
+                    let parsed = String::from_utf8(payload.to_vec()).map_err(|e| {
+                        PolyforgeError::Validation(format!(
+                            "Invalid UTF-8 in WebSocket message: {e}"
+                        ))
+                    });
+                    return Some(parsed.and_then(|text| {
+                        serde_json::from_str::<WebSocketEvent>(&text).map_err(Into::into)
+                    }));
+                }
+                Ok(Message::Close(_)) => return None,
+                Ok(Message::Ping(_)) | Ok(Message::Pong(_)) | Ok(Message::Frame(_)) => continue,
+                Err(e) => return Some(Err(PolyforgeError::from(e))),
+            }
+        }
+    }
+
+    /// Subscribe to live price updates for one or more token IDs.
+    pub async fn subscribe_prices<I, S>(&mut self, token_ids: I) -> Result<()>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let token_ids = normalize_websocket_ids("tokenIds", token_ids)?;
+        self.send(WebSocketClientMessage::SubscribePrices { token_ids })
+            .await
+    }
+
+    /// Unsubscribe from live price updates for one or more token IDs.
+    pub async fn unsubscribe_prices<I, S>(&mut self, token_ids: I) -> Result<()>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let token_ids = normalize_websocket_ids("tokenIds", token_ids)?;
+        self.send(WebSocketClientMessage::UnsubscribePrices { token_ids })
+            .await
+    }
+
+    /// Subscribe to live strategy events for a strategy ID.
+    pub async fn subscribe_strategy(&mut self, strategy_id: &str) -> Result<()> {
+        let strategy_id = normalize_websocket_id("strategyId", strategy_id)?;
+        self.send(WebSocketClientMessage::SubscribeStrategy { strategy_id })
+            .await
+    }
+
+    /// Unsubscribe from live strategy events for a strategy ID.
+    pub async fn unsubscribe_strategy(&mut self, strategy_id: &str) -> Result<()> {
+        let strategy_id = normalize_websocket_id("strategyId", strategy_id)?;
+        self.send(WebSocketClientMessage::UnsubscribeStrategy { strategy_id })
+            .await
+    }
+
+    /// Subscribe to whale trade events.
+    pub async fn subscribe_whales(&mut self) -> Result<()> {
+        self.send(WebSocketClientMessage::SubscribeWhales).await
+    }
+
+    /// Unsubscribe from whale trade events.
+    pub async fn unsubscribe_whales(&mut self) -> Result<()> {
+        self.send(WebSocketClientMessage::UnsubscribeWhales).await
+    }
+
+    /// Send a gateway ping.
+    pub async fn ping(&mut self) -> Result<()> {
+        self.send(WebSocketClientMessage::Ping).await
+    }
+
+    /// Close the WebSocket connection.
+    pub async fn close(&mut self) -> Result<()> {
+        self.stream.close(None).await?;
+        Ok(())
+    }
+}
+
+fn normalize_websocket_ids<I, S>(name: &str, ids: I) -> Result<Vec<String>>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+{
+    let ids: Vec<String> = ids.into_iter().map(Into::into).collect();
+    if ids.is_empty() {
+        return Err(PolyforgeError::Validation(format!(
+            "{name} must contain at least one id"
+        )));
+    }
+    if ids.len() > MAX_WEBSOCKET_SUBSCRIPTIONS {
+        return Err(PolyforgeError::Validation(format!(
+            "{name} can contain at most {MAX_WEBSOCKET_SUBSCRIPTIONS} ids"
+        )));
+    }
+    for id in &ids {
+        normalize_websocket_id(name, id)?;
+    }
+    Ok(ids)
+}
+
+fn normalize_websocket_id(name: &str, id: &str) -> Result<String> {
+    if id.is_empty() || id.len() > 128 {
+        return Err(PolyforgeError::Validation(format!(
+            "{name} must be a non-empty string up to 128 characters"
+        )));
+    }
+    Ok(id.to_string())
+}
 
 /// An open SSE connection to a strategy's execution event stream.
 ///
@@ -510,6 +662,32 @@ impl PolyforgeClient {
     ) -> Result<crate::GatewayWsClient> {
         let url = self.websocket_url(&options)?;
         crate::GatewayWsClient::connect(url, options.reconnect).await
+    }
+
+    fn native_websocket_url(&self, auth_mode: WebSocketAuthMode) -> Result<Url> {
+        let mut url = Url::parse(&self.base_url)
+            .map_err(|e| PolyforgeError::Validation(format!("Malformed base URL: {e}")))?;
+        match url.scheme() {
+            "https" => url
+                .set_scheme("wss")
+                .map_err(|_| PolyforgeError::Validation("Unable to build WebSocket URL".into()))?,
+            "http" => url
+                .set_scheme("ws")
+                .map_err(|_| PolyforgeError::Validation("Unable to build WebSocket URL".into()))?,
+            other => {
+                return Err(PolyforgeError::Validation(format!(
+                    "Unsupported URL scheme \"{other}\"; expected http or https"
+                )));
+            }
+        }
+        url.set_path("/ws");
+        url.set_query(None);
+        url.set_fragment(None);
+        if auth_mode == WebSocketAuthMode::Query {
+            url.query_pairs_mut()
+                .append_pair("token", self.api_key.expose_secret());
+        }
+        Ok(url)
     }
 
     fn auth_header(&self) -> Result<HeaderValue> {
@@ -3273,6 +3451,45 @@ impl PolyforgeClient {
         })
     }
 
+    // -----------------------------------------------------------------------
+    // Native WebSocket Gateway
+    // -----------------------------------------------------------------------
+
+    /// Open an authenticated connection to the native `/ws` gateway.
+    ///
+    /// The default auth mode sends the API token as `Cookie: pf_token=...`,
+    /// matching the non-browser gateway path. Use
+    /// [`connect_websocket_with_auth_mode`](Self::connect_websocket_with_auth_mode)
+    /// with [`WebSocketAuthMode::Query`] for compatibility with clients that
+    /// require query-string token auth.
+    pub async fn connect_websocket(&self) -> Result<PolyforgeWebSocketClient> {
+        self.connect_websocket_with_auth_mode(WebSocketAuthMode::Cookie)
+            .await
+    }
+
+    /// Open an authenticated connection to the native `/ws` gateway using an
+    /// explicit auth mode.
+    pub async fn connect_websocket_with_auth_mode(
+        &self,
+        auth_mode: WebSocketAuthMode,
+    ) -> Result<PolyforgeWebSocketClient> {
+        let url = self.native_websocket_url(auth_mode)?;
+        let mut request = url.as_str().into_client_request()?;
+        if auth_mode == WebSocketAuthMode::Cookie {
+            let cookie = format!("pf_token={}", self.api_key.expose_secret());
+            request.headers_mut().insert(
+                COOKIE,
+                HeaderValue::from_str(&cookie).map_err(|_| {
+                    PolyforgeError::Validation(
+                        "API key contains invalid HTTP cookie characters".into(),
+                    )
+                })?,
+            );
+        }
+        let (stream, _) = connect_async(request).await?;
+        Ok(PolyforgeWebSocketClient { stream })
+    }
+
     async fn put<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
@@ -4264,6 +4481,147 @@ mod tests {
         .await;
 
         assert_generated_idempotency_key(&request);
+    }
+
+    #[test]
+    fn test_websocket_url_builds_gateway_path_and_supports_query_auth() {
+        let client =
+            PolyforgeClient::with_url("jwt-token", "https://api.polyforge.app/api/v1").unwrap();
+        assert_eq!(
+            client
+                .native_websocket_url(WebSocketAuthMode::Cookie)
+                .unwrap()
+                .as_str(),
+            "wss://api.polyforge.app/ws"
+        );
+        assert_eq!(
+            client
+                .native_websocket_url(WebSocketAuthMode::Query)
+                .unwrap()
+                .as_str(),
+            "wss://api.polyforge.app/ws?token=jwt-token"
+        );
+
+        let local = PolyforgeClient::with_url("jwt token", "http://localhost:3002").unwrap();
+        assert_eq!(
+            local
+                .native_websocket_url(WebSocketAuthMode::Query)
+                .unwrap()
+                .as_str(),
+            "ws://localhost:3002/ws?token=jwt+token"
+        );
+    }
+
+    #[test]
+    fn test_websocket_client_messages_serialize_to_gateway_protocol() {
+        let messages = vec![
+            WebSocketClientMessage::SubscribePrices {
+                token_ids: vec!["token-a".into(), "token-b".into()],
+            },
+            WebSocketClientMessage::UnsubscribePrices {
+                token_ids: vec!["token-a".into()],
+            },
+            WebSocketClientMessage::SubscribeWhales,
+            WebSocketClientMessage::UnsubscribeWhales,
+            WebSocketClientMessage::SubscribeStrategy {
+                strategy_id: "strategy-a".into(),
+            },
+            WebSocketClientMessage::Ping,
+        ];
+
+        let serialized: Vec<serde_json::Value> = messages
+            .into_iter()
+            .map(|message| serde_json::to_value(message).unwrap())
+            .collect();
+
+        assert_eq!(
+            serialized,
+            vec![
+                serde_json::json!({"type":"SUBSCRIBE_PRICES","tokenIds":["token-a","token-b"]}),
+                serde_json::json!({"type":"UNSUBSCRIBE_PRICES","tokenIds":["token-a"]}),
+                serde_json::json!({"type":"SUBSCRIBE_WHALES"}),
+                serde_json::json!({"type":"UNSUBSCRIBE_WHALES"}),
+                serde_json::json!({"type":"SUBSCRIBE_STRATEGY","strategyId":"strategy-a"}),
+                serde_json::json!({"type":"PING"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_websocket_events_decode_price_whale_and_broadcast_payloads() {
+        let price: WebSocketEvent = serde_json::from_value(serde_json::json!({
+            "type": "PRICE_UPDATE",
+            "data": {"tokenId": "token-a", "price": 0.42},
+            "timestamp": 11
+        }))
+        .unwrap();
+        let whale: WebSocketEvent = serde_json::from_value(serde_json::json!({
+            "type": "WHALE_TRADE",
+            "data": {"walletAddress": "0xabc"},
+            "timestamp": 12
+        }))
+        .unwrap();
+        let broadcast: WebSocketEvent = serde_json::from_value(serde_json::json!({
+            "type": "NOTIFICATION",
+            "data": {"title": "Broadcast"},
+            "timestamp": 13
+        }))
+        .unwrap();
+
+        assert_eq!(price.event_type, "PRICE_UPDATE");
+        assert_eq!(price.data["tokenId"], "token-a");
+        assert_eq!(price.timestamp, Some(11));
+        assert_eq!(whale.event_type, "WHALE_TRADE");
+        assert_eq!(whale.data["walletAddress"], "0xabc");
+        assert_eq!(broadcast.event_type, "NOTIFICATION");
+        assert_eq!(broadcast.data["title"], "Broadcast");
+    }
+
+    #[tokio::test]
+    async fn test_connect_websocket_uses_cookie_auth_and_sends_subscriptions() {
+        use futures_util::StreamExt;
+        use std::sync::{Arc, Mutex};
+        use tokio_tungstenite::accept_hdr_async;
+        use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+        use tokio_tungstenite::tungstenite::Message;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let captured_cookie = Arc::new(Mutex::new(None::<String>));
+        let server_cookie = Arc::clone(&captured_cookie);
+
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut ws = accept_hdr_async(stream, |req: &Request, resp: Response| {
+                let cookie = req
+                    .headers()
+                    .get("cookie")
+                    .and_then(|value| value.to_str().ok())
+                    .map(String::from);
+                *server_cookie.lock().unwrap() = cookie;
+                Ok(resp)
+            })
+            .await
+            .unwrap();
+            match ws.next().await.unwrap().unwrap() {
+                Message::Text(payload) => payload.to_string(),
+                other => panic!("expected text websocket message, got {other:?}"),
+            }
+        });
+
+        let client =
+            PolyforgeClient::with_url("jwt-token", format!("http://{addr}/api/v1")).unwrap();
+        let mut ws = client.connect_websocket().await.unwrap();
+        ws.subscribe_prices(["token-a", "token-b"]).await.unwrap();
+
+        assert_eq!(
+            captured_cookie.lock().unwrap().as_deref(),
+            Some("pf_token=jwt-token")
+        );
+        assert_eq!(
+            server.await.unwrap(),
+            r#"{"type":"SUBSCRIBE_PRICES","tokenIds":["token-a","token-b"]}"#
+        );
     }
 
     #[tokio::test]

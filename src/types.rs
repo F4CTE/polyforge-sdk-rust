@@ -2927,6 +2927,83 @@ pub const KNOWN_STRATEGY_EVENT_TYPES: &[&str] = &[
 ];
 
 // ---------------------------------------------------------------------------
+// WebSocket Gateway Events
+// ---------------------------------------------------------------------------
+
+/// Authentication mode for the native `/ws` gateway.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WebSocketAuthMode {
+    /// Send the API token as `Cookie: pf_token=...`.
+    Cookie,
+    /// Send the API token as `?token=...` for compatibility with older clients.
+    Query,
+}
+
+/// A client-to-server message for the native `/ws` gateway.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type")]
+pub enum WebSocketClientMessage {
+    #[serde(rename = "PING")]
+    Ping,
+    #[serde(rename = "SUBSCRIBE_PRICES")]
+    SubscribePrices {
+        #[serde(rename = "tokenIds")]
+        token_ids: Vec<String>,
+    },
+    #[serde(rename = "UNSUBSCRIBE_PRICES")]
+    UnsubscribePrices {
+        #[serde(rename = "tokenIds")]
+        token_ids: Vec<String>,
+    },
+    #[serde(rename = "SUBSCRIBE_STRATEGY")]
+    SubscribeStrategy {
+        #[serde(rename = "strategyId")]
+        strategy_id: String,
+    },
+    #[serde(rename = "UNSUBSCRIBE_STRATEGY")]
+    UnsubscribeStrategy {
+        #[serde(rename = "strategyId")]
+        strategy_id: String,
+    },
+    #[serde(rename = "SUBSCRIBE_WHALES")]
+    SubscribeWhales,
+    #[serde(rename = "UNSUBSCRIBE_WHALES")]
+    UnsubscribeWhales,
+}
+
+/// A server-to-client event from the native `/ws` gateway.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WebSocketEvent {
+    /// Event type identifier such as `PRICE_UPDATE`, `WHALE_TRADE`, or `NOTIFICATION`.
+    #[serde(rename = "type")]
+    pub event_type: String,
+    /// Event-specific payload.
+    #[serde(default)]
+    pub data: serde_json::Value,
+    /// Unix millisecond timestamp when provided by the gateway.
+    #[serde(default)]
+    pub timestamp: Option<u64>,
+    /// Additional gateway fields preserved for forward compatibility.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Known native WebSocket gateway event types.
+///
+/// The gateway may emit additional event types; clients should handle unknown
+/// `WebSocketEvent::event_type` values gracefully.
+pub const KNOWN_WEBSOCKET_EVENT_TYPES: &[&str] = &[
+    "AUTH_OK",
+    "PONG",
+    "PRICE_UPDATE",
+    "WHALE_TRADE",
+    "NEWS_SIGNAL",
+    "NOTIFICATION",
+    "MARKET_SETTLEMENT",
+    "ERROR",
+];
+
+// ---------------------------------------------------------------------------
 // Cross-Venue Arbitrage (POLA-782)
 // ---------------------------------------------------------------------------
 

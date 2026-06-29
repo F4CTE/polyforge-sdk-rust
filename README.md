@@ -247,6 +247,11 @@ Server messages are parsed into typed envelopes for `AUTH_OK`, `PONG`,
 `PRICE_UPDATE`, `WHALE_TRADE`, `NEWS_SIGNAL`, and `MARKET_SETTLEMENT`; unknown
 broadcast event types are preserved as `WsServerMessage::Broadcast`.
 
+`connect_websocket` is also available for API-key based gateway connections.
+It sends the key as the gateway's `pf_token` cookie by default; use
+`connect_websocket_with_auth_mode(polyforge::WebSocketAuthMode::Query)` only
+when query-string token compatibility is required.
+
 ### Portfolio & Orders
 
 Trading write methods automatically attach a fresh 32-character `Idempotency-Key`
