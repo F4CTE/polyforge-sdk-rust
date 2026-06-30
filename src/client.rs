@@ -42,6 +42,10 @@ const MAX_GDPR_EXPORT_SIZE: usize = 500 * 1024 * 1024; // 500 MiB
 
 const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
 const MAX_WEBSOCKET_SUBSCRIPTIONS: usize = 200;
+#[cfg(not(test))]
+const WEBSOCKET_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(test)]
+const WEBSOCKET_HANDSHAKE_TIMEOUT: Duration = Duration::from_millis(100);
 
 // ---------------------------------------------------------------------------
 // PolyforgeWebSocketClient — async client for the native /ws gateway
@@ -228,7 +232,7 @@ impl StrategyEventStream {
                         return Some(
                             serde_json::from_str::<StrategyEvent>(raw)
                                 .map_err(PolyforgeError::from),
-                       );
+                        );
                     }
                 }
                 // Skip comment / heartbeat lines and loop
@@ -1513,9 +1517,7 @@ impl PolyforgeClient {
     /// Get strategy design patterns for AI / tooling discovery.
     ///
     /// `GET /api/v1/strategies/design-patterns`
-    pub async fn get_strategy_design_patterns_typed(
-        &self,
-    ) -> Result<StrategyDesignPatterns> {
+    pub async fn get_strategy_design_patterns_typed(&self) -> Result<StrategyDesignPatterns> {
         self.get_with_optional_auth("/api/v1/strategies/design-patterns")
             .await
     }
@@ -2224,8 +2226,7 @@ impl PolyforgeClient {
         params: &BulkCancelParams,
     ) -> Result<BulkCancelResponse> {
         let body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        self.post_idempotent("/api/v1/orders/bulk", &body)
-            .await
+        self.post_idempotent("/api/v1/orders/bulk", &body).await
     }
 
     /// Close an open prediction-market position (partial or sweep).
@@ -2822,10 +2823,7 @@ impl PolyforgeClient {
     /// to EIP-55 checksummed format.
     fn create_copy_config_body(params: &CreateCopyConfigParams) -> Result<serde_json::Value> {
         let mut body = serde_json::to_value(params).map_err(PolyforgeError::from)?;
-        if let Some(raw) = body
-            .get("targetWallet")
-            .and_then(serde_json::Value::as_str)
-        {
+        if let Some(raw) = body.get("targetWallet").and_then(serde_json::Value::as_str) {
             body["targetWallet"] = serde_json::Value::String(checksum_address(raw)?);
         }
         Ok(body)
@@ -3486,7 +3484,18 @@ impl PolyforgeClient {
                 })?,
             );
         }
-        let (stream, _) = connect_async(request).await?;
+        let (stream, _) = tokio::time::timeout(WEBSOCKET_HANDSHAKE_TIMEOUT, connect_async(request))
+            .await
+            .map_err(|_| PolyforgeError::Api {
+                status: 0,
+                code: "WEBSOCKET_HANDSHAKE_TIMEOUT".into(),
+                message: format!(
+                    "WebSocket handshake timed out after {:?}",
+                    WEBSOCKET_HANDSHAKE_TIMEOUT
+                ),
+                request_id: None,
+                suggestion: Some("Retry the connection or check gateway availability".into()),
+            })??;
         Ok(PolyforgeWebSocketClient { stream })
     }
 
@@ -4622,6 +4631,39 @@ mod tests {
             server.await.unwrap(),
             r#"{"type":"SUBSCRIBE_PRICES","tokenIds":["token-a","token-b"]}"#
         );
+    }
+
+    #[tokio::test]
+    async fn test_connect_websocket_times_out_when_handshake_stalls() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (_stream, _) = listener.accept().await.unwrap();
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        });
+
+        let client =
+            PolyforgeClient::with_url("jwt-token", format!("http://{addr}/api/v1")).unwrap();
+        let result = tokio::time::timeout(Duration::from_millis(500), client.connect_websocket())
+            .await
+            .expect("websocket connection attempt should not hang indefinitely");
+
+        match result {
+            Err(PolyforgeError::Api {
+                code,
+                message,
+                status,
+                ..
+            }) => {
+                assert_eq!(status, 0);
+                assert_eq!(code, "WEBSOCKET_HANDSHAKE_TIMEOUT");
+                assert!(message.contains("timed out"));
+            }
+            other => panic!("expected websocket handshake timeout error, got {other:?}"),
+        }
+
+        server.abort();
     }
 
     #[tokio::test]
@@ -8139,7 +8181,10 @@ mod tests {
 
         // Verify known EIP-55 address: 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed
         let known = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
-        assert_eq!(checksum_address(known).unwrap(), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+        assert_eq!(
+            checksum_address(known).unwrap(),
+            "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+        );
 
         // Already checksummed address stays unchanged (idempotent)
         let already = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
