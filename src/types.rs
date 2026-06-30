@@ -2931,12 +2931,12 @@ pub const KNOWN_STRATEGY_EVENT_TYPES: &[&str] = &[
 // ---------------------------------------------------------------------------
 
 /// Authentication mode for the native `/ws` gateway.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WebSocketAuthMode {
     /// Send the API token as `Cookie: pf_token=...`.
     Cookie,
-    /// Send the API token as `?token=...` for compatibility with older clients.
-    Query,
+    /// Send an explicit short-lived gateway token as `?token=...`.
+    QueryToken(String),
 }
 
 /// A client-to-server message for the native `/ws` gateway.
@@ -2966,7 +2966,10 @@ pub enum WebSocketClientMessage {
         strategy_id: String,
     },
     #[serde(rename = "SUBSCRIBE_WHALES")]
-    SubscribeWhales,
+    SubscribeWhales {
+        #[serde(rename = "minSize", skip_serializing_if = "Option::is_none")]
+        min_size: Option<f64>,
+    },
     #[serde(rename = "UNSUBSCRIBE_WHALES")]
     UnsubscribeWhales,
 }
@@ -2980,9 +2983,9 @@ pub struct WebSocketEvent {
     /// Event-specific payload.
     #[serde(default)]
     pub data: serde_json::Value,
-    /// Unix millisecond timestamp when provided by the gateway.
+    /// Gateway timestamp when provided, preserved as numeric or string JSON.
     #[serde(default)]
-    pub timestamp: Option<u64>,
+    pub timestamp: Option<serde_json::Value>,
     /// Additional gateway fields preserved for forward compatibility.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,

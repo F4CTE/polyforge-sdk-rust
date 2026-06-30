@@ -139,9 +139,10 @@ impl PolyforgeWebSocketClient {
             .await
     }
 
-    /// Subscribe to whale trade events.
-    pub async fn subscribe_whales(&mut self) -> Result<()> {
-        self.send(WebSocketClientMessage::SubscribeWhales).await
+    /// Subscribe to whale trade events, optionally filtering by minimum size.
+    pub async fn subscribe_whales(&mut self, min_size: Option<f64>) -> Result<()> {
+        self.send(WebSocketClientMessage::SubscribeWhales { min_size })
+            .await
     }
 
     /// Unsubscribe from whale trade events.
@@ -668,7 +669,7 @@ impl PolyforgeClient {
         crate::GatewayWsClient::connect(url, options.reconnect).await
     }
 
-    fn native_websocket_url(&self, auth_mode: WebSocketAuthMode) -> Result<Url> {
+    fn native_websocket_url(&self, auth_mode: &WebSocketAuthMode) -> Result<Url> {
         let mut url = Url::parse(&self.base_url)
             .map_err(|e| PolyforgeError::Validation(format!("Malformed base URL: {e}")))?;
         match url.scheme() {
@@ -687,9 +688,13 @@ impl PolyforgeClient {
         url.set_path("/ws");
         url.set_query(None);
         url.set_fragment(None);
-        if auth_mode == WebSocketAuthMode::Query {
-            url.query_pairs_mut()
-                .append_pair("token", self.api_key.expose_secret());
+        if let WebSocketAuthMode::QueryToken(token) = auth_mode {
+            if token.trim().is_empty() {
+                return Err(PolyforgeError::Validation(
+                    "WebSocket query auth requires a non-empty gateway token".into(),
+                ));
+            }
+            url.query_pairs_mut().append_pair("token", token);
         }
         Ok(url)
     }
@@ -3456,10 +3461,9 @@ impl PolyforgeClient {
     /// Open an authenticated connection to the native `/ws` gateway.
     ///
     /// The default auth mode sends the API token as `Cookie: pf_token=...`,
-    /// matching the non-browser gateway path. Use
-    /// [`connect_websocket_with_auth_mode`](Self::connect_websocket_with_auth_mode)
-    /// with [`WebSocketAuthMode::Query`] for compatibility with clients that
-    /// require query-string token auth.
+    /// matching the non-browser gateway path. If query-string compatibility is
+    /// required, pass a short-lived gateway token with
+    /// [`WebSocketAuthMode::QueryToken`].
     pub async fn connect_websocket(&self) -> Result<PolyforgeWebSocketClient> {
         self.connect_websocket_with_auth_mode(WebSocketAuthMode::Cookie)
             .await
@@ -3471,7 +3475,7 @@ impl PolyforgeClient {
         &self,
         auth_mode: WebSocketAuthMode,
     ) -> Result<PolyforgeWebSocketClient> {
-        let url = self.native_websocket_url(auth_mode)?;
+        let url = self.native_websocket_url(&auth_mode)?;
         let mut request = url.as_str().into_client_request()?;
         if auth_mode == WebSocketAuthMode::Cookie {
             let cookie = format!("pf_token={}", self.api_key.expose_secret());
@@ -4498,27 +4502,31 @@ mod tests {
             PolyforgeClient::with_url("jwt-token", "https://api.polyforge.app/api/v1").unwrap();
         assert_eq!(
             client
-                .native_websocket_url(WebSocketAuthMode::Cookie)
+                .native_websocket_url(&WebSocketAuthMode::Cookie)
                 .unwrap()
                 .as_str(),
             "wss://api.polyforge.app/ws"
         );
         assert_eq!(
             client
-                .native_websocket_url(WebSocketAuthMode::Query)
+                .native_websocket_url(&WebSocketAuthMode::QueryToken("gateway-jwt".into()))
                 .unwrap()
                 .as_str(),
-            "wss://api.polyforge.app/ws?token=jwt-token"
+            "wss://api.polyforge.app/ws?token=gateway-jwt"
         );
 
         let local = PolyforgeClient::with_url("jwt token", "http://localhost:3002").unwrap();
         assert_eq!(
             local
-                .native_websocket_url(WebSocketAuthMode::Query)
+                .native_websocket_url(&WebSocketAuthMode::QueryToken("gateway token".into()))
                 .unwrap()
                 .as_str(),
-            "ws://localhost:3002/ws?token=jwt+token"
+            "ws://localhost:3002/ws?token=gateway+token"
         );
+        assert!(matches!(
+            client.native_websocket_url(&WebSocketAuthMode::QueryToken("  ".into())),
+            Err(PolyforgeError::Validation(_))
+        ));
     }
 
     #[test]
@@ -4530,7 +4538,10 @@ mod tests {
             WebSocketClientMessage::UnsubscribePrices {
                 token_ids: vec!["token-a".into()],
             },
-            WebSocketClientMessage::SubscribeWhales,
+            WebSocketClientMessage::SubscribeWhales {
+                min_size: Some(1_000.0),
+            },
+            WebSocketClientMessage::SubscribeWhales { min_size: None },
             WebSocketClientMessage::UnsubscribeWhales,
             WebSocketClientMessage::SubscribeStrategy {
                 strategy_id: "strategy-a".into(),
@@ -4548,6 +4559,7 @@ mod tests {
             vec![
                 serde_json::json!({"type":"SUBSCRIBE_PRICES","tokenIds":["token-a","token-b"]}),
                 serde_json::json!({"type":"UNSUBSCRIBE_PRICES","tokenIds":["token-a"]}),
+                serde_json::json!({"type":"SUBSCRIBE_WHALES","minSize":1000.0}),
                 serde_json::json!({"type":"SUBSCRIBE_WHALES"}),
                 serde_json::json!({"type":"UNSUBSCRIBE_WHALES"}),
                 serde_json::json!({"type":"SUBSCRIBE_STRATEGY","strategyId":"strategy-a"}),
@@ -4573,17 +4585,21 @@ mod tests {
         let broadcast: WebSocketEvent = serde_json::from_value(serde_json::json!({
             "type": "NOTIFICATION",
             "data": {"title": "Broadcast"},
-            "timestamp": 13
+            "timestamp": "2026-06-30T06:52:49Z"
         }))
         .unwrap();
 
         assert_eq!(price.event_type, "PRICE_UPDATE");
         assert_eq!(price.data["tokenId"], "token-a");
-        assert_eq!(price.timestamp, Some(11));
+        assert_eq!(price.timestamp, Some(serde_json::json!(11)));
         assert_eq!(whale.event_type, "WHALE_TRADE");
         assert_eq!(whale.data["walletAddress"], "0xabc");
         assert_eq!(broadcast.event_type, "NOTIFICATION");
         assert_eq!(broadcast.data["title"], "Broadcast");
+        assert_eq!(
+            broadcast.timestamp,
+            Some(serde_json::json!("2026-06-30T06:52:49Z"))
+        );
     }
 
     #[tokio::test]

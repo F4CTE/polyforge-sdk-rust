@@ -249,8 +249,9 @@ broadcast event types are preserved as `WsServerMessage::Broadcast`.
 
 `connect_websocket` is also available for API-key based gateway connections.
 It sends the key as the gateway's `pf_token` cookie by default; use
-`connect_websocket_with_auth_mode(polyforge::WebSocketAuthMode::Query)` only
-when query-string token compatibility is required.
+`connect_websocket_with_auth_mode(polyforge::WebSocketAuthMode::QueryToken(...))`
+only with a short-lived gateway token when query-string token compatibility is
+required.
 
 ### Portfolio & Orders
 
