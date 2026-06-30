@@ -141,6 +141,7 @@ impl PolyforgeWebSocketClient {
 
     /// Subscribe to whale trade events, optionally filtering by minimum size.
     pub async fn subscribe_whales(&mut self, min_size: Option<f64>) -> Result<()> {
+        let min_size = validate_websocket_min_size(min_size)?;
         self.send(WebSocketClientMessage::SubscribeWhales { min_size })
             .await
     }
@@ -191,6 +192,17 @@ fn normalize_websocket_id(name: &str, id: &str) -> Result<String> {
         )));
     }
     Ok(id.to_string())
+}
+
+fn validate_websocket_min_size(min_size: Option<f64>) -> Result<Option<f64>> {
+    if let Some(value) = min_size {
+        if !value.is_finite() {
+            return Err(PolyforgeError::Validation(
+                "min_size must be finite when subscribing to whale trades".into(),
+            ));
+        }
+    }
+    Ok(min_size)
 }
 
 /// An open SSE connection to a strategy's execution event stream.
@@ -4566,6 +4578,23 @@ mod tests {
                 serde_json::json!({"type":"PING"}),
             ]
         );
+    }
+
+    #[test]
+    fn test_websocket_subscribe_whales_rejects_nonfinite_thresholds_before_serialization() {
+        assert!(matches!(
+            validate_websocket_min_size(Some(f64::NAN)),
+            Err(PolyforgeError::Validation(_))
+        ));
+        assert!(matches!(
+            validate_websocket_min_size(Some(f64::INFINITY)),
+            Err(PolyforgeError::Validation(_))
+        ));
+        assert_eq!(
+            validate_websocket_min_size(Some(1_000.0)).unwrap(),
+            Some(1_000.0)
+        );
+        assert_eq!(validate_websocket_min_size(None).unwrap(), None);
     }
 
     #[test]
