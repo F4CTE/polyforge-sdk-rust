@@ -10063,16 +10063,28 @@ mod tests {
     #[test]
     fn test_ticket_status_deserializes_platform_values() {
         let cases = [
-            ("OPEN", TicketStatus::Open),
-            ("AWAITING_USER", TicketStatus::AwaitingUser),
-            ("AWAITING_ADMIN", TicketStatus::AwaitingAdmin),
-            ("CLOSED", TicketStatus::Closed),
+            ("OPEN", TicketStatus::Open, "OPEN"),
+            ("open", TicketStatus::Open, "OPEN"),
+            ("AWAITING_USER", TicketStatus::AwaitingUser, "AWAITING_USER"),
+            ("awaiting_user", TicketStatus::AwaitingUser, "AWAITING_USER"),
+            (
+                "AWAITING_ADMIN",
+                TicketStatus::AwaitingAdmin,
+                "AWAITING_ADMIN",
+            ),
+            (
+                "awaiting_admin",
+                TicketStatus::AwaitingAdmin,
+                "AWAITING_ADMIN",
+            ),
+            ("CLOSED", TicketStatus::Closed, "CLOSED"),
+            ("closed", TicketStatus::Closed, "CLOSED"),
         ];
 
-        for (raw, expected) in cases {
+        for (raw, expected, serialized) in cases {
             let status: TicketStatus = serde_json::from_str(&format!(r#""{}""#, raw)).unwrap();
             assert_eq!(status, expected);
-            assert_eq!(serde_json::to_value(status).unwrap(), raw);
+            assert_eq!(serde_json::to_value(status).unwrap(), serialized);
         }
     }
 

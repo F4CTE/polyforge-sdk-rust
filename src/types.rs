@@ -3789,13 +3789,13 @@ pub enum TicketPriority {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TicketStatus {
-    #[serde(rename = "OPEN")]
+    #[serde(rename = "OPEN", alias = "open")]
     Open,
-    #[serde(rename = "AWAITING_USER")]
+    #[serde(rename = "AWAITING_USER", alias = "awaiting_user")]
     AwaitingUser,
-    #[serde(rename = "AWAITING_ADMIN")]
+    #[serde(rename = "AWAITING_ADMIN", alias = "awaiting_admin")]
     AwaitingAdmin,
-    #[serde(rename = "CLOSED")]
+    #[serde(rename = "CLOSED", alias = "closed")]
     Closed,
 }
 
