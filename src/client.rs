@@ -10295,9 +10295,11 @@ mod tests {
         let triggers = manifest.capabilities.get("triggers").unwrap();
         assert_eq!(triggers[0].name, "PRICE_ABOVE");
         assert_eq!(
-            triggers[0].config_schema.as_ref().unwrap()["threshold"]["type"],
+            triggers[0].extra["configSchema"]["threshold"]["type"],
             "number"
         );
+        assert_eq!(triggers[0].extra["label"], "Price above");
+        assert_eq!(triggers[0].extra["category"], "triggers");
         assert_eq!(triggers[0].extra["serverOnly"], true);
         assert_eq!(manifest.extra["generatedAt"], "2026-07-01T00:00:00Z");
     }
@@ -10336,11 +10338,7 @@ mod tests {
         let _literal = StrategyCapability {
             name: "PRICE_BELOW".to_string(),
             version: None,
-            label: None,
             description: None,
-            category: None,
-            config_schema: None,
-            examples: None,
             extra: serde_json::Value::Null,
         };
     }

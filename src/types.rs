@@ -547,17 +547,9 @@ pub struct StrategyCapability {
     #[serde(rename = "type", alias = "name")]
     pub name: String,
     #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default)]
-    pub label: Option<String>,
-    #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
-    pub category: Option<String>,
-    #[serde(default)]
-    pub config_schema: Option<serde_json::Value>,
-    #[serde(default)]
-    pub examples: Option<Vec<serde_json::Value>>,
+    pub version: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
