@@ -10051,11 +10051,26 @@ mod tests {
 
     #[test]
     fn test_ticket_deserializes() {
-        let json = r#"{"id":"t-1","subject":"Login issue","status":"open","createdAt":"2026-04-01","messages":[]}"#;
+        let json = r#"{"id":"t-1","subject":"Login issue","status":"OPEN","createdAt":"2026-04-01","messages":[]}"#;
         let t: Ticket = serde_json::from_str(json).unwrap();
         assert_eq!(t.id, "t-1");
-        assert_eq!(t.status.as_deref(), Some("open"));
+        assert_eq!(t.status, Some(TicketStatus::Open));
         assert!(t.messages.is_empty());
+    }
+
+    #[test]
+    fn test_ticket_status_enum_deserializes_all_variants() {
+        for (raw, expected) in [
+            ("OPEN", TicketStatus::Open),
+            ("AWAITING_USER", TicketStatus::AwaitingUser),
+            ("AWAITING_ADMIN", TicketStatus::AwaitingAdmin),
+            ("CLOSED", TicketStatus::Closed),
+        ] {
+            let json = format!("\"{}\"", raw);
+            let status: TicketStatus = serde_json::from_str(&json).unwrap();
+            assert_eq!(status, expected);
+            assert_eq!(serde_json::to_value(status).unwrap(), raw);
+        }
     }
 
     #[test]
