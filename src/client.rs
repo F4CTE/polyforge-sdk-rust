@@ -10303,6 +10303,21 @@ mod tests {
     }
 
     #[test]
+    fn test_strategy_capabilities_accepts_legacy_name_field() {
+        let json = r#"{
+            "capabilities":{
+                "triggers":[{
+                    "name":"PRICE_ABOVE",
+                    "label":"Price above"
+                }]
+            }
+        }"#;
+        let manifest: StrategyCapabilities = serde_json::from_str(json).unwrap();
+        let triggers = manifest.capabilities.get("triggers").unwrap();
+        assert_eq!(triggers[0].capability_type, "PRICE_ABOVE");
+    }
+
+    #[test]
     fn test_strategy_design_patterns_deserializes() {
         let json = r#"{
             "version":"1.0",
