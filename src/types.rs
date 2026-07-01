@@ -540,18 +540,22 @@ pub struct StrategyHealth {
     pub last_updated: Option<String>,
 }
 
-/// A single capability entry returned by the strategy capabilities endpoint.
-///
-/// The platform groups capabilities by category; each category maps to a
-/// list of capability identifiers.
+/// A server-published strategy builder capability.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StrategyCapability {
-    pub name: String,
+    #[serde(rename = "type")]
+    pub capability_type: String,
+    #[serde(default)]
+    pub label: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
-    pub version: Option<String>,
+    pub category: Option<String>,
+    #[serde(default)]
+    pub config_schema: Option<serde_json::Value>,
+    #[serde(default)]
+    pub examples: Option<Vec<serde_json::Value>>,
     #[serde(flatten)]
     pub extra: serde_json::Value,
 }
@@ -4681,8 +4685,6 @@ pub struct ActionsSchema {
     pub version: String,
     pub actions: Vec<ActionDefinition>,
 }
-
-// ---------------------------------------------------------------------------
 
 /// Aggregated correlation matrix between top market categories.
 ///
