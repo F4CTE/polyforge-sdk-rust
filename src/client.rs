@@ -10089,6 +10089,24 @@ mod tests {
     }
 
     #[test]
+    fn test_ticket_deserializes_lowercase_response_enums() {
+        let json = r#"{"id":"t-1","subject":"Login issue","status":"awaiting_admin","category":"technical","priority":"high","createdAt":"2026-04-01","messages":[]}"#;
+        let t: Ticket = serde_json::from_str(json).unwrap();
+        assert_eq!(t.status, Some(TicketStatus::AwaitingAdmin));
+        assert_eq!(t.category, Some(TicketCategory::Technical));
+        assert_eq!(t.priority, Some(TicketPriority::High));
+    }
+
+    #[test]
+    fn test_ticket_ignores_unknown_category_and_priority() {
+        let json = r#"{"id":"t-1","subject":"Login issue","status":"OPEN","category":"CUSTOM_CASE","priority":"P1","createdAt":"2026-04-01","messages":[]}"#;
+        let t: Ticket = serde_json::from_str(json).unwrap();
+        assert_eq!(t.status, Some(TicketStatus::Open));
+        assert_eq!(t.category, None);
+        assert_eq!(t.priority, None);
+    }
+
+    #[test]
     fn test_ticket_message_deserializes() {
         let json = r#"{"id":"msg-1","ticketId":"t-1","body":"We are looking into it.","senderName":"support","isAdmin":true,"createdAt":"2026-04-02"}"#;
         let m: TicketMessage = serde_json::from_str(json).unwrap();
@@ -10622,6 +10640,48 @@ mod tests {
         let p = TicketPriority::Urgent;
         let v = serde_json::to_value(p).unwrap();
         assert_eq!(v, "URGENT");
+    }
+
+    #[test]
+    fn test_ticket_category_deserializes_platform_values() {
+        let cases = [
+            ("GENERAL", TicketCategory::General),
+            ("general", TicketCategory::General),
+            ("BILLING", TicketCategory::Billing),
+            ("billing", TicketCategory::Billing),
+            ("TECHNICAL", TicketCategory::Technical),
+            ("technical", TicketCategory::Technical),
+            ("ACCOUNT", TicketCategory::Account),
+            ("account", TicketCategory::Account),
+            ("BUG", TicketCategory::Bug),
+            ("bug", TicketCategory::Bug),
+            ("FEATURE_REQUEST", TicketCategory::FeatureRequest),
+            ("feature_request", TicketCategory::FeatureRequest),
+        ];
+
+        for (raw, expected) in cases {
+            let category: TicketCategory = serde_json::from_str(&format!(r#""{}""#, raw)).unwrap();
+            assert_eq!(category, expected);
+        }
+    }
+
+    #[test]
+    fn test_ticket_priority_deserializes_platform_values() {
+        let cases = [
+            ("LOW", TicketPriority::Low),
+            ("low", TicketPriority::Low),
+            ("MEDIUM", TicketPriority::Medium),
+            ("medium", TicketPriority::Medium),
+            ("HIGH", TicketPriority::High),
+            ("high", TicketPriority::High),
+            ("URGENT", TicketPriority::Urgent),
+            ("urgent", TicketPriority::Urgent),
+        ];
+
+        for (raw, expected) in cases {
+            let priority: TicketPriority = serde_json::from_str(&format!(r#""{}""#, raw)).unwrap();
+            assert_eq!(priority, expected);
+        }
     }
 
     // ── POLA-1841: Sports markets ─────────────────────────────────────────

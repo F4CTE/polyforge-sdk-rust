@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // Paginated wrapper
@@ -3761,29 +3760,29 @@ pub struct SystemHealthAuthenticated {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TicketCategory {
-    #[serde(rename = "GENERAL")]
+    #[serde(rename = "GENERAL", alias = "general")]
     General,
-    #[serde(rename = "BILLING")]
+    #[serde(rename = "BILLING", alias = "billing")]
     Billing,
-    #[serde(rename = "TECHNICAL")]
+    #[serde(rename = "TECHNICAL", alias = "technical")]
     Technical,
-    #[serde(rename = "ACCOUNT")]
+    #[serde(rename = "ACCOUNT", alias = "account")]
     Account,
-    #[serde(rename = "BUG")]
+    #[serde(rename = "BUG", alias = "bug")]
     Bug,
-    #[serde(rename = "FEATURE_REQUEST")]
+    #[serde(rename = "FEATURE_REQUEST", alias = "feature_request")]
     FeatureRequest,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TicketPriority {
-    #[serde(rename = "LOW")]
+    #[serde(rename = "LOW", alias = "low")]
     Low,
-    #[serde(rename = "MEDIUM")]
+    #[serde(rename = "MEDIUM", alias = "medium")]
     Medium,
-    #[serde(rename = "HIGH")]
+    #[serde(rename = "HIGH", alias = "high")]
     High,
-    #[serde(rename = "URGENT")]
+    #[serde(rename = "URGENT", alias = "urgent")]
     Urgent,
 }
 
@@ -3819,9 +3818,9 @@ pub struct Ticket {
     pub body: Option<String>,
     #[serde(default)]
     pub status: Option<TicketStatus>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_ticket_category")]
     pub category: Option<TicketCategory>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_ticket_priority")]
     pub priority: Option<TicketPriority>,
     #[serde(default)]
     pub created_at: Option<String>,
@@ -3952,6 +3951,42 @@ where
             .map(|decoded| (Some(decoded), Some(value)))
             .map_err(E::custom),
         None => Ok((None, None)),
+    }
+}
+
+fn deserialize_optional_ticket_category<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<TicketCategory>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_optional_ticket_enum(deserializer)
+}
+
+fn deserialize_optional_ticket_priority<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<TicketPriority>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_optional_ticket_enum(deserializer)
+}
+
+fn deserialize_optional_ticket_enum<'de, D, T>(
+    deserializer: D,
+) -> std::result::Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    let Some(value) = value else {
+        return Ok(None);
+    };
+
+    match serde_json::from_value(value) {
+        Ok(decoded) => Ok(Some(decoded)),
+        Err(_) => Ok(None),
     }
 }
 
