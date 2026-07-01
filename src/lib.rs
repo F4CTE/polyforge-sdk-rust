@@ -21,7 +21,7 @@ pub mod errors;
 pub mod types;
 pub mod ws;
 
-pub use client::{PolyforgeClient, StrategyEventStream};
+pub use client::{PolyforgeClient, PolyforgeWebSocketClient, StrategyEventStream};
 pub use errors::{PolyforgeError, Result};
 pub use types::*;
 
