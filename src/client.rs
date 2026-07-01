@@ -10293,7 +10293,7 @@ mod tests {
         let manifest: StrategyCapabilities = serde_json::from_str(json).unwrap();
         assert_eq!(manifest.version.as_deref(), Some("1.0"));
         let triggers = manifest.capabilities.get("triggers").unwrap();
-        assert_eq!(triggers[0].capability_type, "PRICE_ABOVE");
+        assert_eq!(triggers[0].name, "PRICE_ABOVE");
         assert_eq!(
             triggers[0].config_schema.as_ref().unwrap()["threshold"]["type"],
             "number"
@@ -10314,7 +10314,35 @@ mod tests {
         }"#;
         let manifest: StrategyCapabilities = serde_json::from_str(json).unwrap();
         let triggers = manifest.capabilities.get("triggers").unwrap();
-        assert_eq!(triggers[0].capability_type, "PRICE_ABOVE");
+        assert_eq!(triggers[0].name, "PRICE_ABOVE");
+    }
+
+    #[test]
+    fn test_strategy_capability_preserves_public_name_and_version_fields() {
+        let json = r#"{
+            "capabilities":{
+                "triggers":[{
+                    "type":"PRICE_ABOVE",
+                    "version":"2026-07-01",
+                    "label":"Price above"
+                }]
+            }
+        }"#;
+        let manifest: StrategyCapabilities = serde_json::from_str(json).unwrap();
+        let triggers = manifest.capabilities.get("triggers").unwrap();
+        assert_eq!(triggers[0].name, "PRICE_ABOVE");
+        assert_eq!(triggers[0].version.as_deref(), Some("2026-07-01"));
+
+        let _literal = StrategyCapability {
+            name: "PRICE_BELOW".to_string(),
+            version: None,
+            label: None,
+            description: None,
+            category: None,
+            config_schema: None,
+            examples: None,
+            extra: serde_json::Value::Null,
+        };
     }
 
     #[test]

@@ -545,7 +545,9 @@ pub struct StrategyHealth {
 #[serde(rename_all = "camelCase")]
 pub struct StrategyCapability {
     #[serde(rename = "type", alias = "name")]
-    pub capability_type: String,
+    pub name: String,
+    #[serde(default)]
+    pub version: Option<String>,
     #[serde(default)]
     pub label: Option<String>,
     #[serde(default)]
