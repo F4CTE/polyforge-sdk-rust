@@ -10341,6 +10341,10 @@ mod tests {
             description: None,
             extra: serde_json::Value::Null,
         };
+
+        let serialized = serde_json::to_value(&_literal).unwrap();
+        assert_eq!(serialized["name"], "PRICE_BELOW");
+        assert!(serialized.get("type").is_none());
     }
 
     #[test]

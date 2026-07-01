@@ -544,7 +544,7 @@ pub struct StrategyHealth {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StrategyCapability {
-    #[serde(rename = "type", alias = "name")]
+    #[serde(alias = "type")]
     pub name: String,
     #[serde(default)]
     pub description: Option<String>,
