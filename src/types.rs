@@ -3820,9 +3820,9 @@ pub struct Ticket {
     #[serde(default)]
     pub status: Option<TicketStatus>,
     #[serde(default)]
-    pub category: Option<String>,
+    pub category: Option<TicketCategory>,
     #[serde(default)]
-    pub priority: Option<String>,
+    pub priority: Option<TicketPriority>,
     #[serde(default)]
     pub created_at: Option<String>,
     #[serde(default)]

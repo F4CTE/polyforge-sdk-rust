@@ -10051,23 +10051,26 @@ mod tests {
 
     #[test]
     fn test_ticket_deserializes() {
-        let json = r#"{"id":"t-1","subject":"Login issue","status":"OPEN","createdAt":"2026-04-01","messages":[]}"#;
+        let json = r#"{"id":"t-1","subject":"Login issue","status":"AWAITING_ADMIN","category":"TECHNICAL","priority":"HIGH","createdAt":"2026-04-01","messages":[]}"#;
         let t: Ticket = serde_json::from_str(json).unwrap();
         assert_eq!(t.id, "t-1");
-        assert_eq!(t.status, Some(TicketStatus::Open));
+        assert_eq!(t.status, Some(TicketStatus::AwaitingAdmin));
+        assert_eq!(t.category, Some(TicketCategory::Technical));
+        assert_eq!(t.priority, Some(TicketPriority::High));
         assert!(t.messages.is_empty());
     }
 
     #[test]
-    fn test_ticket_status_enum_deserializes_all_variants() {
-        for (raw, expected) in [
+    fn test_ticket_status_deserializes_platform_values() {
+        let cases = [
             ("OPEN", TicketStatus::Open),
             ("AWAITING_USER", TicketStatus::AwaitingUser),
             ("AWAITING_ADMIN", TicketStatus::AwaitingAdmin),
             ("CLOSED", TicketStatus::Closed),
-        ] {
-            let json = format!("\"{}\"", raw);
-            let status: TicketStatus = serde_json::from_str(&json).unwrap();
+        ];
+
+        for (raw, expected) in cases {
+            let status: TicketStatus = serde_json::from_str(&format!(r#""{}""#, raw)).unwrap();
             assert_eq!(status, expected);
             assert_eq!(serde_json::to_value(status).unwrap(), raw);
         }
