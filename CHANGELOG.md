@@ -7,7 +7,7 @@
 
 ### Fixed
 - **Webhook active alias** — `Webhook.enabled` now deserializes from platform `"active"` responses, matching the actual webhook payload shape while preserving the Rust SDK field name. (closes #306)
-- **TicketMessage response fields** — `TicketMessage` now exposes `sender_id`, `sender_name`, and `is_admin`, matching the platform's `senderId`, `senderName`, and `isAdmin` ticket-message response shape. (closes #313)
+- **TicketMessage response fields** — `TicketMessage` now maps platform `senderName` and `isAdmin` responses onto the existing `author` and `is_staff` fields, while preserving raw sender metadata in `extra`. (closes #313)
 - **list_smart_orders response type** — `list_smart_orders()` now returns `Vec<SmartOrder>` instead of `PaginatedResponse<SmartOrder>`, matching the bare array returned by `GET /api/v1/orders/smart`. (closes #303)
 - **search_markets response shape** — `search_markets()` now returns `SearchMarketsResponse { results: Vec<Market> }` instead of `PaginatedResponse<Market>`, matching the platform's actual `{ "results": [...] }` envelope. `MarketSearchResponse` is retained as a deprecated alias for backward compatibility. (#253)
 - **ConditionalOrder type alias** — `ConditionalOrder.condition_type` now accepts `"type"` as a serde alias, matching the platform's actual field name in `GET /api/v1/conditional-orders` responses. (POLA-5122)
