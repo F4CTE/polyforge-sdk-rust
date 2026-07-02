@@ -10051,26 +10051,68 @@ mod tests {
 
     #[test]
     fn test_ticket_deserializes() {
-        let json = r#"{"id":"t-1","subject":"Login issue","status":"OPEN","createdAt":"2026-04-01","messages":[]}"#;
+        let json = r#"{"id":"t-1","subject":"Login issue","status":"AWAITING_ADMIN","category":"TECHNICAL","priority":"HIGH","createdAt":"2026-04-01","messages":[]}"#;
         let t: Ticket = serde_json::from_str(json).unwrap();
         assert_eq!(t.id, "t-1");
-        assert_eq!(t.status, Some(TicketStatus::Open));
+        assert_eq!(t.status, Some(TicketStatus::AwaitingAdmin));
+        assert_eq!(t.category, Some(TicketCategory::Technical));
+        assert_eq!(t.priority, Some(TicketPriority::High));
         assert!(t.messages.is_empty());
     }
 
     #[test]
-    fn test_ticket_status_enum_deserializes_all_variants() {
-        for (raw, expected) in [
-            ("OPEN", TicketStatus::Open),
-            ("AWAITING_USER", TicketStatus::AwaitingUser),
-            ("AWAITING_ADMIN", TicketStatus::AwaitingAdmin),
-            ("CLOSED", TicketStatus::Closed),
-        ] {
-            let json = format!("\"{}\"", raw);
-            let status: TicketStatus = serde_json::from_str(&json).unwrap();
+    fn test_ticket_status_deserializes_platform_values() {
+        let cases = [
+            ("OPEN", TicketStatus::Open, "OPEN"),
+            ("open", TicketStatus::Open, "OPEN"),
+            ("AWAITING_USER", TicketStatus::AwaitingUser, "AWAITING_USER"),
+            ("awaiting_user", TicketStatus::AwaitingUser, "AWAITING_USER"),
+            (
+                "AWAITING_ADMIN",
+                TicketStatus::AwaitingAdmin,
+                "AWAITING_ADMIN",
+            ),
+            (
+                "awaiting_admin",
+                TicketStatus::AwaitingAdmin,
+                "AWAITING_ADMIN",
+            ),
+            ("CLOSED", TicketStatus::Closed, "CLOSED"),
+            ("closed", TicketStatus::Closed, "CLOSED"),
+        ];
+
+        for (raw, expected, serialized) in cases {
+            let status: TicketStatus = serde_json::from_str(&format!(r#""{}""#, raw)).unwrap();
             assert_eq!(status, expected);
-            assert_eq!(serde_json::to_value(status).unwrap(), raw);
+            assert_eq!(serde_json::to_value(status).unwrap(), serialized);
         }
+    }
+
+    #[test]
+    fn test_ticket_deserializes_lowercase_response_enums() {
+        let json = r#"{"id":"t-1","subject":"Login issue","status":"awaiting_admin","category":"technical","priority":"high","createdAt":"2026-04-01","messages":[]}"#;
+        let t: Ticket = serde_json::from_str(json).unwrap();
+        assert_eq!(t.status, Some(TicketStatus::AwaitingAdmin));
+        assert_eq!(t.category, Some(TicketCategory::Technical));
+        assert_eq!(t.priority, Some(TicketPriority::High));
+    }
+
+    #[test]
+    fn test_ticket_ignores_unknown_category_and_priority() {
+        let json = r#"{"id":"t-1","subject":"Login issue","status":"OPEN","category":"CUSTOM_CASE","priority":"P1","createdAt":"2026-04-01","messages":[]}"#;
+        let t: Ticket = serde_json::from_str(json).unwrap();
+        assert_eq!(t.status, Some(TicketStatus::Open));
+        assert_eq!(t.category, None);
+        assert_eq!(t.priority, None);
+    }
+
+    #[test]
+    fn test_ticket_ignores_unknown_status() {
+        let json = r#"{"id":"t-1","subject":"Login issue","status":"PENDING_TRIAGE","category":"TECHNICAL","priority":"HIGH","createdAt":"2026-04-01","messages":[]}"#;
+        let t: Ticket = serde_json::from_str(json).unwrap();
+        assert_eq!(t.status, None);
+        assert_eq!(t.category, Some(TicketCategory::Technical));
+        assert_eq!(t.priority, Some(TicketPriority::High));
     }
 
     #[test]
@@ -10607,6 +10649,48 @@ mod tests {
         let p = TicketPriority::Urgent;
         let v = serde_json::to_value(p).unwrap();
         assert_eq!(v, "URGENT");
+    }
+
+    #[test]
+    fn test_ticket_category_deserializes_platform_values() {
+        let cases = [
+            ("GENERAL", TicketCategory::General),
+            ("general", TicketCategory::General),
+            ("BILLING", TicketCategory::Billing),
+            ("billing", TicketCategory::Billing),
+            ("TECHNICAL", TicketCategory::Technical),
+            ("technical", TicketCategory::Technical),
+            ("ACCOUNT", TicketCategory::Account),
+            ("account", TicketCategory::Account),
+            ("BUG", TicketCategory::Bug),
+            ("bug", TicketCategory::Bug),
+            ("FEATURE_REQUEST", TicketCategory::FeatureRequest),
+            ("feature_request", TicketCategory::FeatureRequest),
+        ];
+
+        for (raw, expected) in cases {
+            let category: TicketCategory = serde_json::from_str(&format!(r#""{}""#, raw)).unwrap();
+            assert_eq!(category, expected);
+        }
+    }
+
+    #[test]
+    fn test_ticket_priority_deserializes_platform_values() {
+        let cases = [
+            ("LOW", TicketPriority::Low),
+            ("low", TicketPriority::Low),
+            ("MEDIUM", TicketPriority::Medium),
+            ("medium", TicketPriority::Medium),
+            ("HIGH", TicketPriority::High),
+            ("high", TicketPriority::High),
+            ("URGENT", TicketPriority::Urgent),
+            ("urgent", TicketPriority::Urgent),
+        ];
+
+        for (raw, expected) in cases {
+            let priority: TicketPriority = serde_json::from_str(&format!(r#""{}""#, raw)).unwrap();
+            assert_eq!(priority, expected);
+        }
     }
 
     // ── POLA-1841: Sports markets ─────────────────────────────────────────
