@@ -90,9 +90,12 @@ async fn main() -> polyforge::Result<()> {
 | `stop_strategy(id)` | Stop a running strategy |
 | `list_strategy_templates(params)` | List available templates with pagination |
 | `get_strategy_templates()` | List the first page of available templates |
-| `get_strategy_capabilities()` | Fetch the strategy builder capability manifest |
-| `get_strategy_design_patterns()` | Fetch strategy composition patterns |
-| `get_strategy_examples()` | Fetch example strategies for discovery and onboarding |
+| `get_strategy_capabilities()` | Fetch the raw strategy builder capability manifest |
+| `get_strategy_design_patterns()` | Fetch raw strategy composition patterns |
+| `get_strategy_examples()` | Fetch raw example strategies for discovery and onboarding |
+| `get_strategy_capabilities_typed()` | Discover typed server-supported strategy builder capabilities |
+| `get_strategy_design_patterns_typed()` | Discover typed strategy design pattern guidance |
+| `get_strategy_examples_typed()` | Fetch typed example strategy definitions for tooling |
 | `export_strategy(id)` | Export strategy config as JSON |
 | `watch_strategy(id)` | Stream live execution events via SSE |
 

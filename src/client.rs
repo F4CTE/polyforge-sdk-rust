@@ -10272,6 +10272,183 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
+    // Strategy capability discovery — type and path tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_strategy_capabilities_deserializes() {
+        let json = r#"{
+            "version":"1.0",
+            "capabilities":{
+                "triggers":[{
+                    "type":"PRICE_ABOVE",
+                    "label":"Price above",
+                    "category":"triggers",
+                    "configSchema":{"threshold":{"type":"number"}},
+                    "serverOnly":true
+                }]
+            },
+            "generatedAt":"2026-07-01T00:00:00Z"
+        }"#;
+        let manifest: StrategyCapabilities = serde_json::from_str(json).unwrap();
+        assert_eq!(manifest.version.as_deref(), Some("1.0"));
+        let triggers = manifest.capabilities.get("triggers").unwrap();
+        assert_eq!(triggers[0].name, "PRICE_ABOVE");
+        assert_eq!(
+            triggers[0].extra["configSchema"]["threshold"]["type"],
+            "number"
+        );
+        assert_eq!(triggers[0].extra["label"], "Price above");
+        assert_eq!(triggers[0].extra["category"], "triggers");
+        assert_eq!(triggers[0].extra["serverOnly"], true);
+        assert_eq!(manifest.extra["generatedAt"], "2026-07-01T00:00:00Z");
+    }
+
+    #[test]
+    fn test_strategy_capabilities_accepts_legacy_name_field() {
+        let json = r#"{
+            "capabilities":{
+                "triggers":[{
+                    "name":"PRICE_ABOVE",
+                    "label":"Price above"
+                }]
+            }
+        }"#;
+        let manifest: StrategyCapabilities = serde_json::from_str(json).unwrap();
+        let triggers = manifest.capabilities.get("triggers").unwrap();
+        assert_eq!(triggers[0].name, "PRICE_ABOVE");
+    }
+
+    #[test]
+    fn test_strategy_capability_preserves_public_name_and_version_fields() {
+        let json = r#"{
+            "capabilities":{
+                "triggers":[{
+                    "type":"PRICE_ABOVE",
+                    "version":"2026-07-01",
+                    "label":"Price above"
+                }]
+            }
+        }"#;
+        let manifest: StrategyCapabilities = serde_json::from_str(json).unwrap();
+        let triggers = manifest.capabilities.get("triggers").unwrap();
+        assert_eq!(triggers[0].name, "PRICE_ABOVE");
+        assert_eq!(triggers[0].version.as_deref(), Some("2026-07-01"));
+
+        let _literal = StrategyCapability {
+            name: "PRICE_BELOW".to_string(),
+            version: None,
+            description: None,
+            extra: serde_json::Value::Null,
+        };
+
+        let serialized = serde_json::to_value(&_literal).unwrap();
+        assert_eq!(serialized["name"], "PRICE_BELOW");
+        assert!(serialized.get("type").is_none());
+    }
+
+    #[test]
+    fn test_strategy_design_patterns_deserializes() {
+        let json = r#"{
+            "version":"1.0",
+            "patterns":[{
+                "name":"Mean reversion",
+                "useCases":["range-bound markets"],
+                "blocks":{"triggers":["PRICE_BELOW"]},
+                "relatedTools":["create_strategy"]
+            }]
+        }"#;
+        let manifest: StrategyDesignPatterns = serde_json::from_str(json).unwrap();
+        assert_eq!(manifest.patterns[0].name, "Mean reversion");
+        assert_eq!(
+            manifest.patterns[0].use_cases.as_deref(),
+            Some(&["range-bound markets".to_string()] as &[String])
+        );
+        assert_eq!(
+            manifest.patterns[0].blocks.as_ref().unwrap()["triggers"][0],
+            "PRICE_BELOW"
+        );
+        assert_eq!(
+            manifest.patterns[0].extra["relatedTools"][0],
+            "create_strategy"
+        );
+    }
+
+    #[test]
+    fn test_strategy_examples_deserializes() {
+        let json = r#"{
+            "version":"1.0",
+            "examples":[{
+                "name":"BTC momentum",
+                "strategy":{"name":"BTC momentum","visibility":"PUBLIC"},
+                "nextTools":["create_strategy"]
+            }]
+        }"#;
+        let manifest: StrategyExamples = serde_json::from_str(json).unwrap();
+        assert_eq!(manifest.examples[0].name, "BTC momentum");
+        assert_eq!(
+            manifest.examples[0].strategy.as_ref().unwrap()["visibility"],
+            "PUBLIC"
+        );
+        assert_eq!(
+            manifest.examples[0].extra["nextTools"][0],
+            "create_strategy"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_strategy_capabilities_path_and_auth() {
+        let request = capture_request(
+            r#"{"version":"1.0","capabilities":{"triggers":[]}}"#,
+            |client| async move { client.get_strategy_capabilities().await.map(|_| ()) },
+        )
+        .await;
+        assert!(
+            request.contains("GET /api/v1/strategies/capabilities HTTP/1.1"),
+            "request must hit GET /api/v1/strategies/capabilities; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        assert_eq!(
+            captured_header(&request, "Authorization"),
+            Some("Bearer test-key")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_strategy_design_patterns_path_and_auth() {
+        let request = capture_request(r#"{"version":"1.0","patterns":[]}"#, |client| async move {
+            client.get_strategy_design_patterns().await.map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("GET /api/v1/strategies/design-patterns HTTP/1.1"),
+            "request must hit GET /api/v1/strategies/design-patterns; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        assert_eq!(
+            captured_header(&request, "Authorization"),
+            Some("Bearer test-key")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_strategy_examples_path_and_auth() {
+        let request = capture_request(r#"{"version":"1.0","examples":[]}"#, |client| async move {
+            client.get_strategy_examples().await.map(|_| ())
+        })
+        .await;
+        assert!(
+            request.contains("GET /api/v1/strategies/examples HTTP/1.1"),
+            "request must hit GET /api/v1/strategies/examples; got: {}",
+            request.lines().next().unwrap_or("")
+        );
+        assert_eq!(
+            captured_header(&request, "Authorization"),
+            Some("Bearer test-key")
+        );
+    }
+
+    // -----------------------------------------------------------------------
     // System Health — HTTP request-capture tests (POLA-3671)
     // -----------------------------------------------------------------------
 

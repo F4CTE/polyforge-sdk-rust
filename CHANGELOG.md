@@ -32,6 +32,14 @@
 - **Strategy health endpoint (POLA-9105 / #301)** — add `get_strategy_health(id)` for
   `GET /api/v1/strategies/{id}/health`, returning the new typed
   `StrategyHealth` metrics payload.
+- **Strategy capability discovery (POLA-14718)** — `get_strategy_capabilities()`,
+  `get_strategy_design_patterns()`, and `get_strategy_examples()` wrap
+  `GET /api/v1/strategies/capabilities`,
+  `GET /api/v1/strategies/design-patterns`, and
+  `GET /api/v1/strategies/examples` for strategy-generation tooling. Adds
+  typed manifest structs: `StrategyCapabilities`, `StrategyCapability`,
+  `StrategyDesignPatterns`, `StrategyDesignPattern`, `StrategyExamples`, and
+  `StrategyExample`. (closes #305)
 - **GDPR personal data export (POLA-3846)** — `export_personal_data()` and `export_personal_data_csv()` wrap `GET /api/v1/me/export` for GDPR-mandated right-to-export compliance. The JSON path returns a typed [`PersonalDataExport`] struct with `account`, `settings`, `security`, `trading`, `communications`, and `social` sections plus `_meta` truncation metadata; the CSV path returns plain text with `section, index, data_json` columns. Both paths send the `Content-Disposition: attachment` response and require a READ-scoped API key. (closes #215)
 - New types: `PersonalDataExport`, `PersonalDataExportMeta`.
 - **Sports markets API** — 9 new `PolyforgeClient` methods wrapping the `/api/v1/sports/*` endpoints (POLA-1841):
