@@ -3837,6 +3837,8 @@ pub struct TicketMessage {
     pub id: String,
     pub ticket_id: Option<String>,
     pub body: Option<String>,
+    pub sender_name: Option<String>,
+    pub is_admin: Option<bool>,
     pub author: Option<String>,
     pub is_staff: Option<bool>,
     pub created_at: Option<String>,
@@ -3861,20 +3863,22 @@ impl<'de> Deserialize<'de> for TicketMessage {
             deserialize_ticket_message_field(&mut fields, "senderName")?;
         let legacy_author: Option<String> =
             deserialize_ticket_message_field(&mut fields, "author")?.0;
-        let author = if raw_sender_name.is_some() {
+        let sender_name = if raw_sender_name.is_some() {
             platform_sender_name
         } else {
             legacy_author
         };
+        let author = sender_name.clone();
         let (platform_is_admin, raw_is_admin): (Option<bool>, Option<serde_json::Value>) =
             deserialize_ticket_message_field(&mut fields, "isAdmin")?;
         let legacy_is_staff: Option<bool> =
             deserialize_ticket_message_field(&mut fields, "isStaff")?.0;
-        let is_staff = if raw_is_admin.is_some() {
+        let is_admin = if raw_is_admin.is_some() {
             platform_is_admin
         } else {
             legacy_is_staff
         };
+        let is_staff = is_admin;
         let created_at: Option<String> =
             deserialize_ticket_message_field(&mut fields, "createdAt")?.0;
 
@@ -3890,6 +3894,8 @@ impl<'de> Deserialize<'de> for TicketMessage {
             id,
             ticket_id,
             body,
+            sender_name,
+            is_admin,
             author,
             is_staff,
             created_at,
@@ -3905,7 +3911,7 @@ impl Serialize for TicketMessage {
     {
         use serde::ser::SerializeMap;
 
-        let mut field_count = 6;
+        let mut field_count = 8;
         if let serde_json::Value::Object(extra) = &self.extra {
             field_count += extra
                 .keys()
@@ -3914,11 +3920,11 @@ impl Serialize for TicketMessage {
                         key.as_str(),
                         "id" | "ticketId"
                             | "body"
+                            | "senderName"
+                            | "isAdmin"
                             | "author"
                             | "isStaff"
                             | "createdAt"
-                            | "senderName"
-                            | "isAdmin"
                     )
                 })
                 .count();
@@ -3928,6 +3934,8 @@ impl Serialize for TicketMessage {
         map.serialize_entry("id", &self.id)?;
         map.serialize_entry("ticketId", &self.ticket_id)?;
         map.serialize_entry("body", &self.body)?;
+        map.serialize_entry("senderName", &self.sender_name)?;
+        map.serialize_entry("isAdmin", &self.is_admin)?;
         map.serialize_entry("author", &self.author)?;
         map.serialize_entry("isStaff", &self.is_staff)?;
         map.serialize_entry("createdAt", &self.created_at)?;
@@ -3938,11 +3946,11 @@ impl Serialize for TicketMessage {
                     key.as_str(),
                     "id" | "ticketId"
                         | "body"
+                        | "senderName"
+                        | "isAdmin"
                         | "author"
                         | "isStaff"
                         | "createdAt"
-                        | "senderName"
-                        | "isAdmin"
                 ) {
                     map.serialize_entry(key, value)?;
                 }
