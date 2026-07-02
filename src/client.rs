@@ -10107,6 +10107,15 @@ mod tests {
     }
 
     #[test]
+    fn test_ticket_ignores_unknown_status() {
+        let json = r#"{"id":"t-1","subject":"Login issue","status":"PENDING_TRIAGE","category":"TECHNICAL","priority":"HIGH","createdAt":"2026-04-01","messages":[]}"#;
+        let t: Ticket = serde_json::from_str(json).unwrap();
+        assert_eq!(t.status, None);
+        assert_eq!(t.category, Some(TicketCategory::Technical));
+        assert_eq!(t.priority, Some(TicketPriority::High));
+    }
+
+    #[test]
     fn test_ticket_message_deserializes() {
         let json = r#"{"id":"msg-1","ticketId":"t-1","body":"We are looking into it.","senderName":"support","isAdmin":true,"createdAt":"2026-04-02"}"#;
         let m: TicketMessage = serde_json::from_str(json).unwrap();

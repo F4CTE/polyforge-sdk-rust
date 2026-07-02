@@ -3816,7 +3816,7 @@ pub struct Ticket {
     pub subject: Option<String>,
     #[serde(default)]
     pub body: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_ticket_status")]
     pub status: Option<TicketStatus>,
     #[serde(default, deserialize_with = "deserialize_optional_ticket_category")]
     pub category: Option<TicketCategory>,
@@ -3966,6 +3966,15 @@ where
 fn deserialize_optional_ticket_priority<'de, D>(
     deserializer: D,
 ) -> std::result::Result<Option<TicketPriority>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_optional_ticket_enum(deserializer)
+}
+
+fn deserialize_optional_ticket_status<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<TicketStatus>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
