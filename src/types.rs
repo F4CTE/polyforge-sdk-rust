@@ -3836,10 +3836,7 @@ pub struct Ticket {
 pub struct TicketMessage {
     pub id: String,
     pub ticket_id: Option<String>,
-    pub sender_id: Option<String>,
     pub body: Option<String>,
-    pub sender_name: Option<String>,
-    pub is_admin: Option<bool>,
     pub author: Option<String>,
     pub is_staff: Option<bool>,
     pub created_at: Option<String>,
@@ -3859,14 +3856,12 @@ impl<'de> Deserialize<'de> for TicketMessage {
             .and_then(|value| serde_json::from_value(value).map_err(serde::de::Error::custom))?;
         let ticket_id: Option<String> =
             deserialize_ticket_message_field(&mut fields, "ticketId")?.0;
-        let sender_id: Option<String> =
-            deserialize_ticket_message_field(&mut fields, "senderId")?.0;
         let body: Option<String> = deserialize_ticket_message_field(&mut fields, "body")?.0;
         let (platform_sender_name, raw_sender_name): (Option<String>, Option<serde_json::Value>) =
             deserialize_ticket_message_field(&mut fields, "senderName")?;
         let legacy_author: Option<String> =
             deserialize_ticket_message_field(&mut fields, "author")?.0;
-        let sender_name = if raw_sender_name.is_some() {
+        let author = if raw_sender_name.is_some() {
             platform_sender_name
         } else {
             legacy_author
@@ -3875,7 +3870,7 @@ impl<'de> Deserialize<'de> for TicketMessage {
             deserialize_ticket_message_field(&mut fields, "isAdmin")?;
         let legacy_is_staff: Option<bool> =
             deserialize_ticket_message_field(&mut fields, "isStaff")?.0;
-        let is_admin = if raw_is_admin.is_some() {
+        let is_staff = if raw_is_admin.is_some() {
             platform_is_admin
         } else {
             legacy_is_staff
@@ -3894,12 +3889,9 @@ impl<'de> Deserialize<'de> for TicketMessage {
         Ok(Self {
             id,
             ticket_id,
-            sender_id,
             body,
-            author: sender_name.clone(),
-            sender_name,
-            is_staff: is_admin,
-            is_admin,
+            author,
+            is_staff,
             created_at,
             extra: serde_json::Value::Object(extra),
         })
@@ -3913,26 +3905,45 @@ impl Serialize for TicketMessage {
     {
         use serde::ser::SerializeMap;
 
-        let mut field_count = 7;
+        let mut field_count = 6;
         if let serde_json::Value::Object(extra) = &self.extra {
             field_count += extra
                 .keys()
-                .filter(|key| key.as_str() != "senderName" && key.as_str() != "isAdmin")
+                .filter(|key| {
+                    !matches!(
+                        key.as_str(),
+                        "id" | "ticketId"
+                            | "body"
+                            | "author"
+                            | "isStaff"
+                            | "createdAt"
+                            | "senderName"
+                            | "isAdmin"
+                    )
+                })
                 .count();
         }
 
         let mut map = serializer.serialize_map(Some(field_count))?;
         map.serialize_entry("id", &self.id)?;
         map.serialize_entry("ticketId", &self.ticket_id)?;
-        map.serialize_entry("senderId", &self.sender_id)?;
         map.serialize_entry("body", &self.body)?;
-        map.serialize_entry("senderName", &self.sender_name)?;
-        map.serialize_entry("isAdmin", &self.is_admin)?;
+        map.serialize_entry("author", &self.author)?;
+        map.serialize_entry("isStaff", &self.is_staff)?;
         map.serialize_entry("createdAt", &self.created_at)?;
 
         if let serde_json::Value::Object(extra) = &self.extra {
             for (key, value) in extra {
-                if key != "senderName" && key != "isAdmin" {
+                if !matches!(
+                    key.as_str(),
+                    "id" | "ticketId"
+                        | "body"
+                        | "author"
+                        | "isStaff"
+                        | "createdAt"
+                        | "senderName"
+                        | "isAdmin"
+                ) {
                     map.serialize_entry(key, value)?;
                 }
             }
