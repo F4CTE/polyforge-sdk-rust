@@ -3836,6 +3836,7 @@ pub struct Ticket {
 pub struct TicketMessage {
     pub id: String,
     pub ticket_id: Option<String>,
+    pub sender_id: Option<String>,
     pub body: Option<String>,
     pub sender_name: Option<String>,
     pub is_admin: Option<bool>,
@@ -3858,6 +3859,8 @@ impl<'de> Deserialize<'de> for TicketMessage {
             .and_then(|value| serde_json::from_value(value).map_err(serde::de::Error::custom))?;
         let ticket_id: Option<String> =
             deserialize_ticket_message_field(&mut fields, "ticketId")?.0;
+        let sender_id: Option<String> =
+            deserialize_ticket_message_field(&mut fields, "senderId")?.0;
         let body: Option<String> = deserialize_ticket_message_field(&mut fields, "body")?.0;
         let (platform_sender_name, raw_sender_name): (Option<String>, Option<serde_json::Value>) =
             deserialize_ticket_message_field(&mut fields, "senderName")?;
@@ -3891,6 +3894,7 @@ impl<'de> Deserialize<'de> for TicketMessage {
         Ok(Self {
             id,
             ticket_id,
+            sender_id,
             body,
             author: sender_name.clone(),
             sender_name,
@@ -3909,7 +3913,7 @@ impl Serialize for TicketMessage {
     {
         use serde::ser::SerializeMap;
 
-        let mut field_count = 6;
+        let mut field_count = 7;
         if let serde_json::Value::Object(extra) = &self.extra {
             field_count += extra
                 .keys()
@@ -3920,6 +3924,7 @@ impl Serialize for TicketMessage {
         let mut map = serializer.serialize_map(Some(field_count))?;
         map.serialize_entry("id", &self.id)?;
         map.serialize_entry("ticketId", &self.ticket_id)?;
+        map.serialize_entry("senderId", &self.sender_id)?;
         map.serialize_entry("body", &self.body)?;
         map.serialize_entry("senderName", &self.sender_name)?;
         map.serialize_entry("isAdmin", &self.is_admin)?;
