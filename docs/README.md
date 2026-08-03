@@ -2,17 +2,21 @@
 
 ## Shared architecture
 
-- [`adr/SDK-ADR-001-sdk-architecture-and-parity.md`](./adr/SDK-ADR-001-sdk-architecture-and-parity.md) — shared architecture, Core/Cloud target separation, parity, security and conformance rules for all three SDKs. Current shared revision: **2**.
+- [`SDK-ADR-001`](./adr/SDK-ADR-001-sdk-architecture-and-parity.md) — shared Core/Cloud client architecture, functional parity, Venue Provider conformance and Belief Stream conformance for all three SDKs.
 
-The shared ADR consumes:
+Current shared revision: **3**.
 
-- `CORE-ADR-002` for Provider runtime contracts;
-- `CORE-ADR-003` for Venue Provider order, account, cancellation, market-data and reconciliation semantics;
-- `CLOUD-ADR-001` and `CLOUD-ADR-002` for control-plane and commercial-service behavior.
+## Canonical dependencies
+
+- `CORE-ADR-002` — Provider runtime contracts.
+- `CORE-ADR-003` — Venue Provider behavior.
+- `CORE-ADR-004` — Belief Stream runtime behavior.
+- `CLOUD-ADR-001` through `CLOUD-ADR-003` — control-plane and commercial-service behavior.
+- `F4CTE/PolyForge-core/docs/specs/PREDICTION_PROVIDERS.md` — normative Prediction Provider and Belief Stream wire specification.
 
 ## ADR ownership
 
-- Shared SDK decisions use `SDK-ADR-*` and must remain logically synchronized across TypeScript, Python and Rust repositories.
+- Shared SDK decisions use `SDK-ADR-*` and remain logically synchronized across TypeScript, Python and Rust repositories.
 - Rust-only implementation decisions use `RS-ADR-*`.
 - Core runtime contracts are owned by `F4CTE/PolyForge-core`.
 - Cloud/control-plane contracts are owned by `F4CTE/PolyForge`.
