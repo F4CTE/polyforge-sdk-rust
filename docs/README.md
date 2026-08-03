@@ -2,17 +2,15 @@
 
 ## Shared architecture
 
-- [`SDK-ADR-001`](./adr/SDK-ADR-001-sdk-architecture-and-parity.md) — shared Core/Cloud client architecture, functional parity, Venue Provider conformance and Belief Stream conformance for all three SDKs.
+- [`adr/SDK-ADR-001-sdk-architecture-and-parity.md`](./adr/SDK-ADR-001-sdk-architecture-and-parity.md) — shared Core/Cloud target separation, parity, security and conformance rules. Current shared revision: **4**.
 
-Current shared revision: **3**.
+The shared ADR consumes:
 
-## Canonical dependencies
-
-- `CORE-ADR-002` — Provider runtime contracts.
-- `CORE-ADR-003` — Venue Provider behavior.
-- `CORE-ADR-004` — Belief Stream runtime behavior.
-- `CLOUD-ADR-001` through `CLOUD-ADR-003` — control-plane and commercial-service behavior.
-- `F4CTE/PolyForge-core/docs/specs/PREDICTION_PROVIDERS.md` — normative Prediction Provider and Belief Stream wire specification.
+- `CORE-ADR-002` for Provider runtime contracts;
+- `CORE-ADR-003` for Venue Provider semantics;
+- `CORE-ADR-004` and `CLOUD-ADR-003` for Prediction Providers and Belief Streams;
+- `CORE-ADR-005` and `CLOUD-ADR-004` for Runner runtime and Cloud Runner control-plane behavior;
+- `PREDICTION_PROVIDERS.md` and `RUNNER_PROTOCOL.md` as normative shared specifications.
 
 ## ADR ownership
 
