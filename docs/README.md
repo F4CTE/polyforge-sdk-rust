@@ -2,7 +2,13 @@
 
 ## Shared architecture
 
-- [`adr/SDK-ADR-001-sdk-architecture-and-parity.md`](./adr/SDK-ADR-001-sdk-architecture-and-parity.md) — shared architecture, Core/Cloud target separation, parity, security and conformance rules for all three SDKs.
+- [`adr/SDK-ADR-001-sdk-architecture-and-parity.md`](./adr/SDK-ADR-001-sdk-architecture-and-parity.md) — shared architecture, Core/Cloud target separation, parity, security and conformance rules for all three SDKs. Current shared revision: **2**.
+
+The shared ADR consumes:
+
+- `CORE-ADR-002` for Provider runtime contracts;
+- `CORE-ADR-003` for Venue Provider order, account, cancellation, market-data and reconciliation semantics;
+- `CLOUD-ADR-001` and `CLOUD-ADR-002` for control-plane and commercial-service behavior.
 
 ## ADR ownership
 
