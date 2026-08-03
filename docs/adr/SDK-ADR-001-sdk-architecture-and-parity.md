@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-04
 - **Scope:** `polyforge-sdk-ts`, `polyforge-sdk-python`, `polyforge-sdk-rust`
-- **Shared revision:** 3
+- **Shared revision:** 4
 
 ## Shared-decision rule
 
@@ -41,7 +41,9 @@ Core clients cover runtime and self-hosted capabilities, including:
 - authorized cached commercial Belief Streams;
 - strategies and portable `.polyforge` packages;
 - backtests, paper trading and live execution;
-- runners and deployment targets;
+- execution-package compilation and inspection;
+- local and user-operated remote Runners;
+- Runner deployments, commands, health, events, checkpoints and migration;
 - orders, positions, portfolio and risk;
 - whale tracking and copy trading;
 - local MCP, webhooks and runtime events;
@@ -56,7 +58,8 @@ Cloud clients cover operated-service capabilities, including:
 - commercial Prediction Provider ingestion and history;
 - Belief Stream synchronization, scoring and revocation;
 - subscriptions, billing and entitlements;
-- Cloud Runners;
+- Cloud Runner regions, classes, admission, deployment and usage;
+- Cloud Runner connection provisioning, commands, checkpoints and migration;
 - managed backups and restore;
 - notifications and monitoring;
 - paid remote MCP relay configuration.
@@ -68,6 +71,7 @@ Core and Cloud have distinct base URLs, credentials, permissions and availabilit
 - Core runtime contracts are owned by `F4CTE/PolyForge-core` ADRs, schemas and APIs.
 - Cloud commercial/control-plane contracts are owned by `F4CTE/PolyForge` ADRs, schemas and APIs.
 - `PREDICTION_PROVIDERS.md` is the normative shared Prediction Provider and Belief Stream wire specification.
+- `RUNNER_PROTOCOL.md` is the normative shared Runner manifest, package, deployment, lease, command, event and checkpoint specification.
 - The SDKs consume generated or validated forms of canonical contracts.
 - SDKs must not invent language-only public domain models that conflict with canonical contracts.
 
@@ -98,7 +102,7 @@ A public capability is complete only when:
 2. all three SDKs implement it, or a temporary parity exception is recorded;
 3. all SDKs pass the same conformance examples and fixtures;
 4. Core/Cloud compatibility requirements are documented;
-5. streaming, pagination, cancellation, idempotency, sequence and freshness semantics are represented consistently.
+5. streaming, pagination, cancellation, idempotency, sequence, freshness, generation and fencing semantics are represented consistently.
 
 ## Venue Provider conformance
 
@@ -165,6 +169,64 @@ Core client operations include listing streams, retrieving current state and his
 
 Cloud client operations include publisher ingestion status, commercial history, entitlements, synchronization cursors, scoring, moderation and revocation.
 
+## Runner conformance
+
+The SDKs consume `CORE-ADR-005`, `CLOUD-ADR-004` and the normative `RUNNER_PROTOCOL.md` specification.
+
+At minimum, parity covers:
+
+- `RunnerManifest` and typed Runner capabilities;
+- Runner resource limits, platform, runtime and Provider compatibility;
+- `StrategyExecutionPackage` and content hashes;
+- `RunnerDeployment`, desired state and monotonic generation;
+- target-specific logical connection bindings;
+- `RunnerLease`, expiry, renewal deadline and permitted safety actions;
+- canonical deployment states, including `ORPHANED`;
+- idempotent `RunnerCommand` operations and command status;
+- ordered, versioned `RunnerEvent` streams;
+- event sequence gaps, replay cursors and deduplication identity;
+- `RunnerCheckpoint`, integrity, encryption and compatibility metadata;
+- Runner and deployment health, heartbeat and readiness;
+- migration plans, source fencing and target restore;
+- Cloud Runner regions, classes, admission, quotas, metering and maintenance metadata.
+
+The SDKs preserve these behavioral guarantees:
+
+1. Execution packages never contain resolved secrets or unrestricted credentials.
+2. Package, strategy revision, runtime version and content hash remain explicit and immutable for one deployment.
+3. A stale generation or command is represented as fenced/rejected and cannot be hidden by automatic retry.
+4. Lease loss remains visible; SDK helpers must not continue or restart risk-increasing execution automatically.
+5. Risk-reducing or cancellation permissions after lease expiry are explicit, never assumed.
+6. Commands are idempotent by command ID. A timeout or missing acknowledgement is not converted to success.
+7. Runner events remain at-least-once, ordered per generation and deduplicable by event ID.
+8. Sequence gaps are surfaced and require replay or reconciliation before state is called authoritative.
+9. Checkpoints expose package hash, runtime, generation, state hash and event sequence. Incompatible restore is rejected.
+10. Live restore and migration require external Provider reconciliation before increasing risk.
+11. Migration allocates a newer generation and exposes source-fencing status; helpers never start both generations optimistically.
+12. Runner process health, deployment liveness, lease ownership and private Provider readiness remain separate fields.
+13. Core and Cloud Runner operations remain on their explicit target clients with distinct credentials and authorization.
+14. Cloud usage and billing models do not expose strategy logic, wallets, positions or secret values.
+
+Core client operations include:
+
+- list/register/inspect local and remote Runners;
+- validate compatibility;
+- compile and inspect execution packages;
+- create and control deployments;
+- query commands, health, events and sequence gaps;
+- create/list/restore checkpoints;
+- bind connections and migrate deployments.
+
+Cloud client operations include:
+
+- list Cloud Runner regions, classes and compatibility;
+- submit packages for admission;
+- provision target-specific connections;
+- create/control/migrate Cloud deployments;
+- inspect operational health and synchronization status;
+- manage checkpoint retention;
+- inspect quotas, usage, billing and maintenance windows.
+
 ## Language-specific freedom
 
 Implementations may differ in:
@@ -184,18 +246,19 @@ Examples:
 - Python may use async iterators and cancellation through its selected async runtime;
 - Rust may use `Future`, `Stream`, typed errors and explicit cancellation tokens.
 
-All three represent the same deadlines, cursor state, completeness, ambiguity, sequence gaps, freshness and reconciliation requirements.
+All three represent the same deadlines, cursor state, completeness, ambiguity, sequence gaps, freshness, reconciliation, command status, generation and fencing requirements.
 
 ## Security rules
 
-- Raw credentials are never serialized into strategies, Provider manifests or Runner packages.
+- Raw credentials are never serialized into strategies, Provider manifests, execution packages or checkpoints.
 - Core and Cloud tokens are not interchangeable.
 - Convenience APIs cannot silently forward local data to Cloud.
 - Remote MCP relay operations remain explicit paid Cloud operations.
 - Sensitive values must be redacted from errors and logs consistently across SDKs.
 - Venue connection references may be transmitted, but resolved secrets and signed private payloads are not returned through ordinary SDK models.
 - Publisher ingestion credentials are exposed only by Cloud administration operations and are never mixed with subscriber or Core credentials.
-- SDK telemetry must not include prediction payloads, strategies, wallets or positions by default.
+- Runner connection bindings are opaque references; secret material is never returned by ordinary deployment APIs.
+- SDK telemetry must not include prediction payloads, strategies, wallets, positions, packages, checkpoints or secrets by default.
 
 ## Versioning
 
@@ -206,6 +269,7 @@ SDK package versions may advance independently, but each release declares:
 - Provider protocol versions;
 - Venue Provider contract versions;
 - Prediction Provider/Belief Stream specification versions;
+- Runner protocol and Core runtime versions;
 - event schema versions;
 - known temporary parity gaps.
 
@@ -223,10 +287,19 @@ The repositories should share:
 - decimal boundary and precision cases;
 - correction and supersession cases;
 - duplicate identity and conflicting hash cases;
-- sequence-gap and resynchronization cases;
+- Belief Stream sequence-gap and resynchronization cases;
 - stale and expired state cases;
 - structured driver, risk, source and extension limits;
 - commercial entitlement, cursor and revocation cases;
+- Runner manifest and compatibility cases;
+- execution package hash and secret-exclusion cases;
+- state transition and idempotent command cases;
+- lease expiry, stale generation and fencing cases;
+- Runner event replay, deduplication and gap cases;
+- checkpoint integrity and incompatible restore cases;
+- pause, drain, stop and emergency safety cases;
+- source-fenced migration and target-restore cases;
+- Cloud admission, quota, usage and maintenance cases;
 - portable strategy examples;
 - compatibility matrices.
 
@@ -240,3 +313,5 @@ CI should detect drift between published schemas and language implementations.
 - `CLOUD-ADR-002` defines commercial Provider services.
 - `CORE-ADR-004` defines Belief Stream runtime semantics.
 - `CLOUD-ADR-003` defines commercial Belief Stream ingestion, scoring and distribution.
+- `CORE-ADR-005` defines Runner runtime, generations, fencing, events, checkpoints and migration.
+- `CLOUD-ADR-004` defines the Cloud Runner fleet and control plane.
