@@ -2,7 +2,7 @@
 
 ## Shared architecture
 
-- [`adr/SDK-ADR-001-sdk-architecture-and-parity.md`](./adr/SDK-ADR-001-sdk-architecture-and-parity.md) — shared Core/Cloud target separation, parity, security and conformance rules. Current shared revision: **6**.
+- [`adr/SDK-ADR-001-sdk-architecture-and-parity.md`](./adr/SDK-ADR-001-sdk-architecture-and-parity.md) — shared Core/Cloud target separation, parity, security and conformance rules. Current shared revision: **7**.
 
 The shared ADR consumes:
 
@@ -12,7 +12,8 @@ The shared ADR consumes:
 - `CORE-ADR-005` and `CLOUD-ADR-004` for Runner runtime and Cloud Runner behavior;
 - `CORE-ADR-006` and `CLOUD-ADR-005` for Core/Cloud MCP and remote relay;
 - `CORE-ADR-007` and `CLOUD-ADR-006` for Marketplace installation, commerce, entitlements and settlement;
-- `PREDICTION_PROVIDERS.md`, `RUNNER_PROTOCOL.md`, `MCP_PROTOCOL.md` and `MARKETPLACE_PROTOCOL.md` as normative shared specifications.
+- `CORE-ADR-008` and `CLOUD-ADR-007` for connections, secret lifecycle, signer isolation and managed custody;
+- `PREDICTION_PROVIDERS.md`, `RUNNER_PROTOCOL.md`, `MCP_PROTOCOL.md`, `MARKETPLACE_PROTOCOL.md` and `CONNECTIONS_AND_SIGNING_PROTOCOL.md` as normative shared specifications.
 
 ## ADR ownership
 
