@@ -3,352 +3,351 @@
 - **Status:** Accepted
 - **Date:** 2026-08-04
 - **Scope:** `polyforge-sdk-ts`, `polyforge-sdk-python`, `polyforge-sdk-rust`
-- **Shared revision:** 7
+- **Shared revision:** 9
 
 ## Shared-decision rule
 
-This ADR is shared by the three SDK repositories and must remain logically identical in each implementation repository.
+This ADR is shared by the three SDK repositories and remains logically identical in each implementation repository.
 
-A change is accepted only when:
+A shared change is accepted only when:
 
 1. the shared revision is incremented;
-2. equivalent ADR changes are prepared for all three repositories;
+2. equivalent changes are prepared for all three repositories;
 3. implementation and conformance impact is recorded;
-4. temporary parity exceptions are explicitly tracked.
+4. temporary parity exceptions are explicit and time bounded.
 
-Language-specific architecture decisions use separate prefixes:
-
-- `TS-ADR-*`
-- `PY-ADR-*`
-- `RS-ADR-*`
+Language-specific decisions use `TS-ADR-*`, `PY-ADR-*` and `RS-ADR-*`.
 
 ## Principle
 
-The TypeScript, Python and Rust Polyforge SDKs expose the same public capabilities and contracts.
+The TypeScript, Python and Rust SDKs expose equivalent public capabilities, validation, error meaning, authorization boundaries and lifecycle semantics.
 
-Language-native ergonomics may differ, but resource coverage, validation, events, error meaning, security boundaries and authorization behavior remain equivalent.
+Language-native ergonomics may differ, but an operation must not become safer, more authoritative or more successful merely because it is called from one language rather than another.
 
 ## Explicit API targets
 
-Every SDK supports two distinct targets.
-
-### Polyforge Core
-
-Core clients cover self-hosted and runtime capabilities, including:
-
-- markets and Venue Provider capabilities;
-- strategies, portable `.polyforge` packages and local Marketplace installations;
-- backtests, paper trading and live execution;
-- local/private Prediction Providers and authorized cached Belief Streams;
-- execution-package compilation and local/user-operated Runners;
-- Runner deployments, commands, health, events, checkpoints and migration;
-- local MCP catalog, credentials, approvals and operations;
-- local connections, secret lifecycle metadata and typed signer operations;
-- deployment connection bindings and readiness;
-- orders, positions, portfolio and risk;
-- local webhooks, audit and installation administration.
-
-### Polyforge Cloud
-
-Cloud clients cover operated-service capabilities, including:
-
-- accounts, workspaces and installation identity;
-- Marketplace assets, releases, offers, acquisitions and entitlements;
-- commercial Provider publication and Belief Stream services;
-- Cloud Runner regions, classes, admission, deployment, usage and migration;
-- Cloud MCP, OAuth metadata and remote relay administration;
-- optional managed connections and custody-mode provisioning;
-- user-managed vault, remote signer and federation integrations;
-- managed rotation, revocation, deletion and audit summaries;
-- backups, notifications, monitoring, quotas, billing and settlement references.
-
-Public SDK clients do not expose private admin MCP tools or generic secret-export operations by default.
-
-Core and Cloud have distinct base URLs, credentials, permissions and availability assumptions. A convenience `PolyforgeClient` may coordinate both but must not hide the target, merge credentials or silently move private data between planes.
-
-## Canonical contract ownership
-
-- Core runtime contracts are owned by `F4CTE/PolyForge-core` ADRs, schemas and APIs.
-- Cloud commercial/control-plane contracts are owned by `F4CTE/PolyForge` ADRs, schemas and APIs.
-- `PREDICTION_PROVIDERS.md` is the normative Prediction Provider and Belief Stream contract.
-- `RUNNER_PROTOCOL.md` is the normative Runner contract.
-- `MCP_PROTOCOL.md` is the normative MCP descriptor, result, approval, operation and relay contract.
-- `MARKETPLACE_PROTOCOL.md` is the normative Marketplace asset, entitlement and installation contract.
-- `CONNECTIONS_AND_SIGNING_PROTOCOL.md` is the normative connection, custody, secret lifecycle, binding and signer-operation contract.
-- SDKs consume generated or validated forms of canonical contracts and must not invent conflicting language-only domain models.
-
-Public types should be generated from or validated against versioned OpenAPI, JSON Schema and event-schema fixtures where practical.
-
-## Client shape
-
-Each SDK provides explicit equivalents of:
+Every SDK provides explicit equivalents of:
 
 ```text
 PolyforgeCoreClient
 PolyforgeCloudClient
 ```
 
-An optional higher-level facade preserves:
+Core and Cloud have distinct base URLs, credentials, scopes, availability and data-ownership assumptions.
+
+An optional facade may coordinate both clients but must preserve:
 
 - explicit target selection;
 - separate authentication;
 - explicit data movement;
 - independent retries and failures;
 - distinct permission checks;
-- target-specific connection and custody semantics.
+- target-specific custody and availability semantics.
+
+Cloud credentials are never treated as Core credentials, and local data is never forwarded to Cloud silently.
+
+## Core client scope
+
+Core clients cover self-hosted/runtime capabilities including:
+
+- markets and Venue Provider capabilities;
+- strategies, portable `.polyforge` resources and local Marketplace installations;
+- backtests, paper trading and live execution;
+- private Prediction Providers and cached authorized Belief Streams;
+- execution packages, local/remote Runners, deployments, events and checkpoints;
+- local MCP catalog, approvals and operations;
+- local connections, secret lifecycle metadata and typed signer operations;
+- deployment connection bindings and readiness;
+- local backup policies, backup creation, restore plans and validation;
+- release discovery, local preflight, upgrade operations, migrations and rollback;
+- orders, positions, portfolio, risk, webhooks, audit and installation administration.
+
+## Cloud client scope
+
+Cloud clients cover operated-service capabilities including:
+
+- accounts, workspaces and installation identity;
+- Marketplace publishers, assets, releases, offers, acquisitions and entitlements;
+- commercial Provider publication and Belief Stream services;
+- Cloud Runner regions, classes, deployment, usage and migration;
+- Cloud MCP, OAuth metadata and remote-relay administration;
+- optional managed connections, custody modes, vault/remote-signer/federation integration;
+- managed backup plans, retention, restore orchestration and DR testing;
+- signed release catalogue, channels, compatibility, managed-update policy and rollout status;
+- notifications, monitoring, billing, quotas and settlement references.
+
+Public SDK clients do not expose private admin MCP or generic secret-export functionality by default.
+
+## Canonical contract ownership
+
+SDKs consume canonical contracts owned by Core and Cloud:
+
+- `PREDICTION_PROVIDERS.md`;
+- `RUNNER_PROTOCOL.md`;
+- `MCP_PROTOCOL.md`;
+- `MARKETPLACE_PROTOCOL.md`;
+- `CONNECTIONS_AND_SIGNING_PROTOCOL.md`;
+- `BACKUP_AND_RESTORE_PROTOCOL.md`;
+- `UPDATE_AND_MIGRATION_PROTOCOL.md`.
+
+Public types should be generated from or validated against versioned OpenAPI, JSON Schema and event fixtures where practical.
+
+SDKs must not invent language-only public models that conflict with canonical contracts.
 
 ## General parity requirements
 
-A public capability is complete only when:
+A capability is complete only when:
 
 1. its canonical contract is versioned;
-2. all three SDKs implement it, or a temporary parity exception is recorded;
-3. all SDKs pass shared conformance fixtures;
-4. Core/Cloud compatibility requirements are documented;
-5. pagination, streaming, cancellation, idempotency, approval, sequence, freshness, generation, fencing, entitlement, custody and secret-lifecycle semantics remain explicit.
+2. all three SDKs implement it or an explicit parity exception exists;
+3. shared conformance fixtures pass;
+4. supported Core/Cloud/protocol versions are declared;
+5. pagination, streaming, cancellation, idempotency, approval, ambiguity, sequence, freshness, generation and fencing remain visible.
+
+Structured fields are authoritative. Human-readable messages are supplemental and must not be parsed to recover missing domain state.
 
 ## Venue Provider conformance
 
-The SDKs consume `CORE-ADR-003` and preserve:
+The SDKs preserve `CORE-ADR-003` semantics for:
 
-- extensible `VenueId`;
-- `VenueMarketRef` and canonical-market mappings;
-- `VenueAccountRef`, wallet, account and subaccount identity;
-- typed manifests and capabilities;
-- cursor pages with completeness and authority metadata;
-- ordered market-data snapshots and deltas;
-- freshness and sequence gaps;
-- `VenueOrderIntent` with decimal-string financial values;
-- accepted, rejected and unknown placement outcomes;
-- scoped cancellation and authoritative reconciliation;
-- separate public-data and private-execution readiness.
+- `VenueId`, `VenueMarketRef` and `VenueAccountRef`;
+- account, wallet and subaccount continuity;
+- typed capabilities and manifests;
+- authoritative/completeness metadata and pagination;
+- ordered market-data snapshots/deltas, freshness and gaps;
+- exact order type, time-in-force and expiration;
+- accepted, rejected and `UNKNOWN` placement outcomes;
+- cancellation, cancel-all, fills, fees, positions and reconciliation;
+- decimal-string financial values and stable errors.
 
-Unsupported order types are never silently converted. Ambiguous placement remains `UNKNOWN`. Account identity is preserved across placement, cancellation, retrieval and reconciliation.
+Unsupported order semantics are never silently downgraded. Incomplete data is never exposed as an authoritative empty result. Ambiguous placement remains `UNKNOWN` until reconciled.
 
 ## Belief Stream conformance
 
-The SDKs consume `CORE-ADR-004`, `CLOUD-ADR-003` and `PREDICTION_PROVIDERS.md`.
+The SDKs preserve `CORE-ADR-004`, `CLOUD-ADR-003` and `PREDICTION_PROVIDERS.md` semantics for:
 
-Parity covers:
-
-- `BeliefStreamRef` and immutable `PredictionRevision`;
+- immutable `PredictionRevision` history;
+- `BeliefStreamRef`, state, sequence and freshness;
 - active, abstained, withdrawn and invalidated states;
-- decimal-string probability and confidence;
-- sequence, authoritative receipt time, hashes and source plane;
+- canonical decimal-string probability/confidence;
 - corrections and supersession;
-- structured drivers, risks and sources;
-- freshness, expiry, gaps and synchronization cursors;
-- private local publication and Cloud commercial distribution;
-- entitlement and revocation state;
-- versioned events and immutable history.
+- duplicate-ID/hash conflicts;
+- sequence gaps, cursors and resynchronization;
+- local private publication and Cloud commercial synchronization;
+- entitlement, grace and revocation metadata;
+- versioned events and structured drivers/risks/sources.
 
-Missing, stale, expired or withdrawn predictions are never converted to zero probability or confidence.
+Missing, stale, expired or gap-affected predictions are never converted to zero probability or confidence.
 
 ## Runner conformance
 
-The SDKs consume `CORE-ADR-005`, `CLOUD-ADR-004` and `RUNNER_PROTOCOL.md`.
+The SDKs preserve `CORE-ADR-005`, `CLOUD-ADR-004` and `RUNNER_PROTOCOL.md` semantics for:
 
-Parity covers:
+- Runner manifests, capabilities and limits;
+- immutable execution packages and content hashes;
+- deployment desired state and monotonic generation;
+- leases, expiry and explicitly permitted safety actions;
+- idempotent commands and durable command state;
+- ordered at-least-once events, deduplication and replay gaps;
+- checkpoints, compatibility and restore;
+- process health, deployment liveness, lease ownership and Provider readiness as distinct facets;
+- source fencing and target restore during migration;
+- Cloud admission, quotas, maintenance and usage.
 
-- `RunnerManifest` and compatibility;
-- `StrategyExecutionPackage` and immutable hashes;
-- `RunnerDeployment`, monotonic generations and desired state;
-- deployment connection bindings;
-- `RunnerLease`, expiry and permitted safety actions;
-- idempotent commands and command status;
-- ordered at-least-once events and replay gaps;
-- checkpoints, integrity and restore compatibility;
-- migration with source fencing and target reconciliation;
-- Cloud admission, quotas, metering and maintenance.
-
-A stale generation is never hidden by retry. Lease loss remains visible. A timeout is not success. A target is not started before the source is fenced during migration.
+A timeout is not command success. A stale generation is not retried as a fresh action. Lease loss remains visible and cannot be hidden by automatic restart.
 
 ## MCP conformance
 
-The SDKs consume `CORE-ADR-006`, `CLOUD-ADR-005` and `MCP_PROTOCOL.md`.
-
-Parity covers:
+The SDKs preserve `CORE-ADR-006`, `CLOUD-ADR-005` and `MCP_PROTOCOL.md` semantics for:
 
 - separate Core, Cloud and private Admin planes;
-- `McpToolDescriptor`, effects, scopes and relay policy;
-- structured calls, results, warnings and stable errors;
-- payload-bound approvals and idempotency;
+- tool descriptors, versions, scopes, effects and data classification;
+- exact input/output schemas;
+- approval challenges bound to actor, payload hash, target, expiry and idempotency key;
 - asynchronous operation handles;
-- OAuth protected-resource metadata for Cloud;
-- explicit relay grants, signed requests and Core reauthorization;
-- offline behavior, replay protection and audit redaction.
+- stable structured errors;
+- explicit relay grants, offline behavior, replay protection and Core reauthorization;
+- minimal redacted audit metadata.
 
-SDK helpers must not expose a generic arbitrary Core relay or arbitrary HTTP proxy. A failed or timed-out financial MCP call is not automatically retried with a fresh idempotency identity.
+SDK helpers must not expose arbitrary Core API relay, arbitrary-sign, secret-read or generic credential-injecting HTTP tools.
 
 ## Marketplace conformance
 
-The SDKs consume `CORE-ADR-007`, `CLOUD-ADR-006` and `MARKETPLACE_PROTOCOL.md`.
-
-Parity covers:
+The SDKs preserve `CORE-ADR-007`, `CLOUD-ADR-006` and `MARKETPLACE_PROTOCOL.md` semantics for:
 
 - stable assets and immutable content-addressed releases;
-- mutable listings and versioned offers;
-- acquisition and payment states, including ambiguous payment;
-- entitlements, rights, expiry, grace and revocation;
-- short-lived distribution grants;
-- local installation requests and immutable installation receipts;
-- compatibility, permissions, dependencies and safety attestations;
-- update, pinning, rollback, local modifications and quarantine;
-- verified-acquirer reviews;
-- decimal-string amounts and publisher settlement references.
+- mutable listings separated from versioned offers;
+- acquisition/payment states separated from entitlements;
+- distribution grants separated from local installation receipts;
+- compatibility, permissions, dependencies and attestations;
+- local pinning, update, rollback, provenance and modifications;
+- reviews tied to verified acquisition/version context;
+- revocation, quarantine and settlement references;
+- decimal-string price, fee, tax and payout amounts.
 
-A purchase is not represented as a local installation. Paid acquisition is not successful until payment authority is confirmed. Release hashes and bytes are immutable.
+A purchase is not represented as a successful Core installation. Payment ambiguity remains explicit. Mutable listing counters are never treated as financial authority.
 
 ## Connections and signer conformance
 
-The SDKs consume `CORE-ADR-008`, `CLOUD-ADR-007` and `CONNECTIONS_AND_SIGNING_PROTOCOL.md`.
+The SDKs preserve `CORE-ADR-008`, `CLOUD-ADR-007` and `CONNECTIONS_AND_SIGNING_PROTOCOL.md` semantics for:
+
+- opaque `ConnectionRef` and redacted `ConnectionMetadata`;
+- custody modes and external secret backends;
+- immutable secret-bundle versions;
+- protected import flows that never return plaintext secrets;
+- connection use policies and permission summaries;
+- deployment/generation-bound connection bindings;
+- typed payload-bound signer operations and immutable receipts;
+- signer-mediated calls, remote signers, user-managed vaults and ephemeral federation;
+- multidimensional readiness;
+- rotation, revocation, deletion and audit receipts.
+
+Possession of a connection ID is not authorization. SDKs never offer generic private-key export, generic arbitrary-sign or silent local-to-Cloud secret copying.
+
+## Backup and Restore conformance
+
+The SDKs consume `CORE-ADR-009`, `CLOUD-ADR-008` and `BACKUP_AND_RESTORE_PROTOCOL.md`.
 
 At minimum, parity covers:
 
-- `ConnectionRef` and redacted `ConnectionMetadata`;
-- custody modes: local managed, Cloud managed, user-managed vault, remote signer, ephemeral federation and public no-secret;
-- `SecretBundleRef` and versioned lifecycle states;
-- protected secret import requests without secret-bearing responses;
-- `ConnectionUsePolicy`, actors, permissions and constraints;
-- deployment connection bindings with generation scope;
-- `SignerOperationRequest`, exact payload hashes, target binding and deadlines;
-- structured signer results and immutable receipts;
-- mediated-operation policies and endpoint classes;
-- multidimensional connection readiness;
-- rotation, revocation and deletion requests/results;
-- managed provisioning, ephemeral grants and remote signer envelopes;
-- audit records, canary events and stable redacted errors.
+- `BackupManifest`, `BackupComponent` and content hashes;
+- authority classes: authoritative, append-only, checkpointed, cache, derived, external reference and encrypted secret;
+- application-, database-, crash-consistent and resource-export backups;
+- encryption modes and key dependencies;
+- policies, schedules, RPO/RTO targets and retention tiers;
+- durable create/upload/verify/restore-test operations;
+- restore plans, preflight, identity conflicts and secret policy;
+- same-installation, replacement-installation, isolated-test and partial-import modes;
+- validation reports, Venue/Belief Stream reconciliation and derived-state rebuild;
+- deletion receipts and retained-media state.
 
 The SDKs preserve these guarantees:
 
-1. A `ConnectionRef` never contains secret material.
-2. Possession of a connection ID does not imply authorization.
-3. Ordinary SDK calls never return private keys, API secrets, refresh tokens, encrypted blobs or reusable unrestricted headers.
-4. Secret import values are accepted only by protected operations and are redacted from errors, logs and representations.
-5. Secret versions are immutable references; rotation creates a new version rather than overwriting the active value silently.
-6. The same request/operation identity with a different payload is an idempotency conflict.
-7. Signer approvals bind actor, connection, exact payload hash, target, deployment generation, expiry and idempotency identity.
-8. Arbitrary-sign and arbitrary-URL credential-injection helpers are prohibited.
-9. A stale Runner generation or expired lease cannot receive new risk-increasing signatures or credentials.
-10. Remote signer denial, offline and timeout states remain explicit and are not downgraded to another custody mode.
-11. Cloud-managed custody is distinct from user-managed vault and remote-signer modes; SDK terminology must not misrepresent custody.
-12. Local Core connections are not copied to Cloud implicitly.
-13. Revocation blocks new use and never silently switches dependent workloads to another connection.
-14. Deletion receipts distinguish logical deletion, crypto-erasure, external-reference removal and backup-retention pending state.
-15. Missing credentials are not represented as empty balances, empty orders or healthy private execution.
-16. Audit models expose references and hashes, never raw secrets or replay-sensitive signed payloads.
+1. Upload completion is not restore verification.
+2. Cache or derived components are not presented as authoritative after restore.
+3. Plaintext secrets never appear in backup models or logs.
+4. Missing key dependencies produce locked/incomplete state, not empty credentials.
+5. Restored Runner leases, generations and grants are never active.
+6. Revoked/deleted secrets are not reactivated silently from an old backup.
+7. A restore is not `COMMITTED` before mandatory validation succeeds.
+8. `safeForLiveExecution` remains false until Venue, connection and runtime reconciliation pass.
+9. Deletion distinguishes catalogue deletion, object deletion, crypto-erasure and retention pending.
+10. Target RPO/RTO is not represented as observed achievement.
 
-### Core connection operations
+Core operations include backup policy management, local snapshot creation, export, preflight, restore, validation and retention.
 
-Core clients may expose:
+Cloud operations include managed plan enrollment, upload grants, storage/replication state, restore orchestration, restore tests, quotas and deletion.
 
-- list/get redacted connections;
-- create metadata and initiate protected import/OAuth flows;
-- inspect readiness, permissions and audit summaries;
-- create/update connection-use policies;
-- bind connections to strategies and Runner deployments;
-- request typed signer or mediated operations;
-- rotate, revoke and delete;
-- inspect operation and reconciliation status;
-- configure external vaults and local/remote signers.
+## Update and Migration conformance
 
-### Cloud managed-connection operations
+The SDKs consume `CORE-ADR-010`, `CLOUD-ADR-009` and `UPDATE_AND_MIGRATION_PROTOCOL.md`.
 
-Cloud clients may expose:
+At minimum, parity covers:
 
-- provision managed connections with explicit custody mode;
-- configure user-managed vault, remote signer and federation integrations;
-- inspect redacted health and workload bindings;
-- bind connections to Cloud Runner deployments;
-- initiate rotation, reauthorization, revocation and deletion;
-- inspect JIT grants, audit summaries and deletion receipts;
-- manage regional/custody capabilities and entitlements.
+- immutable `ReleaseRef`, `ReleaseManifest` and artifact digests;
+- build provenance, signatures and release channels;
+- compatibility matrices and support windows;
+- preflight requirements, backup requirements and maintenance windows;
+- typed immutable migration steps, dependencies and validation checks;
+- upgrade plans, approvals and durable operation state;
+- post-upgrade validation and reconciliation reports;
+- rollback classes and plans;
+- managed-update policy, update grants and rollout rings;
+- signed release revocation and security-advisory metadata.
 
-Neither client exposes a general decrypted-secret read API.
+The SDKs preserve these guarantees:
+
+1. Mutable tags/channel pointers are not artifact authority.
+2. Invalid signatures or digest mismatches are hard failures.
+3. Schema drift and migration checksum conflict remain explicit blockers.
+4. Backup requirements cannot be silently bypassed by convenience helpers.
+5. Active Runner drain/fencing requirements remain visible.
+6. Upgrade timeout or client disconnect is not failure or success; the operation is queried by ID.
+7. Irreversible migration and no-downgrade boundaries require explicit approval metadata.
+8. A heartbeat is not post-upgrade validation.
+9. Rollback class remains explicit; `FORWARD_FIX_ONLY`, `RESTORE_REQUIRED` and `NO_DOWNGRADE` are not represented as reversible.
+10. Rollback does not claim to reverse external Venue, payment or settlement side effects.
+11. Cloud managed-update grants cannot execute arbitrary commands.
+12. Self-hosted update timing remains under local policy.
+
+Core operations include release verification, compatibility/preflight, upgrade execution, migration progress, validation, rollback and local policy.
+
+Cloud operations include release/channel discovery, signed manifest distribution, update enrollment, grants, rollout status, support windows and revocations.
 
 ## Language-specific freedom
 
 Implementations may differ in:
 
 - async primitives;
-- iterators and streams;
-- error wrappers;
+- iterator/stream APIs;
+- typed error wrappers;
 - package/module layout;
-- language-conventional naming;
-- secure input helpers;
-- transport implementation.
+- cancellation tokens;
+- language naming conventions;
+- transport internals.
 
-Differences must not alter contract meaning.
-
-Examples:
-
-- TypeScript may use `Promise`, `AsyncIterable`, `AbortSignal` and secret-value wrapper types;
-- Python may use async iterators, context managers and mutable byte arrays;
-- Rust may use `Future`, `Stream`, typed errors, secret-zeroizing wrappers and explicit cancellation tokens.
-
-All languages represent the same deadlines, ambiguity, idempotency, custody, secret version, policy, readiness, generation and deletion semantics.
+They must preserve the same observable states, deadlines, ambiguity, cursors, sequences, approvals, hashes, generations, custody, restore and rollback semantics.
 
 ## Security rules
 
-- Raw credentials are never serialized into strategies, Marketplace releases, Provider manifests, Runner packages or ordinary checkpoints.
-- Core and Cloud tokens are not interchangeable.
-- Convenience clients cannot silently forward local secrets or private data to Cloud.
-- Secret values and import payloads must be redacted from debug output and exception formatting.
-- SDK telemetry excludes strategies, prediction payloads, wallets, positions, packages, checkpoints, secret metadata and signing payloads by default.
-- Connection metadata may be sensitive even when it contains no secret and must respect authorization.
-- Reusable signed headers or tokens are returned only to explicitly trusted operation contracts and must remain target/expiry bounded.
-- Remote MCP relay never turns a Cloud credential into a Core credential.
-- Marketplace assets cannot embed connection secrets.
+- Core and Cloud credentials are not interchangeable.
+- Raw credentials are never serialized into strategies, packages, checkpoints, backups, release manifests or ordinary SDK responses.
+- Secret import values are redacted from logs, traces and exceptions.
+- Sensitive errors never expose upstream bodies, private object URLs, ciphertext fields, tokens, keys or signatures when replay-sensitive.
+- Backup and update telemetry excludes private strategies, wallets, orders, positions and secrets by default.
+- SDK helpers cannot silently forward local data or secrets to Cloud.
+- Public clients do not expose private admin MCP or unrestricted operator access.
 
 ## Versioning
 
-SDK releases declare:
+Each SDK release declares supported:
 
-- supported Core and Cloud API/protocol versions;
-- Provider and Venue contract versions;
-- Prediction/Belief Stream specification version;
-- Runner protocol/runtime versions;
-- MCP protocol version;
-- Marketplace protocol version;
-- Connections and Signing protocol version;
-- supported custody modes and signer operation versions;
+- Core and Cloud API versions;
+- Provider, Venue and Belief Stream protocols;
+- Runner, MCP and Marketplace protocols;
+- Connections/Signing protocol;
+- Backup/Restore protocol;
+- Update/Migration protocol;
 - event schema versions;
 - known temporary parity gaps.
 
-Breaking canonical changes require a compatible SDK major-version strategy or explicit negotiated protocol transition.
+Breaking canonical changes require a compatible major-version strategy or an explicit negotiated transition.
 
 ## Conformance
 
-Shared fixtures should include:
+Shared fixtures should cover all prior domain contracts plus:
 
-- Core/Cloud authentication separation;
-- Provider and Venue manifests, account isolation and reconciliation;
-- Belief Stream immutability, decimal precision, gaps and expiry;
-- Runner generations, lease loss, command idempotency and checkpoint restore;
-- MCP scopes, approvals, relay replay and asynchronous operations;
-- Marketplace release hashes, payment ambiguity, entitlements, installation and quarantine;
-- connection metadata redaction and identity continuity;
-- secret import idempotency and serialization redaction;
-- AAD/key-version failures and rotation states;
-- policy denial and exact approval binding;
-- deployment connection generation fencing;
-- allowed/forbidden signer targets;
-- mediated operation timeout and ambiguous result;
-- remote signer offline/denied cases;
-- ephemeral grant expiry and replay;
-- revocation with explicit risk-reducing exception;
-- deletion receipts and backup retention;
-- canary secret access and audit redaction;
-- compatibility matrices and temporary parity exceptions.
+### Backup/Restore
 
-CI should detect drift between canonical schemas and language implementations.
+- complete, incomplete and corrupt manifests;
+- encrypted-secret inclusion and missing key dependencies;
+- stale Runner and revoked-secret resurrection prevention;
+- replacement-installation identity rebinding;
+- Venue and Belief Stream reconciliation;
+- partial restore conflicts;
+- restore testing, retention and deletion receipts.
+
+### Update/Migration
+
+- signed and invalid manifests;
+- artifact digest mismatch and release revocation;
+- supported and skipped upgrade paths;
+- schema drift and migration hash conflicts;
+- backup and maintenance preflight blockers;
+- Runner drain/fencing;
+- idempotent/resumable migration steps;
+- rollback classes and restore-assisted recovery;
+- post-upgrade validation and rollout halt behavior.
+
+CI should detect drift between published schemas and all language implementations.
 
 ## Related decisions
 
-- `CORE-ADR-002` and `CORE-ADR-003` define Provider, Venue, account and signer boundaries.
-- `CORE-ADR-004` and `CLOUD-ADR-003` define Belief Streams.
-- `CORE-ADR-005` and `CLOUD-ADR-004` define Runners and deployment generations.
-- `CORE-ADR-006` and `CLOUD-ADR-005` define MCP and relay.
-- `CORE-ADR-007` and `CLOUD-ADR-006` define Marketplace commerce and installation.
-- `CORE-ADR-008` defines local connections, secrets and signer isolation.
-- `CLOUD-ADR-007` defines optional managed connections and Cloud custody.
+- `CORE-ADR-003` — Venue Providers.
+- `CORE-ADR-004` / `CLOUD-ADR-003` — Belief Streams.
+- `CORE-ADR-005` / `CLOUD-ADR-004` — Runners.
+- `CORE-ADR-006` / `CLOUD-ADR-005` — MCP and relay.
+- `CORE-ADR-007` / `CLOUD-ADR-006` — Marketplace.
+- `CORE-ADR-008` / `CLOUD-ADR-007` — Connections and signer custody.
+- `CORE-ADR-009` / `CLOUD-ADR-008` — Backup, restore and DR.
+- `CORE-ADR-010` / `CLOUD-ADR-009` — Releases, upgrades and managed updates.
