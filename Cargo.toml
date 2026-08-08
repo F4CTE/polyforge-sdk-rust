@@ -2,8 +2,12 @@
 name = "polyforge"
 version = "3.0.0"
 edition = "2021"
+authors = ["Oryon Technologies <dev@polyforge.app>"]
 license = "Apache-2.0"
 description = "Rust SDK for the Polyforge trading platform REST API"
+homepage = "https://polyforge.app"
+repository = "https://github.com/Polyforge-labs/PolyForge-sdk-rust"
+documentation = "https://docs.rs/polyforge"
 keywords = ["polyforge", "trading", "api", "sdk", "async"]
 categories = ["api-bindings", "web-programming::http-client"]
 
