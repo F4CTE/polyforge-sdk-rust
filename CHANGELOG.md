@@ -101,7 +101,7 @@
   - New types: `RewardsMarketDetail`, `UserSponsoredMarkets`, `RewardsSponsorUrl`. All use `#[serde(flatten)] extra: serde_json::Value` for forward-compatibility.
 
 ### Verified
-- **POLA-3834** Venue preferences compatibility check — verified that `get_my_preferences()` and `update_my_preferences()` were already implemented (POLA-3330) and the corresponding GitHub issue ([#207](https://github.com/F4CTE/polyforge-sdk-rust/issues/207)) is closed. All 389 tests pass. No code changes needed.
+- **POLA-3834** Venue preferences compatibility check — verified that `get_my_preferences()` and `update_my_preferences()` were already implemented (POLA-3330) and the corresponding GitHub issue ([#207](https://github.com/Polyforge-labs/PolyForge-sdk-rust/issues/207)) is closed. All 389 tests pass. No code changes needed.
 
 - **Public user profile lookups (POLA-1844)** — five endpoints sourced from the weekly SDK audit:
   - `get_user_performance(username, period)` → `Vec<UserPerformancePoint>` (PnL curve).
