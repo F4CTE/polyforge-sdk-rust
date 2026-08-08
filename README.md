@@ -1,6 +1,6 @@
-# polyforge
+# PolyForge Rust SDK
 
-Async Rust SDK for the [Polyforge](https://polyforge.io) trading platform REST API.
+Async Rust SDK for the [PolyForge](https://polyforge.app) REST API, compatible with PolyForge Platform and self-hosted deployments. Self-hosted endpoints must normally use HTTPS with a hostname that is not reserved for local networks; HTTP is accepted only for loopback development hosts, and private or reserved IP literals are rejected by the client's SSRF protections.
 
 ## Installation
 
@@ -484,4 +484,6 @@ cargo test
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE) for details.
+Copyright © 2026 Oryon Technologies.
+
+Licensed under Apache 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
