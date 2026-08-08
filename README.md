@@ -1,6 +1,6 @@
 # PolyForge Rust SDK
 
-Async Rust SDK for the [PolyForge](https://polyforge.app) REST API, compatible with self-hosted and PolyForge Platform deployments.
+Async Rust SDK for the [PolyForge](https://polyforge.app) REST API, compatible with PolyForge Platform and self-hosted deployments. Self-hosted endpoints must normally use HTTPS with a hostname that is not reserved for local networks; HTTP is accepted only for loopback development hosts, and private or reserved IP literals are rejected by the client's SSRF protections.
 
 ## Installation
 
